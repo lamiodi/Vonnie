@@ -18,7 +18,7 @@ services:
           name: vonne-x2x-frontend
           type: web
           property: url
-    healthCheckPath: /api/health
+    healthCheckPath: /health
     autoDeploy: true
 
   # Frontend Service (if deploying to Render instead of Vercel)
