@@ -20,9 +20,9 @@
   },
   "build": {
     "env": {
-      "VITE_SUPABASE_URL": "@vite_supabase_url",
-      "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
-      "VITE_PAYSTACK_PUBLIC_KEY": "@vite_paystack_public_key"
+      "VITE_SUPABASE_URL": "https://pqpruuatcsazimqwvlrc.supabase.co",
+      "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxcHJ1dWF0Y3NhemltcXd2bHJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MzI5OTEsImV4cCI6MjA3NjIwODk5MX0.kJHGg44glrUiRbgUCb0tC7wsO8XWXHagPx4-YEOhHgY",
+      "VITE_PAYSTACK_PUBLIC_KEY": "pk_test_ed38e5ad59764baf08a0c2e86e7ec82437e5124d"
     }
   }
 }
