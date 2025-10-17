@@ -24,10 +24,5 @@
       "VITE_SUPABASE_ANON_KEY": "@vite_supabase_anon_key",
       "VITE_PAYSTACK_PUBLIC_KEY": "@vite_paystack_public_key"
     }
-  },
-  "functions": {
-    "app/api/**": {
-      "maxDuration": 30
-    }
   }
 }
