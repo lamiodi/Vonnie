@@ -278,4 +278,117 @@ router.get('/users', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// Create demo accounts (Admin only)
+router.post('/demo-accounts', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const demoAccounts = [
+      {
+        email: 'admin@demo.com',
+        password: 'admin123',
+        first_name: 'Demo',
+        last_name: 'Admin',
+        phone: '+1234567890',
+        role: 'admin'
+      },
+      {
+        email: 'staff@demo.com',
+        password: 'staff123',
+        first_name: 'Demo',
+        last_name: 'Staff',
+        phone: '+1234567891',
+        role: 'staff'
+      }
+    ];
+
+    const createdAccounts = [];
+
+    for (const account of demoAccounts) {
+      try {
+        // Check if user already exists
+        const { data: existingUser } = await supabaseAdmin
+          .from('profiles')
+          .select('id, email')
+          .eq('email', account.email)
+          .single();
+
+        if (existingUser) {
+          createdAccounts.push({
+            email: account.email,
+            status: 'exists',
+            message: 'Account already exists'
+          });
+          continue;
+        }
+
+        // Create user in Supabase Auth
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+          email: account.email,
+          password: account.password,
+          email_confirm: true
+        });
+
+        if (authError) {
+          createdAccounts.push({
+            email: account.email,
+            status: 'error',
+            message: authError.message
+          });
+          continue;
+        }
+
+        // Create user profile
+        const { data: profile, error: profileError } = await supabaseAdmin
+          .from('profiles')
+          .insert({
+            id: authData.user.id,
+            first_name: account.first_name,
+            last_name: account.last_name,
+            phone: account.phone,
+            role: account.role
+          })
+          .select()
+          .single();
+
+        if (profileError) {
+          // Cleanup: delete the auth user if profile creation fails
+          await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+          createdAccounts.push({
+            email: account.email,
+            status: 'error',
+            message: profileError.message
+          });
+          continue;
+        }
+
+        createdAccounts.push({
+          email: account.email,
+          status: 'created',
+          message: 'Account created successfully',
+          user: {
+            id: authData.user.id,
+            email: authData.user.email,
+            profile
+          }
+        });
+
+      } catch (error) {
+        createdAccounts.push({
+          email: account.email,
+          status: 'error',
+          message: error.message
+        });
+      }
+    }
+
+    res.status(201).json({
+      message: 'Demo accounts processed',
+      accounts: createdAccounts
+    });
+
+  } catch (error) {
+    console.error('Demo account creation error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 module.exports = router;
