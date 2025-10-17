@@ -16,7 +16,7 @@
     }
   ],
   "env": {
-    "VITE_API_BASE_URL": "@production_api_url"
+    "VITE_API_BASE_URL": "https://vonne-x2x-backend.onrender.com/api"
   },
   "build": {
     "env": {
