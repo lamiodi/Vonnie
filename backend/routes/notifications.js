@@ -1,17 +1,10 @@
 const express = require('express');
 const { supabase } = require('../config/supabase');
 const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
-const twilio = require('twilio');
 const nodemailer = require('nodemailer');
 const axios = require('axios');
 
 const router = express.Router();
-
-// Initialize Twilio client
-const twilioClient = twilio(
-  process.env.TWILIO_ACCOUNT_SID,
-  process.env.TWILIO_AUTH_TOKEN
-);
 
 // Initialize email transporter
 const emailTransporter = nodemailer.createTransport({
@@ -24,168 +17,20 @@ const emailTransporter = nodemailer.createTransport({
   }
 });
 
-// Send SMS notification
+// SMS notification endpoint (disabled - Twilio integration removed)
 router.post('/sms', authenticateToken, requireStaff, async (req, res) => {
-  try {
-    const { to, message, customer_id, booking_id, transaction_id } = req.body;
-
-    if (!to || !message) {
-      return res.status(400).json({ 
-        error: 'Missing required fields', 
-        message: 'Phone number and message are required' 
-      });
-    }
-
-    // Format phone number (ensure it starts with +234 for Nigeria)
-    let formattedPhone = to.replace(/\s+/g, '');
-    if (formattedPhone.startsWith('0')) {
-      formattedPhone = '+234' + formattedPhone.substring(1);
-    } else if (!formattedPhone.startsWith('+')) {
-      formattedPhone = '+234' + formattedPhone;
-    }
-
-    // Send SMS via Twilio
-    const smsResult = await twilioClient.messages.create({
-      body: message,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: formattedPhone
-    });
-
-    // Log notification in database
-    const { data: notification, error: dbError } = await supabase
-      .from('notifications')
-      .insert({
-        type: 'sms',
-        recipient: formattedPhone,
-        message: message,
-        status: 'sent',
-        external_id: smsResult.sid,
-        customer_id: customer_id || null,
-        booking_id: booking_id || null,
-        transaction_id: transaction_id || null,
-        sent_by: req.user.id,
-        sent_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (dbError) {
-      console.error('Failed to log SMS notification:', dbError);
-    }
-
-    res.json({
-      message: 'SMS sent successfully',
-      notification_id: notification?.id,
-      external_id: smsResult.sid,
-      status: smsResult.status
-    });
-  } catch (error) {
-    console.error('SMS sending error:', error);
-    
-    // Log failed notification
-    await supabase
-      .from('notifications')
-      .insert({
-        type: 'sms',
-        recipient: req.body.to,
-        message: req.body.message,
-        status: 'failed',
-        error_message: error.message,
-        customer_id: req.body.customer_id || null,
-        booking_id: req.body.booking_id || null,
-        transaction_id: req.body.transaction_id || null,
-        sent_by: req.user.id,
-        sent_at: new Date().toISOString()
-      });
-
-    res.status(500).json({ 
-      error: 'Failed to send SMS', 
-      message: error.message 
-    });
-  }
+  res.status(501).json({ 
+    error: 'SMS service not available', 
+    message: 'SMS notifications are currently disabled. Please use email notifications instead.' 
+  });
 });
 
-// Send WhatsApp message
+// WhatsApp notification endpoint (disabled - Twilio integration removed)
 router.post('/whatsapp', authenticateToken, requireStaff, async (req, res) => {
-  try {
-    const { to, message, customer_id, booking_id, transaction_id } = req.body;
-
-    if (!to || !message) {
-      return res.status(400).json({ 
-        error: 'Missing required fields', 
-        message: 'Phone number and message are required' 
-      });
-    }
-
-    // Format phone number for WhatsApp
-    let formattedPhone = to.replace(/\s+/g, '');
-    if (formattedPhone.startsWith('0')) {
-      formattedPhone = '234' + formattedPhone.substring(1);
-    } else if (formattedPhone.startsWith('+234')) {
-      formattedPhone = formattedPhone.substring(1);
-    } else if (!formattedPhone.startsWith('234')) {
-      formattedPhone = '234' + formattedPhone;
-    }
-
-    // Send WhatsApp message via Twilio WhatsApp API
-    const whatsappResult = await twilioClient.messages.create({
-      body: message,
-      from: `whatsapp:${process.env.TWILIO_WHATSAPP_NUMBER}`,
-      to: `whatsapp:+${formattedPhone}`
-    });
-
-    // Log notification in database
-    const { data: notification, error: dbError } = await supabase
-      .from('notifications')
-      .insert({
-        type: 'whatsapp',
-        recipient: `+${formattedPhone}`,
-        message: message,
-        status: 'sent',
-        external_id: whatsappResult.sid,
-        customer_id: customer_id || null,
-        booking_id: booking_id || null,
-        transaction_id: transaction_id || null,
-        sent_by: req.user.id,
-        sent_at: new Date().toISOString()
-      })
-      .select()
-      .single();
-
-    if (dbError) {
-      console.error('Failed to log WhatsApp notification:', dbError);
-    }
-
-    res.json({
-      message: 'WhatsApp message sent successfully',
-      notification_id: notification?.id,
-      external_id: whatsappResult.sid,
-      status: whatsappResult.status
-    });
-  } catch (error) {
-    console.error('WhatsApp sending error:', error);
-    
-    // Log failed notification
-    await supabase
-      .from('notifications')
-      .insert({
-        type: 'whatsapp',
-        recipient: req.body.to,
-        message: req.body.message,
-        status: 'failed',
-        error_message: error.message,
-        customer_id: req.body.customer_id || null,
-        booking_id: req.body.booking_id || null,
-        transaction_id: req.body.transaction_id || null,
-        sent_by: req.user.id,
-        sent_at: new Date().toISOString()
-      });
-
-    res.status(500).json({ 
-      error: 'Failed to send WhatsApp message', 
-      message: error.message 
-    });
-  }
+  res.status(501).json({ 
+    error: 'WhatsApp service not available', 
+    message: 'WhatsApp notifications are currently disabled. Please use email notifications instead.' 
+  });
 });
 
 // Send email notification
