@@ -1,0 +1,462 @@
+
+
+# Custom Web-Based Management System for Vonne X2x's Fashion & Beauty Business
+
+## Revised Project Prompt
+
+I need a comprehensive custom web-based management system for Vonne X2x's fashion and beauty business that operates as a standalone solution without integrating with an existing online store. The system will be built using the PERN stack (PostgreSQL via Supabase, Express, React, Node.js) with the React frontend hosted on Vercel, Express backend on Render.com, and Supabase for real-time database and authentication.
+
+## Business Overview
+
+Vonne X2x operates a combined fashion and beauty business offering:
+- **Fashion Products**: Fur duffle bags, fur purses, dresses, unisex 2-piece shirt sets, lingerie (panties), and bikinis
+- **Beauty Services**: Nails, pedicure, braids, natural hair care, and lash extensions
+
+The business needs a unified management system to replace manual processes and streamline operations.
+
+## System Requirements
+
+### Core Functionality
+
+1. **Service Booking Management**
+   - Calendar-based booking system for beauty services
+   - Worker assignment to appointments
+   - Booking status tracking (scheduled, in-progress, completed, cancelled)
+   - Automated reminders and confirmations
+
+2. **Inventory Management**
+   - Product catalog with SKUs, descriptions, and images
+   - Real-time stock tracking
+   - Low-stock alerts
+   - Inventory adjustment logging
+   - Barcode scanning support for in-store sales
+
+3. **Worker Management**
+   - Staff profiles with roles and permissions
+   - Attendance tracking (resumption and closing times)
+   - Performance monitoring (revenue per staff member)
+   - Shift scheduling
+   - Commission tracking
+
+4. **Sales & Transaction Management**
+   - Point-of-sale functionality for products and services
+   - Payment processing via Paystack/Flutterwave
+   - Transaction history and receipts
+   - Revenue attribution to specific workers
+
+5. **Reporting & Analytics**
+   - Sales reports (by product, service, worker, time period)
+   - Inventory reports (stock levels, movements)
+   - Staff performance reports (revenue, transaction counts)
+   - Export functionality (PDF, CSV)
+
+6. **Notification System**
+   - WhatsApp, SMS, and email notifications
+   - Booking confirmations and reminders
+   - Low stock alerts
+   - Performance summaries
+
+### Technical Requirements
+
+- **Frontend**: React with hooks and context for state management
+- **Styling**: Tailwind CSS for responsive, mobile-first design
+- **Backend**: Node.js with Express.js for RESTful API
+- **Database**: PostgreSQL via Supabase with real-time capabilities
+- **Authentication**: Supabase Auth with role-based access control
+- **Hosting**: Frontend on Vercel, Backend on Render.com
+- **Payment Integration**: Paystack and Flutterwave APIs
+- **Communication**: WhatsApp Business API for notifications
+
+### Design Requirements
+
+- **Aesthetic**: Clean, feminine, and professional
+- **Color Palette**: Soft neutrals (beige, white) with feminine accents (blush pink, gold)
+- **Typography**: Modern sans-serif (Poppins) for body text, serif accents for headings
+- **Layout**: Mobile-first responsive design
+- **Accessibility**: WCAG AA compliance
+- **Imagery**: High-quality product and service photography
+
+## User Roles & Permissions
+
+1. **Admin/Owner**
+   - Full system access
+   - Manage all business operations
+   - View comprehensive reports and analytics
+   - Configure system settings
+
+2. **Staff/Workers**
+   - Limited access to assigned functions
+   - Log attendance
+   - View assigned appointments
+   - Record sales transactions
+   - View personal performance metrics
+
+3. **Customers**
+   - Self-service booking portal
+   - View appointment history
+   - Receive notifications
+
+## Key Features & Modules
+
+### 1. Dashboard
+- Real-time overview of business metrics
+- Sales summary (daily, weekly, monthly)
+- Upcoming appointments
+- Low stock alerts
+- Staff performance highlights
+
+### 2. Service Booking Module
+- Service catalog with descriptions and pricing
+- Interactive calendar with availability display
+- Staff assignment functionality
+- Booking creation and management
+- Automated reminders and confirmations
+
+### 3. Inventory Management Module
+- Product catalog management
+- Stock level tracking
+- Inventory adjustment logging
+- Low stock alerts and notifications
+- Barcode scanning integration
+
+### 4. Worker Management Module
+- Staff directory with profiles
+- Attendance tracking system
+- Performance metrics dashboard
+- Shift scheduling
+- Commission tracking
+
+### 5. Sales & POS Module
+- Point-of-sale interface
+- Product and service sales
+- Payment processing
+- Transaction history
+- Receipt generation
+
+### 6. Reporting Module
+- Sales reports
+- Inventory reports
+- Staff performance reports
+- Customer analytics
+- Export functionality
+
+### 7. Notification Center
+- Multi-channel notifications (WhatsApp, SMS, Email)
+- Notification templates
+- Delivery tracking
+- Notification history
+
+### 8. Settings Module
+- Business information management
+- Service and product configuration
+- User management
+- Integration settings
+- Notification preferences
+
+## Technical Architecture
+
+### Database Schema (Supabase)
+
+```sql
+-- Profiles table (extends auth.users)
+CREATE TABLE profiles (
+  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+  first_name TEXT,
+  last_name TEXT,
+  phone TEXT,
+  role TEXT CHECK (role IN ('admin', 'staff', 'customer')),
+  avatar_url TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Services table
+CREATE TABLE services (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  duration INTEGER NOT NULL, -- in minutes
+  price DECIMAL(10,2) NOT NULL,
+  category TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Products table
+CREATE TABLE products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  sku TEXT UNIQUE NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  category TEXT,
+  stock_level INTEGER NOT NULL DEFAULT 0,
+  low_stock_threshold INTEGER DEFAULT 5,
+  image_url TEXT,
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Bookings table
+CREATE TABLE bookings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  customer_id UUID REFERENCES profiles(id),
+  service_id UUID REFERENCES services(id),
+  staff_id UUID REFERENCES profiles(id),
+  start_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  end_time TIMESTAMP WITH TIME ZONE NOT NULL,
+  status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
+  notes TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Attendance table
+CREATE TABLE attendance (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  staff_id UUID REFERENCES profiles(id),
+  date DATE NOT NULL,
+  resumption_time TIMESTAMP WITH TIME ZONE,
+  closing_time TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Transactions table
+CREATE TABLE transactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  type TEXT NOT NULL CHECK (type IN ('service', 'product', 'combined')),
+  booking_id UUID REFERENCES bookings(id),
+  staff_id UUID REFERENCES profiles(id),
+  amount DECIMAL(10,2) NOT NULL,
+  payment_method TEXT NOT NULL,
+  payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
+  payment_reference TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Transaction items table
+CREATE TABLE transaction_items (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  transaction_id UUID REFERENCES transactions(id),
+  product_id UUID REFERENCES products(id),
+  quantity INTEGER NOT NULL,
+  unit_price DECIMAL(10,2) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Inventory logs table
+CREATE TABLE inventory_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID REFERENCES products(id),
+  adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('sale', 'restock', 'adjustment', 'initial')),
+  quantity INTEGER NOT NULL,
+  notes TEXT,
+  staff_id UUID REFERENCES profiles(id),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Notifications table
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipient_id UUID REFERENCES profiles(id),
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read BOOLEAN DEFAULT false,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### Backend API Structure
+
+```
+/api
+  /auth
+    /login
+    /register
+    /logout
+    /refresh
+  /services
+    / (GET all services)
+    /:id (GET service by ID)
+    / (POST create service)
+    /:id (PUT update service)
+    /:id (DELETE service)
+  /products
+    / (GET all products)
+    /:id (GET product by ID)
+    / (POST create product)
+    /:id (PUT update product)
+    /:id (DELETE product)
+    /:id/stock (PATCH adjust stock)
+  /bookings
+    / (GET all bookings)
+    /:id (GET booking by ID)
+    / (POST create booking)
+    /:id (PUT update booking)
+    /:id (DELETE booking)
+    /availability (GET check availability)
+  /attendance
+    / (GET all attendance records)
+    /:id (GET attendance by ID)
+    / (POST check-in)
+    /:id (PUT check-out)
+  /transactions
+    / (GET all transactions)
+    /:id (GET transaction by ID)
+    / (POST create transaction)
+    /reports (GET transaction reports)
+  /reports
+    /sales (GET sales report)
+    /inventory (GET inventory report)
+    /staff-performance (GET staff performance report)
+  /notifications
+    / (GET all notifications)
+    /:id (GET notification by ID)
+    /:id/read (PUT mark as read)
+    /send (POST send notification)
+```
+
+### Frontend Component Structure
+
+```
+src/
+  components/
+    common/
+      Button.jsx
+      Card.jsx
+      Modal.jsx
+      Form.jsx
+      Table.jsx
+      Calendar.jsx
+      Chart.jsx
+    admin/
+      Dashboard.jsx
+      ServiceManagement.jsx
+      ProductManagement.jsx
+      BookingManagement.jsx
+      StaffManagement.jsx
+      ReportGeneration.jsx
+      NotificationSettings.jsx
+    staff/
+      Dashboard.jsx
+      AttendanceTracker.jsx
+      BookingCalendar.jsx
+      SalesPOS.jsx
+      PerformanceMetrics.jsx
+    customer/
+      BookingPortal.jsx
+      ServiceCatalog.jsx
+      AppointmentHistory.jsx
+  context/
+    AuthContext.jsx
+    AppContext.jsx
+  pages/
+    Login.jsx
+    Dashboard.jsx
+    Services.jsx
+    Products.jsx
+    Bookings.jsx
+    Attendance.jsx
+    Transactions.jsx
+    Reports.jsx
+    Notifications.jsx
+    Settings.jsx
+  services/
+    apiService.js
+    authService.js
+    notificationService.js
+  utils/
+    helpers.js
+    constants.js
+    formatters.js
+```
+
+## Implementation Plan
+
+### Phase 1: Foundation Setup (Week 1-2)
+- Initialize project structure
+- Set up Supabase database and authentication
+- Configure Express backend with basic routes
+- Set up React frontend with routing
+- Implement authentication flow
+
+### Phase 2: Core Features (Week 3-4)
+- Service booking system with calendar
+- Worker assignment functionality
+- Basic inventory management
+- Attendance tracking system
+- Notification framework
+
+### Phase 3: Advanced Features (Week 5-6)
+- Payment gateway integration (Paystack/Flutterwave)
+- Point-of-sale functionality
+- Advanced reporting and analytics
+- WhatsApp notification integration
+- Barcode scanning support
+
+### Phase 4: UI/UX Implementation (Week 7)
+- Implement responsive design
+- Apply feminine aesthetic and branding
+- Ensure WCAG AA compliance
+- Optimize for mobile devices
+- Create intuitive user flows
+
+### Phase 5: Testing & Deployment (Week 8)
+- Unit and integration testing
+- End-to-end testing
+- Performance optimization
+- Security testing
+- Deploy to production (Vercel/Render)
+
+### Phase 6: Documentation & Training (Week 9)
+- Create user documentation
+- Develop training materials
+- Conduct training session
+- Final system handover
+
+## Deliverables
+
+1. **UI/UX Designs**
+   - Figma or Adobe XD designs for all screens
+   - Style guide and component library
+   - Interactive prototypes
+
+2. **Full Implementation**
+   - Complete React frontend codebase
+   - Express backend API
+   - Supabase database schema
+   - All integrations implemented
+
+3. **Deployment**
+   - Frontend deployed to Vercel
+   - Backend deployed to Render.com
+   - Production database configured
+   - Domain and SSL setup
+
+4. **Testing**
+   - Comprehensive test suite
+   - Cross-browser compatibility
+   - Mobile responsiveness verified
+   - Accessibility compliance confirmed
+
+5. **Documentation**
+   - User manuals for all roles
+   - API documentation
+   - System administration guide
+   - Troubleshooting guide
+
+6. **Training**
+   - Training session for admin and staff
+   - Training materials and videos
+   - Ongoing support plan
+
+## Budget Breakdown
+
+- **Design & UX**: ₦52,000 (20%)
+- **Backend & Integrations**: ₦130,000 (50%)
+- **Frontend Implementation**: ₦39,000 (15%)
+- **DevOps, Security & Hosting**: ₦26,000 (10%)
+- **QA, Documentation & Training**: ₦13,000 (5%)
+
+**Total**: ₦260,000
+
+This comprehensive management system will transform Vonne X2x's business operations by providing a unified platform for managing both fashion products and beauty services, with a focus on staff performance monitoring, inventory tracking, and seamless customer experience.

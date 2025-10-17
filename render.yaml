@@ -1,0 +1,52 @@
+# Render.com deployment configuration
+services:
+  # Backend API Service
+  - type: web
+    name: vonne-x2x-backend
+    env: node
+    plan: free
+    region: oregon
+    buildCommand: cd backend && npm install
+    startCommand: cd backend && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: FRONTEND_URL
+        fromService:
+          name: vonne-x2x-frontend
+          type: web
+          property: url
+    healthCheckPath: /api/health
+    autoDeploy: true
+
+  # Frontend Service (if deploying to Render instead of Vercel)
+  - type: web
+    name: vonne-x2x-frontend
+    env: static
+    plan: free
+    region: oregon
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: vonne-x2x-backend
+          type: web
+          property: url
+        value: /api
+    routes:
+      - type: rewrite
+        source: "/*"
+        destination: "/index.html"
+    autoDeploy: true
+
+# Database (if using Render PostgreSQL)
+databases:
+  - name: vonne-x2x-db
+    plan: free
+    region: oregon
+    ipAllowList: []
+    databaseName: vonne_x2x
+    user: vonne_x2x_user
