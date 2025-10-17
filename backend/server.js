@@ -2,7 +2,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const cron = require('node-cron');
+const axios = require('axios');
 require('dotenv').config();
+
+// Initialize Supabase client
+const { supabase } = require('./config/supabase');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,9 +64,81 @@ app.use('*', (req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
+// Function to send automated email reminders 24 hours before appointments
+async function send24HourReminders() {
+  try {
+    console.log('🔔 Checking for appointments needing 24-hour reminders...');
+    
+    // Calculate the target date and time for appointments 24 hours from now
+    const now = new Date();
+    const targetDate = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const targetDateStr = targetDate.toISOString().split('T')[0];
+    
+    // Get bookings scheduled for exactly 24 hours from now
+    const { data: bookings, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        customer:profiles!customer_id(first_name, last_name, email, phone),
+        staff:profiles!staff_id(first_name, last_name),
+        service:services(name, category, price, duration)
+      `)
+      .eq('booking_date', targetDateStr)
+      .eq('status', 'scheduled')
+      .is('reminder_sent', null);
+
+    if (error) {
+      console.error('Error fetching bookings for reminders:', error);
+      return;
+    }
+
+    console.log(`📅 Found ${bookings?.length || 0} appointments needing reminders`);
+
+    if (bookings && bookings.length > 0) {
+      for (const booking of bookings) {
+        try {
+          // Call the booking reminder endpoint
+          const response = await axios.post(
+            `http://localhost:${PORT}/api/notifications/booking-reminder`,
+            {
+              booking_id: booking.id,
+              hours_before: 24
+            },
+            {
+              headers: {
+                'Authorization': `Bearer ${process.env.ADMIN_API_KEY}`,
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          // Mark reminder as sent in the database
+          await supabase
+            .from('bookings')
+            .update({ reminder_sent: new Date().toISOString() })
+            .eq('id', booking.id);
+
+          console.log(`✅ Sent 24-hour reminder for booking ${booking.id}`);
+        } catch (bookingError) {
+          console.error(`❌ Failed to send reminder for booking ${booking.id}:`, bookingError.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error in automated reminder system:', error);
+  }
+}
+
+// Schedule the reminder task to run daily at 9:00 AM
+cron.schedule('0 9 * * *', () => {
+  console.log('⏰ Running daily reminder check...');
+  send24HourReminders();
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Vonne X2x Management System API running on port ${PORT}`);
   console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log('⏰ Automated email reminders scheduled to run daily at 9:00 AM');
 });
 
 module.exports = app;

@@ -313,35 +313,57 @@ router.post('/booking-reminder', authenticateToken, requireStaff, async (req, re
       `Date: ${new Date(booking.booking_date).toLocaleDateString()}\n` +
       `Time: ${booking.booking_time}\n` +
       `Staff: ${staff.first_name} ${staff.last_name}\n\n` +
-      `Please arrive 10 minutes early. Reply CANCEL if you need to cancel.\n\n` +
+      `Please arrive 10 minutes early. Contact us if you need to reschedule or cancel.\n\n` +
       `See you soon at ${process.env.BUSINESS_NAME}!`;
+
+    const emailSubject = `Appointment Reminder - ${service.name}`;
+    const emailHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #d4af37;">Appointment Reminder</h2>
+        <p>Hi ${customer.first_name}!</p>
+        <p>This is a friendly reminder about your upcoming appointment:</p>
+        <div style="background-color: #f9f9f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Service:</strong> ${service.name}</p>
+          <p><strong>Date:</strong> ${new Date(booking.booking_date).toLocaleDateString()}</p>
+          <p><strong>Time:</strong> ${booking.booking_time}</p>
+          <p><strong>Staff:</strong> ${staff.first_name} ${staff.last_name}</p>
+        </div>
+        <p>Please arrive 10 minutes early for your appointment.</p>
+        <p>If you need to reschedule or cancel, please contact us as soon as possible.</p>
+        <p>We look forward to seeing you at ${process.env.BUSINESS_NAME}!</p>
+        <hr style="margin: 30px 0;">
+        <p style="font-size: 12px; color: #666;">
+          ${process.env.BUSINESS_NAME}<br>
+          ${process.env.BUSINESS_ADDRESS}<br>
+          ${process.env.BUSINESS_PHONE}
+        </p>
+      </div>
+    `;
 
     const notifications = [];
 
-    // Send SMS reminder if phone number is available
-    if (customer.phone) {
+    // Send email reminder if email is available
+    if (customer.email) {
       try {
-        let formattedPhone = customer.phone.replace(/\s+/g, '');
-        if (formattedPhone.startsWith('0')) {
-          formattedPhone = '+234' + formattedPhone.substring(1);
-        } else if (!formattedPhone.startsWith('+')) {
-          formattedPhone = '+234' + formattedPhone;
-        }
+        const mailOptions = {
+          from: `"${process.env.BUSINESS_NAME}" <${process.env.EMAIL_FROM}>`,
+          to: customer.email,
+          subject: emailSubject,
+          text: message,
+          html: emailHtml
+        };
 
-        const smsResult = await twilioClient.messages.create({
-          body: message,
-          from: process.env.TWILIO_PHONE_NUMBER,
-          to: formattedPhone
-        });
+        const emailResult = await emailTransporter.sendMail(mailOptions);
 
-        const { data: smsNotification } = await supabase
+        const { data: emailNotification } = await supabase
           .from('notifications')
           .insert({
-            type: 'sms',
-            recipient: formattedPhone,
+            type: 'email',
+            recipient: customer.email,
+            subject: emailSubject,
             message: message,
             status: 'sent',
-            external_id: smsResult.sid,
+            external_id: emailResult.messageId,
             customer_id: customer.id,
             booking_id: booking_id,
             sent_by: req.user.id,
@@ -350,10 +372,10 @@ router.post('/booking-reminder', authenticateToken, requireStaff, async (req, re
           .select()
           .single();
 
-        notifications.push({ type: 'sms', status: 'sent', id: smsNotification?.id });
-      } catch (smsError) {
-        console.error('SMS reminder failed:', smsError);
-        notifications.push({ type: 'sms', status: 'failed', error: smsError.message });
+        notifications.push({ type: 'email', status: 'sent', id: emailNotification?.id });
+      } catch (emailError) {
+        console.error('Email reminder failed:', emailError);
+        notifications.push({ type: 'email', status: 'failed', error: emailError.message });
       }
     }
 
