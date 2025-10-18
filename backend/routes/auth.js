@@ -29,8 +29,8 @@ router.post('/register', validateUserRegistration, async (req, res) => {
       .from('profiles')
       .insert({
         id: authData.user.id,
-        first_name,
-        last_name,
+        email,
+        full_name: `${first_name} ${last_name}`,
         phone,
         role
       })
@@ -157,8 +157,7 @@ router.put('/profile', authenticateToken, async (req, res) => {
     const { data: profile, error } = await supabase
       .from('profiles')
       .update({
-        first_name,
-        last_name,
+        full_name: `${first_name} ${last_name}`,
         phone,
         avatar_url
       })

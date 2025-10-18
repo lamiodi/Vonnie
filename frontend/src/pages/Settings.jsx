@@ -62,8 +62,8 @@ const Settings = () => {
     },
     integrations: {
       paystack_enabled: true,
-      paystack_public_key: 'pk_test_xxxxxxxxxxxxx',
-      paystack_secret_key: 'sk_test_xxxxxxxxxxxxx',
+      paystack_public_key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
+      paystack_secret_key: import.meta.env.VITE_PAYSTACK_SECRET_KEY || '',
       flutterwave_enabled: false,
       flutterwave_public_key: '',
       flutterwave_secret_key: '',
@@ -737,7 +737,7 @@ const Settings = () => {
                     value={settings.integrations.paystack_public_key}
                     onChange={(e) => handleSettingChange('integrations', 'paystack_public_key', e.target.value)}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="pk_test_xxxxxxxxxxxxx"
+                    placeholder={import.meta.env.VITE_PAYSTACK_PUBLIC_KEY ? "Current key configured" : "pk_test_xxxxxxxxxxxxx"}
                   />
                 </div>
                 <div>
@@ -749,7 +749,7 @@ const Settings = () => {
                     value={settings.integrations.paystack_secret_key}
                     onChange={(e) => handleSettingChange('integrations', 'paystack_secret_key', e.target.value)}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="sk_test_xxxxxxxxxxxxx"
+                    placeholder={import.meta.env.VITE_PAYSTACK_SECRET_KEY ? "Current key configured" : "sk_test_xxxxxxxxxxxxx"}
                   />
                 </div>
               </div>

@@ -93,3 +93,21 @@ Desktop.ini
 # Temporary files
 tmp/
 temp/
+
+# Environment example files (contain sensitive placeholders)
+.env.example
+frontend/.env.example
+backend/.env.example
+
+# SQL setup and demo files (contain sensitive data or setup scripts)
+*.sql
+sql_*.sql
+setup_*.js
+create_demo_*.js
+apply_migrations.js
+setup_database_direct.js
+
+# Documentation with sensitive information
+GET_SUPABASE_CREDENTIALS.md
+SETUP.md
+prompt.txt

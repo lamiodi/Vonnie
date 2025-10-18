@@ -23,7 +23,7 @@ const PaystackPayment = ({
 
   const publicKey = import.meta.env.VITE_PAYSTACK_PUBLIC_KEY
 
-  if (!publicKey || publicKey === 'pk_test_your_paystack_key_here') {
+  if (!publicKey || publicKey === 'pk_test_your_paystack_public_key_here') {
     return (
       <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
         <div className="flex items-center gap-2">
