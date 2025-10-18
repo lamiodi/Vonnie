@@ -8,7 +8,8 @@ import {
   decryptEmail,
   generateToken,
   validatePasswordStrength,
-  validateEmail
+  validateEmail,
+  verifyToken
 } from '../utils/auth.js';
 
 const router = express.Router();
@@ -169,7 +170,6 @@ router.get('/profile', async (req, res) => {
     }
 
     const token = authHeader.split(' ')[1];
-    const { verifyToken } = require('../utils/auth');
     const decoded = verifyToken(token);
 
     const { data: user, error } = await supabase
@@ -222,7 +222,6 @@ router.put('/profile', [
     }
 
     const token = authHeader.split(' ')[1];
-    const { verifyToken } = require('../utils/auth');
     const decoded = verifyToken(token);
 
     const { first_name, last_name, phone } = req.body;
@@ -280,7 +279,6 @@ router.put('/change-password', [
     }
 
     const token = authHeader.split(' ')[1];
-    const { verifyToken } = require('../utils/auth');
     const decoded = verifyToken(token);
 
     const { current_password, new_password } = req.body;
