@@ -1,5 +1,5 @@
 const express = require('express');
-const { supabase } = require('../config/supabase');
+const { supabase } = require('../config/supabase-db');
 const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
 const { validateService, validateUUID, validatePagination } = require('../middleware/validation');
 
