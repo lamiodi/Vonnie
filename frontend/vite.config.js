@@ -40,7 +40,7 @@ export default defineConfig({
           ui: ['@headlessui/react', '@heroicons/react', 'lucide-react'],
           charts: ['recharts'],
           forms: ['react-hook-form', '@hookform/resolvers', 'zod'],
-          supabase: ['@supabase/supabase-js'],
+          // Removed Supabase reference
           query: ['@tanstack/react-query']
         }
       }

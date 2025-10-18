@@ -1,83 +1,80 @@
-const jwt = require('jsonwebtoken');
-const { supabase } = require('../config/supabase');
+const { verifyToken, extractToken } = require('../utils/auth');
+const { supabase } = require('../config/supabase-db');
 
-// Verify JWT token and authenticate user
-const authenticateToken = async (req, res, next) => {
+// Authentication middleware
+const authenticate = async (req, res, next) => {
   try {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
-
-    if (!token) {
-      return res.status(401).json({ error: 'Access token required' });
-    }
-
-    // Verify token with Supabase
-    const { data: { user }, error } = await supabase.auth.getUser(token);
+    const authHeader = req.headers.authorization;
+    const token = extractToken(authHeader);
     
-    if (error || !user) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
-    }
-
-    // Get user profile with role
-    const { data: profile, error: profileError } = await supabase
+    const decoded = verifyToken(token);
+    
+    // Fetch user from database
+    const { data: user, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', decoded.userId)
       .single();
-
-    if (profileError || !profile) {
-      return res.status(404).json({ error: 'User profile not found' });
+    
+    if (error || !user) {
+      return res.status(401).json({ error: 'User not found' });
     }
-
-    req.user = {
-      id: user.id,
-      email: user.email,
-      role: profile.role,
-      profile: profile
-    };
-
+    
+    if (!user.is_active) {
+      return res.status(401).json({ error: 'Account is deactivated' });
+    }
+    
+    req.user = user;
     next();
   } catch (error) {
-    console.error('Authentication error:', error);
-    return res.status(403).json({ error: 'Token verification failed' });
+    return res.status(401).json({ error: error.message });
   }
 };
 
-// Check if user has required role
-const requireRole = (roles) => {
+// Authorization middleware for specific roles
+const authorize = (roles = []) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: 'Authentication required' });
     }
-
-    const userRole = req.user.role;
-    const allowedRoles = Array.isArray(roles) ? roles : [roles];
-
-    if (!allowedRoles.includes(userRole)) {
-      return res.status(403).json({ 
-        error: 'Insufficient permissions',
-        required: allowedRoles,
-        current: userRole
-      });
+    
+    if (roles.length && !roles.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
     }
-
+    
     next();
   };
 };
 
-// Admin only middleware
-const requireAdmin = requireRole(['admin']);
-
-// Staff or Admin middleware
-const requireStaff = requireRole(['admin', 'staff']);
-
-// Customer, Staff or Admin middleware
-const requireUser = requireRole(['admin', 'staff', 'customer']);
+// Optional authentication middleware (doesn't fail if no token)
+const optionalAuth = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    
+    if (authHeader) {
+      const token = extractToken(authHeader);
+      const decoded = verifyToken(token);
+      
+      const { data: user, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', decoded.userId)
+        .single();
+      
+      if (!error && user && user.is_active) {
+        req.user = user;
+      }
+    }
+    
+    next();
+  } catch (error) {
+    // Continue without authentication if token is invalid
+    next();
+  }
+};
 
 module.exports = {
-  authenticateToken,
-  requireRole,
-  requireAdmin,
-  requireStaff,
-  requireUser
+  authenticate,
+  authorize,
+  optionalAuth
 };

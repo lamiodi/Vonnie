@@ -6,8 +6,8 @@ const cron = require('node-cron');
 const axios = require('axios');
 require('dotenv').config();
 
-// Initialize Supabase client
-const { supabase } = require('./config/supabase');
+// Initialize Supabase client for database operations only
+const { supabase } = require('./config/supabase-db');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
