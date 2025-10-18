@@ -14,8 +14,10 @@ const Register = () => {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'customer',
+    role: 'staff', // Default to staff for this page
     agreeToTerms: false,
+    specialization: '', // New field for staff
+    experience: '', // New field for staff
   })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
@@ -55,6 +57,17 @@ const Register = () => {
     } else if (formData.password !== formData.confirmPassword) {
       newErrors.confirmPassword = 'Passwords do not match'
     }
+    
+    // Staff-specific validations
+    if (formData.role === 'staff') {
+      if (!formData.specialization.trim()) {
+        newErrors.specialization = 'Specialization is required for staff accounts'
+      }
+      if (!formData.experience.trim()) {
+        newErrors.experience = 'Experience level is required for staff accounts'
+      }
+    }
+    
     if (!formData.agreeToTerms) {
       newErrors.agreeToTerms = 'You must agree to the terms and conditions'
     }
@@ -94,12 +107,14 @@ const Register = () => {
         last_name: formData.lastName,
         phone: formData.phone,
         role: formData.role,
+        specialization: formData.specialization,
+        experience: formData.experience,
       }
 
       const { success } = await signUp(formData.email, formData.password, userData)
       
       if (success) {
-        toast.success('Registration successful! Please check your email to verify your account.')
+        toast.success('Staff registration successful! Please check your email to verify your account.')
         navigate('/login')
       }
     } catch (error) {
@@ -112,25 +127,56 @@ const Register = () => {
   return (
     <>
       <Helmet>
-        <title>Register - Vonne X2x Management System</title>
-        <meta name="description" content="Create your Vonne X2x account to start managing your beauty salon operations." />
+        <title>Staff Registration - Vonne X2x Management System</title>
+        <meta name="description" content="Join the Vonne X2x team as a staff member and help manage our beauty salon operations." />
       </Helmet>
 
       <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-md w-full space-y-8">
+        <div className="max-w-lg w-full space-y-8">
           {/* Header */}
           <div className="text-center">
             <div className="mx-auto h-16 w-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center mb-6">
               <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
             </div>
             <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              Create Account
+              Join Our Team
             </h2>
-            <p className="text-gray-600">
-              Join Vonne X2x to manage your beauty business
+            <p className="text-gray-600 mb-4">
+              Create your staff account to start managing services and appointments
             </p>
+            
+            {/* Staff Benefits */}
+            <div className="bg-primary-50 rounded-lg p-4 mb-6">
+              <h3 className="text-sm font-semibold text-primary-800 mb-2">Staff Benefits</h3>
+              <div className="grid grid-cols-2 gap-2 text-xs text-primary-700">
+                <div className="flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Manage appointments
+                </div>
+                <div className="flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Track earnings
+                </div>
+                <div className="flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Client management
+                </div>
+                <div className="flex items-center">
+                  <svg className="h-3 w-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Performance insights
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Registration Form */}
@@ -140,7 +186,7 @@ const Register = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 mb-2">
-                    First Name
+                    First Name *
                   </label>
                   <input
                     id="firstName"
@@ -159,7 +205,7 @@ const Register = () => {
                 </div>
                 <div>
                   <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 mb-2">
-                    Last Name
+                    Last Name *
                   </label>
                   <input
                     id="lastName"
@@ -181,7 +227,7 @@ const Register = () => {
               {/* Email Field */}
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address
+                  Professional Email Address *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -198,7 +244,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleChange}
                     className={`block w-full pl-10 pr-3 py-3 border ${errors.email ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors`}
-                    placeholder="Enter your email"
+                    placeholder="your.name@email.com"
                   />
                 </div>
                 {errors.email && (
@@ -209,7 +255,7 @@ const Register = () => {
               {/* Phone Field */}
               <div>
                 <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number
+                  Phone Number *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -234,31 +280,65 @@ const Register = () => {
                 )}
               </div>
 
-              {/* Role Selection */}
-              <div>
-                <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
-                  Account Type
-                </label>
-                <select
-                  id="role"
-                  name="role"
-                  value={formData.role}
-                  onChange={handleChange}
-                  className="block w-full px-3 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
-                >
-                  <option value="customer">Customer - Book appointments and services</option>
-                  <option value="staff">Staff - Manage services and appointments</option>
-                </select>
-                <p className="mt-1 text-xs text-gray-500">
-                  Admin accounts are created by existing administrators
-                </p>
+              {/* Staff-specific fields */}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label htmlFor="specialization" className="block text-sm font-medium text-gray-700 mb-2">
+                    Specialization *
+                  </label>
+                  <select
+                    id="specialization"
+                    name="specialization"
+                    value={formData.specialization}
+                    onChange={handleChange}
+                    className={`block w-full px-3 py-3 border ${errors.specialization ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors`}
+                  >
+                    <option value="">Select your specialization</option>
+                    <option value="hair_styling">Hair Styling & Cutting</option>
+                    <option value="nail_care">Nail Care & Manicure</option>
+                    <option value="makeup">Makeup & Beauty</option>
+                    <option value="skincare">Skincare & Facials</option>
+                    <option value="massage">Massage Therapy</option>
+                    <option value="eyebrow_lash">Eyebrow & Lash Services</option>
+                    <option value="general">General Beauty Services</option>
+                  </select>
+                  {errors.specialization && (
+                    <p className="mt-1 text-sm text-red-600">{errors.specialization}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label htmlFor="experience" className="block text-sm font-medium text-gray-700 mb-2">
+                    Experience Level *
+                  </label>
+                  <select
+                    id="experience"
+                    name="experience"
+                    value={formData.experience}
+                    onChange={handleChange}
+                    className={`block w-full px-3 py-3 border ${errors.experience ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors`}
+                  >
+                    <option value="">Select your experience level</option>
+                    <option value="entry">Entry Level (0-1 years)</option>
+                    <option value="junior">Junior (1-3 years)</option>
+                    <option value="mid">Mid Level (3-5 years)</option>
+                    <option value="senior">Senior (5-10 years)</option>
+                    <option value="expert">Expert (10+ years)</option>
+                  </select>
+                  {errors.experience && (
+                    <p className="mt-1 text-sm text-red-600">{errors.experience}</p>
+                  )}
+                </div>
               </div>
+
+              {/* Account Type - Hidden but set to staff */}
+              <input type="hidden" name="role" value="staff" />
 
               {/* Password Fields */}
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                    Password
+                    Password *
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -275,7 +355,7 @@ const Register = () => {
                       value={formData.password}
                       onChange={handleChange}
                       className={`block w-full pl-10 pr-10 py-3 border ${errors.password ? 'border-red-300' : 'border-gray-300'} rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors`}
-                      placeholder="Create a password"
+                      placeholder="Create a secure password"
                     />
                     <button
                       type="button"
@@ -297,11 +377,14 @@ const Register = () => {
                   {errors.password && (
                     <p className="mt-1 text-sm text-red-600">{errors.password}</p>
                   )}
+                  <p className="mt-1 text-xs text-gray-500">
+                    Minimum 6 characters required
+                  </p>
                 </div>
 
                 <div>
                   <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-2">
-                    Confirm Password
+                    Confirm Password *
                   </label>
                   <div className="relative">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -363,6 +446,7 @@ const Register = () => {
                     <Link to="/privacy" className="text-primary-600 hover:text-primary-700 font-medium">
                       Privacy Policy
                     </Link>
+                    {' '}and understand that my account will be reviewed before activation.
                   </label>
                 </div>
                 {errors.agreeToTerms && (
@@ -379,24 +463,54 @@ const Register = () => {
                 {isLoading ? (
                   <>
                     <ButtonSpinner className="mr-2" />
-                    Creating account...
+                    Creating staff account...
                   </>
                 ) : (
-                  'Create Account'
+                  'Join Our Team'
                 )}
               </button>
+
+              {/* Next Steps Info */}
+              <div className="bg-blue-50 rounded-lg p-4 mt-4">
+                <div className="flex">
+                  <svg className="h-5 w-5 text-blue-400 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <h4 className="text-sm font-medium text-blue-800">What happens next?</h4>
+                    <div className="mt-1 text-sm text-blue-700">
+                      <ol className="list-decimal list-inside space-y-1">
+                        <li>Verify your email address</li>
+                        <li>Admin will review your application</li>
+                        <li>You'll receive approval notification</li>
+                        <li>Complete your profile setup</li>
+                        <li>Start managing appointments!</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </form>
 
           {/* Sign In Link */}
           <div className="text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
+              Already have a staff account?{' '}
               <Link
                 to="/login"
                 className="font-medium text-primary-600 hover:text-primary-700 transition-colors"
               >
                 Sign in here
+              </Link>
+            </p>
+            <p className="text-xs text-gray-500 mt-2">
+              Looking to book services?{' '}
+              <Link
+                to="/book"
+                className="font-medium text-primary-600 hover:text-primary-700 transition-colors"
+              >
+                Book as a guest
               </Link>
             </p>
           </div>

@@ -8,14 +8,13 @@ import Login from './pages/auth/Login'
 import Register from './pages/auth/Register'
 import ForgotPassword from './pages/auth/ForgotPassword'
 import ResetPassword from './pages/auth/ResetPassword'
-
-// Main Pages
 import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 
 // Customer Pages
 import BookService from './pages/customer/BookService'
+import GuestBooking from './pages/customer/GuestBooking'
 import Appointments from './pages/customer/Appointments'
 
 // Staff/Admin Pages
@@ -108,6 +107,10 @@ const AppRoutes = () => {
           </PublicRoute>
         }
       />
+      <Route
+        path="/book"
+        element={<GuestBooking />}
+      />
 
       {/* Protected Routes - All Users */}
       <Route
@@ -198,7 +201,7 @@ const AppRoutes = () => {
       />
 
       {/* Default Route */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={<Navigate to="/book" replace />} />
       
       {/* 404 Route */}
       <Route

@@ -277,25 +277,8 @@ CREATE POLICY "Staff can view all settings" ON business_settings
 CREATE POLICY "Admins can modify settings" ON business_settings
     FOR ALL USING (is_admin());
 
--- Create function to handle new user registration
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO profiles (id, email, full_name, role)
-    VALUES (
-        NEW.id,
-        NEW.email,
-        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
-        COALESCE((NEW.raw_user_meta_data->>'role')::user_role, 'customer')
-    );
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to automatically create profile when user signs up
-CREATE TRIGGER on_auth_user_created
-    AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+-- Note: handle_new_user function and trigger are defined in 003_auth_triggers.sql
+-- This avoids duplicate function definitions that can cause conflicts
 
 -- Function to update product stock after transaction
 CREATE OR REPLACE FUNCTION update_product_stock()
