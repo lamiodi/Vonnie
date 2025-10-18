@@ -145,7 +145,7 @@ export const PaymentVerification = ({ reference, onVerified, onError }) => {
     setIsVerifying(true)
     try {
       // This would typically call your backend API to verify the payment
-      const response = await fetch(`/api/payments/verify/${reference}`, {
+      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payments/verify/${reference}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
