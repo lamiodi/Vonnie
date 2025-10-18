@@ -1,5 +1,5 @@
-const { verifyToken, extractToken } = require('../utils/auth');
-const { supabase } = require('../config/supabase-db');
+import { verifyToken, extractToken } from '../utils/auth.js';
+import { supabase } from '../config/supabase-db.js';
 
 // Authentication middleware
 const authenticate = async (req, res, next) => {
@@ -73,8 +73,16 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = {
+// Convenience middleware functions
+const authenticateToken = authenticate;
+const requireStaff = authorize(['staff', 'admin']);
+const requireAdmin = authorize(['admin']);
+
+export {
   authenticate,
   authorize,
-  optionalAuth
+  optionalAuth,
+  authenticateToken,
+  requireStaff,
+  requireAdmin
 };

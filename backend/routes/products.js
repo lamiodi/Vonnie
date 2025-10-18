@@ -1,7 +1,7 @@
-const express = require('express');
-const { supabase } = require('../config/supabase-db');
-const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
-const { validateProduct, validateUUID, validatePagination } = require('../middleware/validation');
+import express from 'express';
+import { supabase } from '../config/supabase-db.js';
+import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
+import { validateProduct, validateUUID, validatePagination } from '../middleware/validation.js';
 
 const router = express.Router();
 
@@ -469,4 +469,4 @@ router.get('/alerts/low-stock', authenticateToken, requireStaff, async (req, res
   }
 });
 
-module.exports = router;
+export default router;

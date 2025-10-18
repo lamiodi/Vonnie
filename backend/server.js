@@ -1,13 +1,16 @@
-const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
-const cron = require('node-cron');
-const axios = require('axios');
-require('dotenv').config();
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import cron from 'node-cron';
+import axios from 'axios';
+import dotenv from 'dotenv';
+
+// Configure dotenv
+dotenv.config();
 
 // Initialize Supabase client for database operations only
-const { supabase } = require('./config/supabase-db');
+import { supabase } from './config/supabase-db.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,14 +48,23 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/services', require('./routes/services'));
-app.use('/api/products', require('./routes/products'));
-app.use('/api/bookings', require('./routes/bookings'));
-app.use('/api/attendance', require('./routes/attendance'));
-app.use('/api/transactions', require('./routes/transactions'));
-app.use('/api/reports', require('./routes/reports'));
-app.use('/api/notifications', require('./routes/notifications'));
+import authRoutes from './routes/auth.js';
+import servicesRoutes from './routes/services.js';
+import productsRoutes from './routes/products.js';
+import bookingsRoutes from './routes/bookings.js';
+import attendanceRoutes from './routes/attendance.js';
+import transactionsRoutes from './routes/transactions.js';
+import reportsRoutes from './routes/reports.js';
+import notificationsRoutes from './routes/notifications.js';
+
+app.use('/api/auth', authRoutes);
+app.use('/api/services', servicesRoutes);
+app.use('/api/products', productsRoutes);
+app.use('/api/bookings', bookingsRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/transactions', transactionsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -145,4 +157,4 @@ app.listen(PORT, () => {
   console.log('⏰ Automated email reminders scheduled to run daily at 9:00 AM');
 });
 
-module.exports = app;
+export default app;

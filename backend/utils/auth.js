@@ -1,7 +1,10 @@
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const CryptoJS = require('crypto-js');
-require('dotenv').config();
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+import CryptoJS from 'crypto-js';
+import dotenv from 'dotenv';
+
+// Configure dotenv
+dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-256-bit-encryption-key-change-me';
@@ -105,7 +108,7 @@ const validateEmail = (email) => {
   return true;
 };
 
-module.exports = {
+export {
   hashPassword,
   comparePassword,
   encryptEmail,

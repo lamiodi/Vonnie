@@ -1,7 +1,7 @@
-const express = require('express');
-const { body, validationResult } = require('express-validator');
-const { supabase } = require('../config/supabase-db');
-const {
+import express from 'express';
+import { body, validationResult } from 'express-validator';
+import { supabase } from '../config/supabase-db.js';
+import {
   hashPassword,
   comparePassword,
   encryptEmail,
@@ -9,7 +9,7 @@ const {
   generateToken,
   validatePasswordStrength,
   validateEmail
-} = require('../utils/auth');
+} from '../utils/auth.js';
 
 const router = express.Router();
 
@@ -330,4 +330,4 @@ router.put('/change-password', [
   }
 });
 
-module.exports = router;
+export default router;

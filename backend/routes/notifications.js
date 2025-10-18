@@ -1,8 +1,8 @@
-const express = require('express');
-const { supabase } = require('../config/supabase-db');
-const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
-const nodemailer = require('nodemailer');
-const axios = require('axios');
+import express from 'express';
+import { supabase } from '../config/supabase-db.js';
+import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 const router = express.Router();
 
@@ -675,4 +675,4 @@ router.get('/templates', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;

@@ -1,4 +1,4 @@
-const pkg = require('pg');
+import pkg from 'pg';
 const { Pool } = pkg;
 
 // Create a PostgreSQL connection pool
@@ -30,7 +30,7 @@ const getClient = () => {
   return pool.connect();
 };
 
-module.exports = {
+export {
   pool,
   query,
   getClient

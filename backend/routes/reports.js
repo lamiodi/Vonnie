@@ -1,8 +1,8 @@
-const express = require('express');
-const { supabase } = require('../config/supabase-db');
-const { authenticateToken, requireStaff, requireAdmin } = require('../middleware/auth');
-const PDFDocument = require('pdfkit');
-const { Parser } = require('json2csv');
+import express from 'express';
+import { supabase } from '../config/supabase-db.js';
+import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
+import PDFDocument from 'pdfkit';
+import { Parser } from 'json2csv';
 
 const router = express.Router();
 
@@ -854,4 +854,4 @@ router.get('/export/pdf', authenticateToken, requireStaff, async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
