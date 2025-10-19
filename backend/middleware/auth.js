@@ -9,21 +9,21 @@ const authenticate = async (req, res, next) => {
     
     const decoded = verifyToken(token);
     
-    // Fetch user from database
+    // Fetch user from database using custom users table
     const { data: user, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*')
       .eq('id', decoded.userId)
       .single();
-    
+
     if (error || !user) {
       return res.status(401).json({ error: 'User not found' });
     }
-    
+
     if (!user.is_active) {
       return res.status(401).json({ error: 'Account is deactivated' });
     }
-    
+
     req.user = user;
     next();
   } catch (error) {
@@ -56,7 +56,7 @@ const optionalAuth = async (req, res, next) => {
       const decoded = verifyToken(token);
       
       const { data: user, error } = await supabase
-        .from('profiles')
+        .from('users')
         .select('*')
         .eq('id', decoded.userId)
         .single();

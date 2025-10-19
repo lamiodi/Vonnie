@@ -16,10 +16,11 @@ CREATE TYPE notification_type AS ENUM ('info', 'success', 'warning', 'error', 'a
 CREATE TYPE transaction_type AS ENUM ('earned', 'redeemed', 'expired', 'adjusted');
 CREATE TYPE movement_type AS ENUM ('in', 'out', 'adjustment', 'transfer');
 
--- Users table (staff and admin only - extends Supabase auth.users)
+-- Users table (staff and admin with custom authentication)
 CREATE TABLE users (
-    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
     full_name VARCHAR(255) NOT NULL,
     phone VARCHAR(20),
     role user_role NOT NULL DEFAULT 'staff',
@@ -312,80 +313,10 @@ CREATE TRIGGER update_staff_attendance_updated_at BEFORE UPDATE ON staff_attenda
 CREATE TRIGGER update_system_settings_updated_at BEFORE UPDATE ON system_settings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security (RLS) Policies
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE staff_attendance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE loyalty_points ENABLE ROW LEVEL SECURITY;
+-- Note: RLS policies are disabled for custom authentication
+-- Authentication and authorization will be handled at the application level
 
--- Users can view their own data
-CREATE POLICY "Users can view own profile" ON users FOR SELECT USING (auth.uid() = id);
-CREATE POLICY "Users can update own profile" ON users FOR UPDATE USING (auth.uid() = id);
-
--- Staff and admin can view all users
-CREATE POLICY "Staff can view all users" ON users FOR SELECT USING (
-    EXISTS (
-        SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin')
-    )
-);
-
--- Appointments policies
-CREATE POLICY "Staff can view appointments" ON appointments FOR SELECT USING (
-    staff_id = auth.uid() OR
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
-CREATE POLICY "Staff can manage appointments" ON appointments FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
--- Payments policies
-CREATE POLICY "Staff can view payments" ON payments FOR SELECT USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
--- Notifications policies
-CREATE POLICY "Users can view own notifications" ON notifications FOR SELECT USING (user_id = auth.uid());
-CREATE POLICY "Users can update own notifications" ON notifications FOR UPDATE USING (user_id = auth.uid());
-
--- Public read access for service-related tables
-ALTER TABLE service_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE services ENABLE ROW LEVEL SECURITY;
-ALTER TABLE product_categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can view active service categories" ON service_categories FOR SELECT USING (is_active = true);
-CREATE POLICY "Anyone can view active services" ON services FOR SELECT USING (is_active = true);
-CREATE POLICY "Anyone can view active product categories" ON product_categories FOR SELECT USING (is_active = true);
-CREATE POLICY "Anyone can view active products" ON products FOR SELECT USING (is_active = true);
-
--- Staff can manage service and product data
-CREATE POLICY "Staff can manage service categories" ON service_categories FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
-CREATE POLICY "Staff can manage services" ON services FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
-CREATE POLICY "Staff can manage product categories" ON product_categories FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
-CREATE POLICY "Staff can manage products" ON products FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role IN ('staff', 'admin'))
-);
-
--- System settings - admin only
-ALTER TABLE system_settings ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public settings are viewable" ON system_settings FOR SELECT USING (is_public = true);
-CREATE POLICY "Admin can manage settings" ON system_settings FOR ALL USING (
-    EXISTS (SELECT 1 FROM users WHERE id = auth.uid() AND role = 'admin')
-);
-
-COMMENT ON TABLE users IS 'Extended user profiles linked to Supabase auth';
+COMMENT ON TABLE users IS 'User profiles with custom JWT authentication';
 COMMENT ON TABLE appointments IS 'Customer appointments with staff and services';
 COMMENT ON TABLE payments IS 'Payment records for appointments and transactions';
 COMMENT ON TABLE transactions IS 'POS transactions and financial records';

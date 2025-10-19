@@ -40,9 +40,9 @@ router.post('/register', [
 
     // Check if user already exists
     const { data: existingUser, error: checkError } = await supabase
-      .from('profiles')
+      .from('users')
       .select('id')
-      .eq('email', encryptEmail(email))
+      .eq('email', email)
       .single();
 
     if (existingUser) {
@@ -52,21 +52,16 @@ router.post('/register', [
     // Hash password
     const hashedPassword = await hashPassword(password);
     
-    // Encrypt email
-    const encryptedEmail = encryptEmail(email);
-
     // Create user in database
     const { data: user, error: createError } = await supabase
-      .from('profiles')
+      .from('users')
       .insert([{
-        email: encryptedEmail,
+        email: email,
         password_hash: hashedPassword,
-        first_name,
-        last_name,
+        full_name: `${first_name} ${last_name}`,
         phone: phone || null,
         role,
         is_active: true,
-        email_verified: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       }])
@@ -85,9 +80,8 @@ router.post('/register', [
       message: 'User registered successfully',
       user: {
         id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: decryptEmail(user.email),
+        full_name: user.full_name,
+        email: user.email,
         role: user.role,
         is_active: user.is_active
       },
@@ -112,15 +106,12 @@ router.post('/login', [
     }
 
     const { email, password } = req.body;
-    
-    // Encrypt email for database query
-    const encryptedEmail = encryptEmail(email);
 
-    // Find user by encrypted email
+    // Find user by email
     const { data: user, error: findError } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*')
-      .eq('email', encryptedEmail)
+      .eq('email', email)
       .single();
 
     if (findError || !user) {
@@ -144,9 +135,8 @@ router.post('/login', [
       message: 'Login successful',
       user: {
         id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: decryptEmail(user.email),
+        full_name: user.full_name,
+        email: user.email,
         role: user.role,
         is_active: user.is_active
       },
@@ -173,7 +163,7 @@ router.get('/profile', async (req, res) => {
     const decoded = verifyToken(token);
 
     const { data: user, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*')
       .eq('id', decoded.userId)
       .single();
@@ -185,13 +175,11 @@ router.get('/profile', async (req, res) => {
     res.json({
       user: {
         id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: decryptEmail(user.email),
+        full_name: user.full_name,
+        email: user.email,
         phone: user.phone,
         role: user.role,
         is_active: user.is_active,
-        email_verified: user.email_verified,
         created_at: user.created_at,
         updated_at: user.updated_at
       }
@@ -205,8 +193,7 @@ router.get('/profile', async (req, res) => {
 
 // Update user profile
 router.put('/profile', [
-  body('first_name').optional().trim().notEmpty(),
-  body('last_name').optional().trim().notEmpty(),
+  body('full_name').optional().trim().notEmpty(),
   body('phone').optional().trim()
 ], async (req, res) => {
   try {
@@ -224,13 +211,12 @@ router.put('/profile', [
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
 
-    const { first_name, last_name, phone } = req.body;
+    const { full_name, phone } = req.body;
 
     const { data: user, error } = await supabase
-      .from('profiles')
+      .from('users')
       .update({
-        first_name,
-        last_name,
+        full_name,
         phone,
         updated_at: new Date().toISOString()
       })
@@ -247,9 +233,8 @@ router.put('/profile', [
       message: 'Profile updated successfully',
       user: {
         id: user.id,
-        first_name: user.first_name,
-        last_name: user.last_name,
-        email: decryptEmail(user.email),
+        full_name: user.full_name,
+        email: user.email,
         phone: user.phone,
         role: user.role
       }
@@ -288,7 +273,7 @@ router.put('/change-password', [
 
     // Get current user
     const { data: user, error: findError } = await supabase
-      .from('profiles')
+      .from('users')
       .select('password_hash')
       .eq('id', decoded.userId)
       .single();
@@ -308,7 +293,7 @@ router.put('/change-password', [
 
     // Update password
     const { error: updateError } = await supabase
-      .from('profiles')
+      .from('users')
       .update({
         password_hash: newHashedPassword,
         updated_at: new Date().toISOString()

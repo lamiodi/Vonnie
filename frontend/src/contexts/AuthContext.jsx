@@ -1,100 +1,93 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
 
 // Create Auth Context
 const AuthContext = createContext();
+
+// API base URL
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 // Auth Provider Component
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [session, setSession] = useState(null);
+  const [token, setToken] = useState(localStorage.getItem('auth_token'));
 
-  // Get user profile from database
-  const getUserProfile = async (userId) => {
+  // API helper function
+  const apiCall = async (endpoint, options = {}) => {
+    const url = `${API_BASE_URL}${endpoint}`;
+    const config = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+      ...options,
+    };
+
+    const response = await fetch(url, config);
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'API request failed');
+    }
+
+    return data;
+  };
+
+  // Get user profile from backend
+  const getUserProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        console.error('Error fetching user profile:', error);
-        return null;
-      }
-
-      return data;
+      if (!token) return null;
+      
+      const data = await apiCall('/auth/profile');
+      return data.user;
     } catch (error) {
-      console.error('Error in getUserProfile:', error);
+      console.error('Error fetching user profile:', error);
+      // Clear invalid token
+      localStorage.removeItem('auth_token');
+      setToken(null);
       return null;
     }
   };
 
   // Check current session on component mount
   useEffect(() => {
-    const getSession = async () => {
+    const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          setIsLoading(false);
-          return;
+        if (token) {
+          const userProfile = await getUserProfile();
+          setUser(userProfile);
         }
-
-        setSession(session);
-
-        if (session?.user) {
-          const userProfile = await getUserProfile(session.user.id);
-          setUser(userProfile || session.user);
-        } else {
-          setUser(null);
-        }
-
         setIsLoading(false);
       } catch (error) {
-        console.error('Error in getSession:', error);
+        console.error('Error initializing auth:', error);
         setIsLoading(false);
       }
     };
 
-    getSession();
-
-    // Listen for auth state changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-
-        if (session?.user) {
-          const userProfile = await getUserProfile(session.user.id);
-          setUser(userProfile || session.user);
-        } else {
-          setUser(null);
-        }
-        
-        setIsLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
-  }, []);
+    initializeAuth();
+  }, [token]);
 
   // Sign up function
   const signUp = async (email, password, userData) => {
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: userData.full_name,
-            phone: userData.phone
-          }
-        }
+      const data = await apiCall('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password,
+          first_name: userData.first_name,
+          last_name: userData.last_name,
+          phone: userData.phone,
+          role: userData.role || 'staff'
+        }),
       });
 
-      if (error) throw error;
+      // Store token and update state
+      localStorage.setItem('auth_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      
       return data;
     } catch (error) {
       throw error;
@@ -104,12 +97,19 @@ export const AuthProvider = ({ children }) => {
   // Sign in function
   const signIn = async (email, password) => {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password
+      const data = await apiCall('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          password
+        }),
       });
 
-      if (error) throw error;
+      // Store token and update state
+      localStorage.setItem('auth_token', data.token);
+      setToken(data.token);
+      setUser(data.user);
+      
       return data;
     } catch (error) {
       throw error;
@@ -119,10 +119,9 @@ export const AuthProvider = ({ children }) => {
   // Sign out function
   const signOut = async () => {
     try {
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      localStorage.removeItem('auth_token');
+      setToken(null);
       setUser(null);
-      setSession(null);
     } catch (error) {
       throw error;
     }
@@ -131,20 +130,29 @@ export const AuthProvider = ({ children }) => {
   // Reset password function
   const resetPassword = async (email) => {
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email);
-      if (error) throw error;
+      // For now, we'll implement a simple password reset request
+      // In a full implementation, this would send an email with a reset link
+      const data = await apiCall('/auth/reset-password', {
+        method: 'POST',
+        body: JSON.stringify({ email }),
+      });
+      return data;
     } catch (error) {
       throw error;
     }
   };
 
   // Update password function
-  const updatePassword = async (newPassword) => {
+  const updatePassword = async (currentPassword, newPassword) => {
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      const data = await apiCall('/auth/change-password', {
+        method: 'PUT',
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword
+        }),
       });
-      if (error) throw error;
+      return data;
     } catch (error) {
       throw error;
     }
@@ -155,22 +163,19 @@ export const AuthProvider = ({ children }) => {
     try {
       if (!user?.id) throw new Error('No user logged in');
 
-      const { data, error } = await supabase
-        .from('users')
-        .update(updates)
-        .eq('id', user.id)
-        .select()
-        .single();
+      const data = await apiCall('/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(updates),
+      });
 
-      if (error) throw error;
-      setUser(data);
+      setUser(data.user);
       return data;
     } catch (error) {
       throw error;
     }
   };
 
-  // Role checking functions (customer role removed)
+  // Helper functions for role checking
   const isAdmin = () => user?.role === 'admin';
   const isStaff = () => user?.role === 'staff';
   const hasRole = (role) => user?.role === role;
@@ -179,14 +184,15 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     user,
-    session,
     isLoading,
+    token,
     signUp,
     signIn,
     signOut,
     resetPassword,
     updatePassword,
     updateProfile,
+    getUserProfile,
     isAdmin,
     isStaff,
     hasRole,
