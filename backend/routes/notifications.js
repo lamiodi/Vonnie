@@ -36,7 +36,7 @@ router.post('/whatsapp', authenticateToken, requireStaff, async (req, res) => {
 // Send email notification
 router.post('/email', authenticateToken, requireStaff, async (req, res) => {
   try {
-    const { to, subject, message, html, customer_id, booking_id, transaction_id } = req.body;
+    const { to, subject, message, html, guest_customer_id, booking_id, transaction_id } = req.body;
 
     if (!to || !subject || !message) {
       return res.status(400).json({ 
@@ -98,7 +98,7 @@ router.post('/email', authenticateToken, requireStaff, async (req, res) => {
         message: req.body.message,
         status: 'failed',
         error_message: error.message,
-        customer_id: req.body.customer_id || null,
+        guest_customer_id: req.body.guest_customer_id || null,
         booking_id: req.body.booking_id || null,
         transaction_id: req.body.transaction_id || null,
         sent_by: req.user.id,
@@ -129,7 +129,7 @@ router.post('/booking-confirmation', authenticateToken, requireStaff, async (req
       .from('bookings')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name),
         service:services(name, category, price, duration)
       `)
@@ -289,7 +289,7 @@ router.post('/booking-reminder', authenticateToken, requireStaff, async (req, re
       .from('bookings')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name),
         service:services(name, category, price, duration)
       `)
@@ -410,7 +410,7 @@ router.post('/payment-receipt', authenticateToken, requireStaff, async (req, res
       .from('transactions')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name),
         transaction_items(
           *,
@@ -577,14 +577,14 @@ router.post('/payment-receipt', authenticateToken, requireStaff, async (req, res
 // Get notification history
 router.get('/history', authenticateToken, requireStaff, async (req, res) => {
   try {
-    const { page = 1, limit = 20, type, status, customer_id } = req.query;
+    const { page = 1, limit = 20, type, status, guest_customer_id } = req.query;
     const offset = (page - 1) * limit;
 
     let query = supabase
       .from('notifications')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         sent_by_user:profiles!sent_by(first_name, last_name)
       `, { count: 'exact' })
       .range(offset, offset + limit - 1)
@@ -597,8 +597,8 @@ router.get('/history', authenticateToken, requireStaff, async (req, res) => {
     if (status) {
       query = query.eq('status', status);
     }
-    if (customer_id) {
-      query = query.eq('customer_id', customer_id);
+    if (guest_customer_id) {
+      query = query.eq('guest_customer_id', guest_customer_id);
     }
 
     // Role-based filtering

@@ -21,7 +21,7 @@ router.post('/register', [
   body('first_name').trim().notEmpty(),
   body('last_name').trim().notEmpty(),
   body('phone').optional().trim(),
-  body('role').optional().isIn(['customer', 'staff', 'admin'])
+  body('role').optional().isIn(['staff', 'admin'])
 ], async (req, res) => {
   try {
     // Validate input
@@ -30,7 +30,7 @@ router.post('/register', [
       return res.status(400).json({ errors: errors.array() });
     }
 
-    const { email, password, first_name, last_name, phone, role = 'customer' } = req.body;
+    const { email, password, first_name, last_name, phone, role = 'staff' } = req.body;
 
     // Validate email format
     validateEmail(email);

@@ -34,7 +34,7 @@ const validateUserRegistration = [
     .isMobilePhone()
     .withMessage('Valid phone number is required'),
   body('role')
-    .isIn(['admin', 'staff', 'customer'])
+    .isIn(['admin', 'staff'])
     .withMessage('Valid role is required'),
   handleValidationErrors
 ];

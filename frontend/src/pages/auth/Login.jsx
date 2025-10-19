@@ -242,25 +242,6 @@ const Login = () => {
                   Use
                 </button>
               </div>
-              <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-gray-900">Customer</div>
-                  <div className="text-gray-600">customer@vonnex2x.com</div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setFormData({
-                      email: 'customer@vonnex2x.com',
-                      password: 'customer123',
-                      rememberMe: false
-                    })
-                  }}
-                  className="px-3 py-1 bg-primary-600 text-white rounded hover:bg-primary-700 transition-colors"
-                >
-                  Use
-                </button>
-              </div>
             </div>
           </div>
         </div>

@@ -23,11 +23,11 @@ const POS = () => {
   const [currentReceipt, setCurrentReceipt] = useState(null)
   
   const [customerForm, setCustomerForm] = useState({
-    first_name: '',
-    last_name: '',
+    full_name: '',
     email: '',
     phone: '',
-    address: ''
+    address: '',
+    notes: ''
   })
 
   const [paymentData, setPaymentData] = useState({
@@ -230,11 +230,11 @@ const POS = () => {
         const mockCustomers = [
           {
             id: 1,
-            first_name: 'Adunni',
-            last_name: 'Okafor',
+            full_name: 'Adunni Okafor',
             email: 'adunni.okafor@email.com',
             phone: '+234 801 234 5678',
             address: '123 Victoria Island, Lagos',
+            notes: 'Prefers natural hair products',
             total_spent: 125000,
             visits: 8,
             last_visit: '2024-01-10',
@@ -242,11 +242,11 @@ const POS = () => {
           },
           {
             id: 2,
-            first_name: 'Chioma',
-            last_name: 'Nwankwo',
+            full_name: 'Chioma Nwankwo',
             email: 'chioma.nwankwo@email.com',
             phone: '+234 803 456 7890',
             address: '456 Lekki Phase 1, Lagos',
+            notes: 'Regular customer, likes hair treatments',
             total_spent: 89000,
             visits: 5,
             last_visit: '2024-01-08',
@@ -254,11 +254,11 @@ const POS = () => {
           },
           {
             id: 3,
-            first_name: 'Fatima',
-            last_name: 'Abdullahi',
+            full_name: 'Fatima Abdullahi',
             email: 'fatima.abdullahi@email.com',
             phone: '+234 805 678 9012',
             address: '789 Ikeja GRA, Lagos',
+            notes: 'VIP customer, prefers premium services',
             total_spent: 156000,
             visits: 12,
             last_visit: '2024-01-12',
@@ -453,7 +453,7 @@ const POS = () => {
 
     try {
       // Validate form
-      if (!customerForm.first_name || !customerForm.last_name || !customerForm.phone) {
+      if (!customerForm.full_name || !customerForm.phone) {
         toast.error('Please fill in required fields')
         return
       }
@@ -474,13 +474,13 @@ const POS = () => {
       setSelectedCustomer(newCustomer)
       setShowCustomerModal(false)
       setCustomerForm({
-        first_name: '',
-        last_name: '',
+        full_name: '',
         email: '',
         phone: '',
-        address: ''
+        address: '',
+        notes: ''
       })
-      toast.success('Customer added successfully')
+      toast.success('Customer added successfully!')
     } catch (error) {
       console.error('Error adding customer:', error)
       toast.error('Failed to add customer')
@@ -783,7 +783,7 @@ const POS = () => {
                     <option value="">Walk-in Customer</option>
                     {customers.map(customer => (
                       <option key={customer.id} value={customer.id}>
-                        {customer.first_name} {customer.last_name} - {customer.phone}
+                        {customer.full_name} - {customer.phone}
                       </option>
                     ))}
                   </select>
@@ -925,29 +925,16 @@ const POS = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="customer_first_name" className="block text-sm font-medium text-gray-700 mb-1">
-                    First Name *
+                  <label htmlFor="customer_full_name" className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name *
                   </label>
                   <input
                     type="text"
-                    id="customer_first_name"
-                    value={customerForm.first_name}
-                    onChange={(e) => setCustomerForm(prev => ({ ...prev, first_name: e.target.value }))}
+                    id="customer_full_name"
+                    value={customerForm.full_name}
+                    onChange={(e) => setCustomerForm(prev => ({ ...prev, full_name: e.target.value }))}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="customer_last_name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Last Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="customer_last_name"
-                    value={customerForm.last_name}
-                    onChange={(e) => setCustomerForm(prev => ({ ...prev, last_name: e.target.value }))}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Enter customer's full name"
                     required
                   />
                 </div>
@@ -977,6 +964,7 @@ const POS = () => {
                     value={customerForm.email}
                     onChange={(e) => setCustomerForm(prev => ({ ...prev, email: e.target.value }))}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="customer@email.com"
                   />
                 </div>
 
@@ -990,6 +978,21 @@ const POS = () => {
                     onChange={(e) => setCustomerForm(prev => ({ ...prev, address: e.target.value }))}
                     rows={3}
                     className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Customer's address"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="customer_notes" className="block text-sm font-medium text-gray-700 mb-1">
+                    Notes
+                  </label>
+                  <textarea
+                    id="customer_notes"
+                    value={customerForm.notes}
+                    onChange={(e) => setCustomerForm(prev => ({ ...prev, notes: e.target.value }))}
+                    rows={2}
+                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    placeholder="Additional notes about the customer"
                   />
                 </div>
               </div>
@@ -1259,7 +1262,7 @@ const POS = () => {
 
               {currentReceipt.customer && (
                 <div className="mb-4 pb-2 border-b border-gray-200">
-                  <p><strong>Customer:</strong> {currentReceipt.customer.first_name} {currentReceipt.customer.last_name}</p>
+                  <p><strong>Customer:</strong> {currentReceipt.customer.full_name}</p>
                   <p><strong>Phone:</strong> {currentReceipt.customer.phone}</p>
                 </div>
               )}

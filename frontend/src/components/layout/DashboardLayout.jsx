@@ -7,7 +7,7 @@ import { Helmet } from 'react-helmet-async'
 const DashboardLayout = ({ children, title = 'Dashboard' }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false)
-  const { user, profile, signOut, isAdmin, isStaff, isCustomer } = useAuth()
+  const { user, profile, signOut, isAdmin, isStaff } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -49,42 +49,6 @@ const DashboardLayout = ({ children, title = 'Dashboard' }) => {
         current: location.pathname === '/dashboard'
       }
     ]
-
-    if (isCustomer()) {
-      return [
-        ...baseItems,
-        {
-          name: 'Book Service',
-          href: '/dashboard/bookings',
-          icon: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0h6m-6 0l-1 12a2 2 0 002 2h6a2 2 0 002-2L16 7" />
-            </svg>
-          ),
-          current: location.pathname.startsWith('/dashboard/bookings')
-        },
-        {
-          name: 'My Appointments',
-          href: '/dashboard/appointments',
-          icon: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3a2 2 0 012-2h4a2 2 0 012 2v4m-6 0h6m-6 0l-1 12a2 2 0 002 2h6a2 2 0 002-2L16 7" />
-            </svg>
-          ),
-          current: location.pathname.startsWith('/dashboard/appointments')
-        },
-        {
-          name: 'Purchase History',
-          href: '/dashboard/purchases',
-          icon: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-            </svg>
-          ),
-          current: location.pathname.startsWith('/dashboard/purchases')
-        }
-      ]
-    }
 
     if (isStaff() || isAdmin()) {
       const staffItems = [
@@ -256,7 +220,7 @@ const DashboardLayout = ({ children, title = 'Dashboard' }) => {
                   {profile?.full_name || 'User'}
                 </p>
                 <p className="text-xs text-gray-500 truncate capitalize">
-                  {profile?.role || 'customer'}
+                  {profile?.role || 'staff'}
                 </p>
               </div>
             </div>

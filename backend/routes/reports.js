@@ -603,7 +603,7 @@ router.get('/export/csv', authenticateToken, requireStaff, async (req, res) => {
           .from('transactions')
           .select(`
             *,
-            customer:profiles!customer_id(first_name, last_name, email, phone),
+            guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
             staff:profiles!staff_id(first_name, last_name)
           `);
 
@@ -634,7 +634,7 @@ router.get('/export/csv', authenticateToken, requireStaff, async (req, res) => {
           .from('bookings')
           .select(`
             *,
-            customer:profiles!customer_id(first_name, last_name, email, phone),
+            guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
             staff:profiles!staff_id(first_name, last_name),
             service:services(name, category, price)
           `);

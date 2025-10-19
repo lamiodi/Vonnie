@@ -170,6 +170,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Role checking functions (customer role removed)
+  const isAdmin = () => user?.role === 'admin';
+  const isStaff = () => user?.role === 'staff';
+  const hasRole = (role) => user?.role === role;
+  const hasAnyRole = (roles) => roles.includes(user?.role);
+  const isAuthenticated = !!user;
+
   const value = {
     user,
     session,
@@ -179,7 +186,13 @@ export const AuthProvider = ({ children }) => {
     signOut,
     resetPassword,
     updatePassword,
-    updateProfile
+    updateProfile,
+    isAdmin,
+    isStaff,
+    hasRole,
+    hasAnyRole,
+    isAuthenticated,
+    profile: user // Alias for compatibility
   };
 
   return (

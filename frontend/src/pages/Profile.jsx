@@ -263,7 +263,7 @@ const Profile = () => {
                 <div className="ml-6">
                   <h1 className="text-2xl font-bold">{profileData.full_name || 'User'}</h1>
                   <p className="text-primary-100">{user?.email}</p>
-                  <p className="text-primary-100 capitalize">{profile?.role || 'customer'}</p>
+                  <p className="text-primary-100 capitalize">{profile?.role || 'staff'}</p>
                 </div>
               </div>
             </div>

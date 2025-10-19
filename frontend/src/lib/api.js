@@ -37,6 +37,15 @@ const API_ENDPOINTS = {
     CANCEL: (id) => `/api/appointments/${id}/cancel`,
   },
   
+  // Guest Customers
+  GUEST_CUSTOMERS: {
+    LIST: '/api/guest-customers',
+    CREATE: '/api/guest-customers',
+    UPDATE: (id) => `/api/guest-customers/${id}`,
+    DELETE: (id) => `/api/guest-customers/${id}`,
+    SEARCH: '/api/guest-customers/search',
+  },
+  
   // Payments
   PAYMENTS: {
     INITIALIZE: '/api/payments/initialize',

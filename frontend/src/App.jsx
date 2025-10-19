@@ -12,10 +12,8 @@ import Dashboard from './pages/Dashboard'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 
-// Customer Pages
-import BookService from './pages/customer/BookService'
+// Guest Pages
 import GuestBooking from './pages/customer/GuestBooking'
-import Appointments from './pages/customer/Appointments'
 
 // Staff/Admin Pages
 import Services from './pages/staff/Services'
@@ -130,27 +128,9 @@ const AppRoutes = () => {
         }
       />
 
-      {/* Customer Routes */}
-      <Route
-        path="/book-service"
-        element={
-          <ProtectedRoute allowedRoles={['customer']}>
-            <BookService />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/appointments"
-        element={
-          <ProtectedRoute allowedRoles={['customer']}>
-            <Appointments />
-          </ProtectedRoute>
-        }
-      />
-
       {/* Staff/Admin Routes */}
       <Route
-        path="/services"
+        path="/dashboard/services"
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <Services />
@@ -158,7 +138,7 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/inventory"
+        path="/dashboard/inventory"
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <Inventory />
@@ -166,7 +146,7 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/workers"
+        path="/dashboard/staff"
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <Workers />
@@ -174,7 +154,7 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/pos"
+        path="/dashboard/pos"
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <POS />
@@ -182,7 +162,7 @@ const AppRoutes = () => {
         }
       />
       <Route
-        path="/reports"
+        path="/dashboard/reports"
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <Reports />
@@ -192,7 +172,15 @@ const AppRoutes = () => {
 
       {/* Admin Only Routes */}
       <Route
-        path="/settings"
+        path="/dashboard/payment-management"
+        element={
+          <ProtectedRoute allowedRoles={['admin']}>
+            <PaymentManagement />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/settings"
         element={
           <ProtectedRoute allowedRoles={['admin']}>
             <Settings />

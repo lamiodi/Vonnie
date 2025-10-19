@@ -8,14 +8,14 @@ const router = express.Router();
 // Get transactions
 router.get('/', authenticateToken, requireStaff, validatePagination, async (req, res) => {
   try {
-    const { page = 1, limit = 20, type, status, date_from, date_to, customer_id } = req.query;
+    const { page = 1, limit = 20, type, status, date_from, date_to, guest_customer_id } = req.query;
     const offset = (page - 1) * limit;
 
     let query = supabase
       .from('transactions')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name)
       `, { count: 'exact' })
       .range(offset, offset + limit - 1)
@@ -28,8 +28,8 @@ router.get('/', authenticateToken, requireStaff, validatePagination, async (req,
     if (status) {
       query = query.eq('status', status);
     }
-    if (customer_id) {
-      query = query.eq('customer_id', customer_id);
+    if (guest_customer_id) {
+      query = query.eq('guest_customer_id', guest_customer_id);
     }
     if (date_from) {
       query = query.gte('created_at', date_from);
@@ -71,7 +71,7 @@ router.get('/:id', authenticateToken, requireStaff, validateUUID, async (req, re
       .from('transactions')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name),
         transaction_items(
           id,
@@ -204,7 +204,7 @@ router.post('/', authenticateToken, requireStaff, validateTransaction, async (re
       })
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name)
       `)
       .single();
@@ -278,7 +278,7 @@ router.put('/:id/status', authenticateToken, requireStaff, validateUUID, async (
       .eq('id', id)
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name)
       `)
       .single();
@@ -395,7 +395,7 @@ router.put('/:id', authenticateToken, requireStaff, validateUUID, async (req, re
       .eq('id', id)
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, email, phone),
         staff:profiles!staff_id(first_name, last_name)
       `)
       .single();
@@ -609,7 +609,7 @@ router.get('/reports/daily', authenticateToken, requireStaff, async (req, res) =
       .from('transactions')
       .select(`
         *,
-        customer:profiles!customer_id(first_name, last_name),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name),
         staff:profiles!staff_id(first_name, last_name),
         transaction_items(
           *,

@@ -121,8 +121,6 @@ const getDashboardRoute = (role) => {
       return '/admin/dashboard'
     case 'staff':
       return '/staff/dashboard'
-    case 'customer':
-      return '/customer/dashboard'
     default:
       return '/dashboard'
   }
@@ -141,15 +139,6 @@ export const AdminRoute = ({ children, ...props }) => (
 export const StaffRoute = ({ children, ...props }) => (
   <ProtectedRoute 
     requiredRoles={['admin', 'staff']} 
-    {...props}
-  >
-    {children}
-  </ProtectedRoute>
-)
-
-export const CustomerRoute = ({ children, ...props }) => (
-  <ProtectedRoute 
-    requiredRoles={['customer']} 
     {...props}
   >
     {children}

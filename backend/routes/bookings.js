@@ -8,7 +8,7 @@ const router = express.Router();
 // Get all bookings
 router.get('/', authenticateToken, validatePagination, async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, staff_id, customer_id, date_from, date_to } = req.query;
+    const { page = 1, limit = 20, status, staff_id, guest_customer_id, date_from, date_to } = req.query;
     const offset = (page - 1) * limit;
 
     let query = supabase
@@ -16,7 +16,7 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
       .select(`
         *,
         services(name, duration, price, category),
-        customer:profiles!customer_id(first_name, last_name, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
         staff:profiles!staff_id(first_name, last_name)
       `, { count: 'exact' })
       .range(offset, offset + limit - 1)
@@ -25,8 +25,6 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
     // Role-based filtering
     if (req.user.role === 'staff') {
       query = query.eq('staff_id', req.user.id);
-    } else if (req.user.role === 'customer') {
-      query = query.eq('customer_id', req.user.id);
     }
 
     // Additional filters
@@ -36,8 +34,8 @@ router.get('/', authenticateToken, validatePagination, async (req, res) => {
     if (staff_id && req.user.role === 'admin') {
       query = query.eq('staff_id', staff_id);
     }
-    if (customer_id && ['admin', 'staff'].includes(req.user.role)) {
-      query = query.eq('customer_id', customer_id);
+    if (guest_customer_id && ['admin', 'staff'].includes(req.user.role)) {
+      query = query.eq('guest_customer_id', guest_customer_id);
     }
     if (date_from) {
       query = query.gte('start_time', date_from);
@@ -80,7 +78,7 @@ router.get('/:id', authenticateToken, validateUUID, async (req, res) => {
       .select(`
         *,
         services(name, duration, price, category, description),
-        customer:profiles!customer_id(first_name, last_name, phone, email),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone, email),
         staff:profiles!staff_id(first_name, last_name, phone)
       `)
       .eq('id', id)
@@ -89,8 +87,6 @@ router.get('/:id', authenticateToken, validateUUID, async (req, res) => {
     // Role-based access control
     if (req.user.role === 'staff') {
       query = query.eq('staff_id', req.user.id);
-    } else if (req.user.role === 'customer') {
-      query = query.eq('customer_id', req.user.id);
     }
 
     const { data: booking, error } = await query;
@@ -200,13 +196,10 @@ router.get('/availability/check', async (req, res) => {
 // Create new booking
 router.post('/', authenticateToken, validateBooking, async (req, res) => {
   try {
-    const { service_id, staff_id, start_time, end_time, customer_id, notes } = req.body;
+    const { service_id, staff_id, start_time, end_time, guest_customer_id, notes } = req.body;
 
-    // Determine customer ID based on user role
-    let finalCustomerId = customer_id;
-    if (req.user.role === 'customer') {
-      finalCustomerId = req.user.id; // Customers can only book for themselves
-    }
+    // Use provided guest customer ID (staff/admin can book for any guest customer)
+    let finalGuestCustomerId = guest_customer_id;
 
     // Validate service exists
     const { data: service, error: serviceError } = await supabase
@@ -266,7 +259,7 @@ router.post('/', authenticateToken, validateBooking, async (req, res) => {
       .insert({
         service_id,
         staff_id,
-        customer_id: finalCustomerId,
+        guest_customer_id: finalGuestCustomerId,
         start_time,
         end_time,
         notes,
@@ -275,7 +268,7 @@ router.post('/', authenticateToken, validateBooking, async (req, res) => {
       .select(`
         *,
         services(name, duration, price, category),
-        customer:profiles!customer_id(first_name, last_name, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
         staff:profiles!staff_id(first_name, last_name)
       `)
       .single();
@@ -318,13 +311,6 @@ router.put('/:id', authenticateToken, validateUUID, async (req, res) => {
     }
 
     // Role-based access control
-    if (req.user.role === 'customer' && existingBooking.customer_id !== req.user.id) {
-      return res.status(403).json({ 
-        error: 'Access denied', 
-        message: 'You can only update your own bookings' 
-      });
-    }
-
     if (req.user.role === 'staff' && existingBooking.staff_id !== req.user.id) {
       return res.status(403).json({ 
         error: 'Access denied', 
@@ -332,47 +318,35 @@ router.put('/:id', authenticateToken, validateUUID, async (req, res) => {
       });
     }
 
-    // Customers can only update notes and cancel bookings
-    let updateData = {};
-    if (req.user.role === 'customer') {
-      if (status && status !== 'cancelled') {
-        return res.status(403).json({ 
-          error: 'Access denied', 
-          message: 'Customers can only cancel bookings' 
+    // Staff and admin can update all fields
+    let updateData = {
+      service_id: service_id || existingBooking.service_id,
+      staff_id: staff_id || existingBooking.staff_id,
+      start_time: start_time || existingBooking.start_time,
+      end_time: end_time || existingBooking.end_time,
+      status: status || existingBooking.status,
+      notes: notes !== undefined ? notes : existingBooking.notes
+    };
+
+    // Check for conflicts if time or staff changed
+    if ((start_time || end_time || staff_id) && status !== 'cancelled') {
+      const checkStaffId = staff_id || existingBooking.staff_id;
+      const checkStartTime = start_time || existingBooking.start_time;
+      const checkEndTime = end_time || existingBooking.end_time;
+
+      const { data: conflicts, error: conflictError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('staff_id', checkStaffId)
+        .neq('id', id)
+        .in('status', ['scheduled', 'in_progress'])
+        .or(`and(start_time.lt.${checkEndTime},end_time.gt.${checkStartTime})`);
+
+      if (conflicts && conflicts.length > 0) {
+        return res.status(409).json({ 
+          error: 'Time slot conflict', 
+          message: 'The updated time slot conflicts with an existing booking' 
         });
-      }
-      updateData = { notes, status: status || existingBooking.status };
-    } else {
-      // Staff and admin can update all fields
-      updateData = {
-        service_id: service_id || existingBooking.service_id,
-        staff_id: staff_id || existingBooking.staff_id,
-        start_time: start_time || existingBooking.start_time,
-        end_time: end_time || existingBooking.end_time,
-        status: status || existingBooking.status,
-        notes: notes !== undefined ? notes : existingBooking.notes
-      };
-
-      // Check for conflicts if time or staff changed
-      if ((start_time || end_time || staff_id) && status !== 'cancelled') {
-        const checkStaffId = staff_id || existingBooking.staff_id;
-        const checkStartTime = start_time || existingBooking.start_time;
-        const checkEndTime = end_time || existingBooking.end_time;
-
-        const { data: conflicts, error: conflictError } = await supabase
-          .from('bookings')
-          .select('id')
-          .eq('staff_id', checkStaffId)
-          .neq('id', id)
-          .in('status', ['scheduled', 'in_progress'])
-          .or(`and(start_time.lt.${checkEndTime},end_time.gt.${checkStartTime})`);
-
-        if (conflicts && conflicts.length > 0) {
-          return res.status(409).json({ 
-            error: 'Time slot conflict', 
-            message: 'The updated time slot conflicts with an existing booking' 
-          });
-        }
       }
     }
 
@@ -383,7 +357,7 @@ router.put('/:id', authenticateToken, validateUUID, async (req, res) => {
       .select(`
         *,
         services(name, duration, price, category),
-        customer:profiles!customer_id(first_name, last_name, phone),
+        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
         staff:profiles!staff_id(first_name, last_name)
       `)
       .single();

@@ -598,6 +598,164 @@ const GuestBooking = () => {
           {currentStep === 5 && renderConfirmation()}
         </div>
       </div>
+
+      {/* Services Section */}
+      <section id="services" className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Our Services</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Discover our comprehensive range of beauty and wellness services designed to make you look and feel your best.
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="bg-gradient-to-br from-primary-50 to-primary-100 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">💇‍♀️</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Hair Care</h3>
+              <p className="text-gray-600">Professional styling, cutting, coloring, and treatments for all hair types.</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-secondary-50 to-secondary-100 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">💅</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Nail Care</h3>
+              <p className="text-gray-600">Manicures, pedicures, and nail art to keep your nails looking perfect.</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-accent-50 to-accent-100 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">✨</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Skin Care</h3>
+              <p className="text-gray-600">Facials, treatments, and skincare solutions for healthy, glowing skin.</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-primary-50 to-secondary-50 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">💄</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Beauty Services</h3>
+              <p className="text-gray-600">Makeup application, eyebrow shaping, and beauty enhancement services.</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-secondary-50 to-accent-50 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">🧘‍♀️</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Wellness</h3>
+              <p className="text-gray-600">Relaxation treatments and wellness services for mind and body.</p>
+            </div>
+            
+            <div className="bg-gradient-to-br from-accent-50 to-primary-50 rounded-xl p-6 text-center">
+              <div className="text-4xl mb-4">🎉</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-2">Special Occasions</h3>
+              <p className="text-gray-600">Bridal packages, event styling, and special occasion beauty services.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="py-16 bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900 mb-6">About Vonne X2x</h2>
+              <p className="text-lg text-gray-600 mb-6">
+                At Vonne X2x, we believe that beauty is more than skin deep. Our mission is to provide exceptional beauty and wellness services that enhance your natural beauty while promoting self-confidence and well-being.
+              </p>
+              <p className="text-gray-600 mb-6">
+                With years of experience in the beauty industry, our team of skilled professionals is dedicated to delivering personalized services that exceed your expectations. We use only the finest products and latest techniques to ensure you receive the best possible care.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary-600 mb-1">500+</div>
+                  <div className="text-sm text-gray-600">Happy Clients</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary-600 mb-1">5+</div>
+                  <div className="text-sm text-gray-600">Years Experience</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary-600 mb-1">15+</div>
+                  <div className="text-sm text-gray-600">Services Offered</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary-600 mb-1">4.9</div>
+                  <div className="text-sm text-gray-600">Average Rating</div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-gradient-to-br from-primary-100 to-secondary-100 rounded-2xl p-8 text-center">
+              <div className="text-6xl mb-6">🌟</div>
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Our Promise</h3>
+              <p className="text-gray-600">
+                We are committed to providing you with an exceptional experience from the moment you book your appointment to the time you leave our salon. Your satisfaction is our top priority.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Contact Section */}
+      <section id="contact" className="py-16 bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Get In Touch</h2>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Ready to book your appointment or have questions about our services? We'd love to hear from you!
+            </p>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="text-center">
+              <div className="bg-primary-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Phone</h3>
+              <p className="text-gray-600">+234 801 234 5678</p>
+              <p className="text-gray-600">+234 803 456 7890</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="bg-secondary-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-secondary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Email</h3>
+              <p className="text-gray-600">info@vonnex2x.com</p>
+              <p className="text-gray-600">bookings@vonnex2x.com</p>
+            </div>
+            
+            <div className="text-center">
+              <div className="bg-accent-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-accent-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Location</h3>
+              <p className="text-gray-600">123 Beauty Street</p>
+              <p className="text-gray-600">Victoria Island, Lagos</p>
+            </div>
+          </div>
+          
+          <div className="mt-12 text-center">
+            <div className="bg-gradient-to-r from-primary-50 to-secondary-50 rounded-xl p-8">
+              <h3 className="text-xl font-semibold text-gray-900 mb-4">Business Hours</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+                <div>
+                  <p className="font-medium text-gray-900">Monday - Friday</p>
+                  <p className="text-gray-600">9:00 AM - 7:00 PM</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Saturday - Sunday</p>
+                  <p className="text-gray-600">10:00 AM - 6:00 PM</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </>
   )
 }
