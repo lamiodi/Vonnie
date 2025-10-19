@@ -38,6 +38,31 @@ app.use('/api/', limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Root endpoint - API information
+app.get('/', (req, res) => {
+  res.status(200).json({
+    name: 'Vonne X2x Management System API',
+    version: '1.0.0',
+    status: 'running',
+    message: 'Welcome to Vonne X2x Management System API',
+    endpoints: {
+      health: '/health',
+      api: '/api',
+      routes: [
+        '/api/auth',
+        '/api/services', 
+        '/api/products',
+        '/api/bookings',
+        '/api/attendance',
+        '/api/transactions',
+        '/api/reports',
+        '/api/notifications'
+      ]
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ 
