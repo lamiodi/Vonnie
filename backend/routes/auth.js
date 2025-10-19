@@ -1,6 +1,6 @@
 import express from 'express';
 import { body, validationResult } from 'express-validator';
-import { supabase } from '../config/supabase-db.js';
+import { sql } from '../config/database.js';
 import {
   hashPassword,
   comparePassword,
@@ -39,13 +39,11 @@ router.post('/register', [
     validatePasswordStrength(password);
 
     // Check if user already exists
-    const { data: existingUser, error: checkError } = await supabase
-      .from('users')
-      .select('id')
-      .eq('email', email)
-      .single();
+    const existingUsers = await sql`
+      SELECT id FROM users WHERE email = ${email}
+    `;
 
-    if (existingUser) {
+    if (existingUsers.length > 0) {
       return res.status(409).json({ error: 'User already exists with this email' });
     }
 
@@ -53,25 +51,18 @@ router.post('/register', [
     const hashedPassword = await hashPassword(password);
     
     // Create user in database
-    const { data: user, error: createError } = await supabase
-      .from('users')
-      .insert([{
-        email: email,
-        password_hash: hashedPassword,
-        full_name: `${first_name} ${last_name}`,
-        phone: phone || null,
-        role,
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      }])
-      .select('*')
-      .single();
+    const users = await sql`
+      INSERT INTO users (email, password_hash, full_name, phone, role, is_active, created_at, updated_at)
+      VALUES (${email}, ${hashedPassword}, ${`${first_name} ${last_name}`}, ${phone || null}, ${role}, true, NOW(), NOW())
+      RETURNING *
+    `;
 
-    if (createError) {
-      console.error('Registration error:', createError);
+    if (users.length === 0) {
+      console.error('Registration error: Failed to create user');
       return res.status(500).json({ error: 'Failed to create user' });
     }
+
+    const user = users[0];
 
     // Generate JWT token
     const token = generateToken({ userId: user.id, email: user.email });
@@ -108,15 +99,15 @@ router.post('/login', [
     const { email, password } = req.body;
 
     // Find user by email
-    const { data: user, error: findError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('email', email)
-      .single();
+    const users = await sql`
+      SELECT * FROM users WHERE email = ${email}
+    `;
 
-    if (findError || !user) {
+    if (users.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    const user = users[0];
 
     if (!user.is_active) {
       return res.status(401).json({ error: 'Account is deactivated' });

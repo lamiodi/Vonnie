@@ -1,5 +1,5 @@
 import express from 'express';
-import { supabase } from '../config/supabase-db.js';
+import { sql } from '../config/database.js';
 import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
 import { validateProduct, validateUUID, validatePagination } from '../middleware/validation.js';
 

@@ -1,5 +1,5 @@
 import { verifyToken, extractToken } from '../utils/auth.js';
-import { supabase } from '../config/supabase-db.js';
+import { sql } from '../config/database.js';
 
 // Authentication middleware
 const authenticate = async (req, res, next) => {
@@ -10,15 +10,15 @@ const authenticate = async (req, res, next) => {
     const decoded = verifyToken(token);
     
     // Fetch user from database using custom users table
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', decoded.userId)
-      .single();
+    const users = await sql`
+      SELECT * FROM users WHERE id = ${decoded.userId}
+    `;
 
-    if (error || !user) {
+    if (users.length === 0) {
       return res.status(401).json({ error: 'User not found' });
     }
+
+    const user = users[0];
 
     if (!user.is_active) {
       return res.status(401).json({ error: 'Account is deactivated' });
@@ -55,14 +55,12 @@ const optionalAuth = async (req, res, next) => {
       const token = extractToken(authHeader);
       const decoded = verifyToken(token);
       
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', decoded.userId)
-        .single();
+      const users = await sql`
+        SELECT * FROM users WHERE id = ${decoded.userId}
+      `;
       
-      if (!error && user && user.is_active) {
-        req.user = user;
+      if (users.length > 0 && users[0].is_active) {
+        req.user = users[0];
       }
     }
     

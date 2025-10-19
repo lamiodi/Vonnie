@@ -9,8 +9,8 @@ import dotenv from 'dotenv';
 // Configure dotenv
 dotenv.config();
 
-// Initialize Supabase client for database operations only
-import { supabase } from './config/supabase-db.js';
+// Database connection for operations
+import { sql } from './config/database.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;

@@ -1,5 +1,5 @@
 import express from 'express';
-import { supabase } from '../config/supabase-db.js';
+import { sql } from '../config/database.js';
 import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
 import { validateService, validateUUID, validatePagination } from '../middleware/validation.js';
 
@@ -11,36 +11,42 @@ router.get('/', validatePagination, async (req, res) => {
     const { page = 1, limit = 20, category, is_active = true } = req.query;
     const offset = (page - 1) * limit;
 
-    let query = supabase
-      .from('services')
-      .select('*', { count: 'exact' })
-      .range(offset, offset + limit - 1)
-      .order('name', { ascending: true });
-
+    let whereClause = '';
+    let params = [];
+    
     if (category) {
-      query = query.eq('category', category);
+      whereClause += ' AND category = $' + (params.length + 1);
+      params.push(category);
     }
 
     if (is_active !== undefined) {
-      query = query.eq('is_active', is_active === 'true');
+      whereClause += ' AND is_active = $' + (params.length + 1);
+      params.push(is_active === 'true');
     }
 
-    const { data: services, error, count } = await query;
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as total FROM services WHERE 1=1 ${whereClause}`;
+    const countResult = await sql.unsafe(countQuery, params);
+    const total = parseInt(countResult[0].total);
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch services', 
-        message: error.message 
-      });
-    }
+    // Get services with pagination
+    const servicesQuery = `
+      SELECT * FROM services 
+      WHERE 1=1 ${whereClause}
+      ORDER BY name ASC 
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    params.push(limit, offset);
+    
+    const services = await sql.unsafe(servicesQuery, params);
 
     res.json({
       services,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: count,
-        pages: Math.ceil(count / limit)
+        total: total,
+        pages: Math.ceil(total / limit)
       }
     });
   } catch (error) {
