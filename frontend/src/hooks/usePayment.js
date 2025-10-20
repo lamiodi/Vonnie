@@ -6,7 +6,7 @@ import { toast } from 'react-hot-toast'
 const paymentService = {
   // Initialize payment
   initializePayment: async (paymentData) => {
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payments/initialize`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/payments/initialize`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -24,7 +24,7 @@ const paymentService = {
 
   // Verify payment
   verifyPayment: async (reference) => {
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payments/verify/${reference}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/payments/verify/${reference}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
@@ -41,7 +41,7 @@ const paymentService = {
   // Get payment history
   getPaymentHistory: async (filters = {}) => {
     const params = new URLSearchParams(filters)
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payments/history?${params}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/payments/history?${params}`, {
       headers: {
         'Authorization': `Bearer ${localStorage.getItem('token')}`
       }
@@ -56,7 +56,7 @@ const paymentService = {
 
   // Process refund
   processRefund: async (paymentId, amount, reason) => {
-    const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payments/${paymentId}/refund`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL}/payments/${paymentId}/refund`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

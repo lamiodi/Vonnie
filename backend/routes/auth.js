@@ -153,15 +153,15 @@ router.get('/profile', async (req, res) => {
     const token = authHeader.split(' ')[1];
     const decoded = verifyToken(token);
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', decoded.userId)
-      .single();
+    const users = await sql`
+      SELECT * FROM users WHERE id = ${decoded.userId}
+    `;
 
-    if (error || !user) {
+    if (users.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    const user = users[0];
 
     res.json({
       user: {
@@ -204,21 +204,18 @@ router.put('/profile', [
 
     const { full_name, phone } = req.body;
 
-    const { data: user, error } = await supabase
-      .from('users')
-      .update({
-        full_name,
-        phone,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', decoded.userId)
-      .select('*')
-      .single();
+    const users = await sql`
+      UPDATE users 
+      SET full_name = ${full_name}, phone = ${phone}, updated_at = NOW()
+      WHERE id = ${decoded.userId}
+      RETURNING *
+    `;
 
-    if (error) {
-      console.error('Update error:', error);
+    if (users.length === 0) {
       return res.status(500).json({ error: 'Failed to update profile' });
     }
+
+    const user = users[0];
 
     res.json({
       message: 'Profile updated successfully',
@@ -263,15 +260,15 @@ router.put('/change-password', [
     validatePasswordStrength(new_password);
 
     // Get current user
-    const { data: user, error: findError } = await supabase
-      .from('users')
-      .select('password_hash')
-      .eq('id', decoded.userId)
-      .single();
+    const users = await sql`
+      SELECT password_hash FROM users WHERE id = ${decoded.userId}
+    `;
 
-    if (findError || !user) {
+    if (users.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    const user = users[0];
 
     // Verify current password
     const isCurrentPasswordValid = await comparePassword(current_password, user.password_hash);
@@ -283,18 +280,11 @@ router.put('/change-password', [
     const newHashedPassword = await hashPassword(new_password);
 
     // Update password
-    const { error: updateError } = await supabase
-      .from('users')
-      .update({
-        password_hash: newHashedPassword,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', decoded.userId);
-
-    if (updateError) {
-      console.error('Password change error:', updateError);
-      return res.status(500).json({ error: 'Failed to change password' });
-    }
+    await sql`
+      UPDATE users 
+      SET password_hash = ${newHashedPassword}, updated_at = NOW()
+      WHERE id = ${decoded.userId}
+    `;
 
     res.json({ message: 'Password changed successfully' });
 
