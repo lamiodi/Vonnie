@@ -4,7 +4,7 @@
 
 ## Revised Project Prompt
 
-I need a comprehensive custom web-based management system for Vonne X2x's fashion and beauty business that operates as a standalone solution without integrating with an existing online store. The system will be built using the PERN stack (PostgreSQL via Supabase, Express, React, Node.js) with the React frontend hosted on Vercel, Express backend on Render.com, and Supabase for real-time database and authentication.
+I need a comprehensive custom web-based management system for Vonne X2x's fashion and beauty business that operates as a standalone solution without integrating with an existing online store. The system will be built using the PERN stack (PostgreSQL, Express, React, Node.js) with the React frontend hosted on Vercel, Express backend on Render.com, and a custom JWT-based authentication system.
 
 ## Business Overview
 
@@ -40,7 +40,7 @@ The business needs a unified management system to replace manual processes and s
 
 4. **Sales & Transaction Management**
    - Point-of-sale functionality for products and services
-   - Payment processing via Paystack/Flutterwave
+   - Payment processing via Paystack
    - Transaction history and receipts
    - Revenue attribution to specific workers
 
@@ -61,10 +61,10 @@ The business needs a unified management system to replace manual processes and s
 - **Frontend**: React with hooks and context for state management
 - **Styling**: Tailwind CSS for responsive, mobile-first design
 - **Backend**: Node.js with Express.js for RESTful API
-- **Database**: PostgreSQL via Supabase with real-time capabilities
-- **Authentication**: Supabase Auth with role-based access control
+- **Database**: PostgreSQL with custom schema
+- **Authentication**: Custom JWT-based authentication with role-based access control
 - **Hosting**: Frontend on Vercel, Backend on Render.com
-- **Payment Integration**: Paystack and Flutterwave APIs
+- **Payment Integration**: Paystack API
 - **Communication**: WhatsApp Business API for notifications
 
 ### Design Requirements
@@ -155,18 +155,22 @@ The business needs a unified management system to replace manual processes and s
 
 ## Technical Architecture
 
-### Database Schema (Supabase)
+### Database Schema
 
 ```sql
--- Profiles table (extends auth.users)
-CREATE TABLE profiles (
-  id UUID REFERENCES auth.users(id) PRIMARY KEY,
+-- Users table (custom authentication)
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  password_hash TEXT NOT NULL,
   first_name TEXT,
   last_name TEXT,
   phone TEXT,
   role TEXT CHECK (role IN ('admin', 'staff', 'customer')),
   avatar_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  is_active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Services table
@@ -199,9 +203,9 @@ CREATE TABLE products (
 -- Bookings table
 CREATE TABLE bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  customer_id UUID REFERENCES profiles(id),
+  customer_id UUID REFERENCES users(id),
   service_id UUID REFERENCES services(id),
-  staff_id UUID REFERENCES profiles(id),
+  staff_id UUID REFERENCES users(id),
   start_time TIMESTAMP WITH TIME ZONE NOT NULL,
   end_time TIMESTAMP WITH TIME ZONE NOT NULL,
   status TEXT DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'completed', 'cancelled')),
@@ -212,7 +216,7 @@ CREATE TABLE bookings (
 -- Attendance table
 CREATE TABLE attendance (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  staff_id UUID REFERENCES profiles(id),
+  staff_id UUID REFERENCES users(id),
   date DATE NOT NULL,
   resumption_time TIMESTAMP WITH TIME ZONE,
   closing_time TIMESTAMP WITH TIME ZONE,
@@ -224,7 +228,7 @@ CREATE TABLE transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type TEXT NOT NULL CHECK (type IN ('service', 'product', 'combined')),
   booking_id UUID REFERENCES bookings(id),
-  staff_id UUID REFERENCES profiles(id),
+  staff_id UUID REFERENCES users(id),
   amount DECIMAL(10,2) NOT NULL,
   payment_method TEXT NOT NULL,
   payment_status TEXT DEFAULT 'pending' CHECK (payment_status IN ('pending', 'completed', 'failed', 'refunded')),
@@ -249,14 +253,14 @@ CREATE TABLE inventory_logs (
   adjustment_type TEXT NOT NULL CHECK (adjustment_type IN ('sale', 'restock', 'adjustment', 'initial')),
   quantity INTEGER NOT NULL,
   notes TEXT,
-  staff_id UUID REFERENCES profiles(id),
+  staff_id UUID REFERENCES users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Notifications table
 CREATE TABLE notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  recipient_id UUID REFERENCES profiles(id),
+  recipient_id UUID REFERENCES users(id),
   type TEXT NOT NULL,
   title TEXT NOT NULL,
   message TEXT NOT NULL,
@@ -374,10 +378,10 @@ src/
 
 ### Phase 1: Foundation Setup (Week 1-2)
 - Initialize project structure
-- Set up Supabase database and authentication
+- Set up PostgreSQL database with custom schema
 - Configure Express backend with basic routes
 - Set up React frontend with routing
-- Implement authentication flow
+- Implement custom JWT authentication flow
 
 ### Phase 2: Core Features (Week 3-4)
 - Service booking system with calendar
@@ -387,7 +391,7 @@ src/
 - Notification framework
 
 ### Phase 3: Advanced Features (Week 5-6)
-- Payment gateway integration (Paystack/Flutterwave)
+- Payment gateway integration (Paystack)
 - Point-of-sale functionality
 - Advanced reporting and analytics
 - WhatsApp notification integration
@@ -420,10 +424,11 @@ src/
    - Style guide and component library
    - Interactive prototypes
 
-2. **Full Implementation**
+2.### Full Implementation
    - Complete React frontend codebase
    - Express backend API
-   - Supabase database schema
+   - Custom PostgreSQL database schema
+   - Custom JWT authentication system
    - All integrations implemented
 
 3. **Deployment**

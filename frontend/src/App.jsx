@@ -21,6 +21,7 @@ import Inventory from './pages/staff/Inventory'
 import Workers from './pages/staff/Workers'
 import POS from './pages/staff/POS'
 import Reports from './pages/staff/Reports'
+import CheckIn from './pages/staff/CheckIn'
 import PaymentManagement from './pages/admin/PaymentManagement'
 
 // Loading Component
@@ -158,6 +159,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute allowedRoles={['staff', 'admin']}>
             <POS />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/check-in"
+        element={
+          <ProtectedRoute allowedRoles={['staff', 'admin']}>
+            <CheckIn />
           </ProtectedRoute>
         }
       />

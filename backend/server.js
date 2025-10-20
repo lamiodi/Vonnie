@@ -13,7 +13,7 @@ dotenv.config();
 import { sql } from './config/database.js';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
 
 // Security middleware
 app.use(helmet());
@@ -56,7 +56,8 @@ app.get('/', (req, res) => {
         '/api/attendance',
         '/api/transactions',
         '/api/reports',
-        '/api/notifications'
+        '/api/notifications',
+        '/api/payments'
       ]
     },
     timestamp: new Date().toISOString()
@@ -81,6 +82,7 @@ import attendanceRoutes from './routes/attendance.js';
 import transactionsRoutes from './routes/transactions.js';
 import reportsRoutes from './routes/reports.js';
 import notificationsRoutes from './routes/notifications.js';
+import paymentsRoutes from './routes/payments.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/services', servicesRoutes);
@@ -90,6 +92,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/payments', paymentsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -116,20 +119,30 @@ async function send24HourReminders() {
     const targetDateStr = targetDate.toISOString().split('T')[0];
     
     // Get bookings scheduled for exactly 24 hours from now
-    const { data: bookings, error } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        customer:profiles!customer_id(first_name, last_name, email, phone),
-        staff:profiles!staff_id(first_name, last_name),
-        service:services(name, category, price, duration)
-      `)
-      .eq('booking_date', targetDateStr)
-      .eq('status', 'scheduled')
-      .is('reminder_sent', null);
+    const bookings = await sql`
+      SELECT 
+        b.*,
+        c.first_name as customer_first_name,
+        c.last_name as customer_last_name,
+        c.email as customer_email,
+        c.phone as customer_phone,
+        s.first_name as staff_first_name,
+        s.last_name as staff_last_name,
+        sv.name as service_name,
+        sv.category as service_category,
+        sv.price as service_price,
+        sv.duration as service_duration
+      FROM bookings b
+      LEFT JOIN profiles c ON b.customer_id = c.id
+      LEFT JOIN profiles s ON b.staff_id = s.id
+      LEFT JOIN services sv ON b.service_id = sv.id
+      WHERE b.booking_date = ${targetDateStr}
+        AND b.status = 'scheduled'
+        AND b.reminder_sent IS NULL
+    `;
 
-    if (error) {
-      console.error('Error fetching bookings for reminders:', error);
+    if (!bookings) {
+      console.error('Error fetching bookings for reminders: No data returned');
       return;
     }
 
@@ -154,10 +167,11 @@ async function send24HourReminders() {
           );
 
           // Mark reminder as sent in the database
-          await supabase
-            .from('bookings')
-            .update({ reminder_sent: new Date().toISOString() })
-            .eq('id', booking.id);
+          await sql`
+            UPDATE bookings 
+            SET reminder_sent = ${new Date().toISOString()}
+            WHERE id = ${booking.id}
+          `;
 
           console.log(`✅ Sent 24-hour reminder for booking ${booking.id}`);
         } catch (bookingError) {

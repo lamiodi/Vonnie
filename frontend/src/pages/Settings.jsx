@@ -64,9 +64,6 @@ const Settings = () => {
       paystack_enabled: true,
       paystack_public_key: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY || '',
       paystack_secret_key: '', // Secret key should be configured on backend only
-      flutterwave_enabled: false,
-      flutterwave_public_key: '',
-      flutterwave_secret_key: '',
       whatsapp_api_enabled: true,
       whatsapp_api_key: 'wa_xxxxxxxxxxxxx',
       sms_provider: 'termii', // termii, twilio, none
@@ -757,65 +754,7 @@ const Settings = () => {
             )}
           </div>
 
-          {/* Flutterwave */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
-                  <span className="text-orange-600 font-bold text-sm">FW</span>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-900">Flutterwave</div>
-                  <div className="text-xs text-gray-500">African payment gateway</div>
-                </div>
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => testIntegration('Flutterwave')}
-                  className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Test
-                </button>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={settings.integrations.flutterwave_enabled}
-                    onChange={(e) => handleSettingChange('integrations', 'flutterwave_enabled', e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-                </label>
-              </div>
-            </div>
-            {settings.integrations.flutterwave_enabled && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Public Key
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.integrations.flutterwave_public_key}
-                    onChange={(e) => handleSettingChange('integrations', 'flutterwave_public_key', e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="FLWPUBK_TEST-xxxxxxxxxxxxx"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Secret Key
-                  </label>
-                  <input
-                    type="password"
-                    value={settings.integrations.flutterwave_secret_key}
-                    onChange={(e) => handleSettingChange('integrations', 'flutterwave_secret_key', e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                    placeholder="FLWSECK_TEST-xxxxxxxxxxxxx"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
+
         </div>
       </div>
 
