@@ -1,6 +1,6 @@
-import express from 'express';
-import { body, validationResult } from 'express-validator';
-import { sql } from '../config/database.js';
+import express from 'express'
+import { body, validationResult } from 'express-validator'
+import { sql } from '../config/database.js'
 import {
   hashPassword,
   comparePassword,
@@ -9,10 +9,10 @@ import {
   generateToken,
   validatePasswordStrength,
   validateEmail,
-  verifyToken
-} from '../utils/auth.js';
+  verifyToken,
+} from '../utils/auth.js'
 
-const router = express.Router();
+const router = express.Router()
 
 // User registration
 router.post('/register', [
@@ -21,51 +21,51 @@ router.post('/register', [
   body('first_name').trim().notEmpty(),
   body('last_name').trim().notEmpty(),
   body('phone').optional().trim(),
-  body('role').optional().isIn(['staff', 'admin'])
-], async (req, res) => {
+  body('role').optional().isIn(['staff', 'admin']),
+], async(req, res) => {
   try {
     // Validate input
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ errors: errors.array() })
     }
 
-    const { email, password, first_name, last_name, phone, role = 'staff' } = req.body;
+    const { email, password, first_name, last_name, phone, role = 'staff' } = req.body
 
     // Validate email format
-    validateEmail(email);
+    validateEmail(email)
     
     // Validate password strength
-    validatePasswordStrength(password);
+    validatePasswordStrength(password)
 
     // Check if user already exists
     const existingUsers = await sql`
       SELECT id FROM users WHERE email = ${email}
-    `;
+    `
 
     if (existingUsers.length > 0) {
-      return res.status(409).json({ error: 'User already exists with this email' });
+      return res.status(409).json({ error: 'User already exists with this email' })
     }
 
     // Hash password
-    const hashedPassword = await hashPassword(password);
+    const hashedPassword = await hashPassword(password)
     
     // Create user in database
     const users = await sql`
       INSERT INTO users (email, password_hash, full_name, phone, role, is_active, created_at, updated_at)
       VALUES (${email}, ${hashedPassword}, ${`${first_name} ${last_name}`}, ${phone || null}, ${role}, true, NOW(), NOW())
       RETURNING *
-    `;
+    `
 
     if (users.length === 0) {
-      console.error('Registration error: Failed to create user');
-      return res.status(500).json({ error: 'Failed to create user' });
+      console.error('Registration error: Failed to create user')
+      return res.status(500).json({ error: 'Failed to create user' })
     }
 
-    const user = users[0];
+    const user = users[0]
 
     // Generate JWT token
-    const token = generateToken({ userId: user.id, email: user.email });
+    const token = generateToken({ userId: user.id, email: user.email })
 
     res.status(201).json({
       message: 'User registered successfully',
@@ -74,53 +74,53 @@ router.post('/register', [
         full_name: user.full_name,
         email: user.email,
         role: user.role,
-        is_active: user.is_active
+        is_active: user.is_active,
       },
-      token
-    });
+      token,
+    })
 
   } catch (error) {
-    console.error('Registration error:', error);
-    res.status(400).json({ error: error.message });
+    console.error('Registration error:', error)
+    res.status(400).json({ error: error.message })
   }
-});
+})
 
 // User login
 router.post('/login', [
   body('email').isEmail().normalizeEmail(),
-  body('password').notEmpty()
-], async (req, res) => {
+  body('password').notEmpty(),
+], async(req, res) => {
   try {
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ errors: errors.array() })
     }
 
-    const { email, password } = req.body;
+    const { email, password } = req.body
 
     // Find user by email
     const users = await sql`
       SELECT * FROM users WHERE email = ${email}
-    `;
+    `
 
     if (users.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const user = users[0];
+    const user = users[0]
 
     if (!user.is_active) {
-      return res.status(401).json({ error: 'Account is deactivated' });
+      return res.status(401).json({ error: 'Account is deactivated' })
     }
 
     // Compare passwords
-    const isPasswordValid = await comparePassword(password, user.password_hash);
+    const isPasswordValid = await comparePassword(password, user.password_hash)
     if (!isPasswordValid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid credentials' })
     }
 
     // Generate JWT token
-    const token = generateToken({ userId: user.id, email: user.email });
+    const token = generateToken({ userId: user.id, email: user.email })
 
     res.json({
       message: 'Login successful',
@@ -129,39 +129,39 @@ router.post('/login', [
         full_name: user.full_name,
         email: user.email,
         role: user.role,
-        is_active: user.is_active
+        is_active: user.is_active,
       },
-      token
-    });
+      token,
+    })
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Login failed' });
+    console.error('Login error:', error)
+    res.status(500).json({ error: 'Login failed' })
   }
-});
+})
 
 // Get current user profile
-router.get('/profile', async (req, res) => {
+router.get('/profile', async(req, res) => {
   try {
     // This will be protected by authentication middleware
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization
     
     if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header required' });
+      return res.status(401).json({ error: 'Authorization header required' })
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    const token = authHeader.split(' ')[1]
+    const decoded = verifyToken(token)
 
     const users = await sql`
       SELECT * FROM users WHERE id = ${decoded.userId}
-    `;
+    `
 
     if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found' })
     }
 
-    const user = users[0];
+    const user = users[0]
 
     res.json({
       user: {
@@ -172,50 +172,50 @@ router.get('/profile', async (req, res) => {
         role: user.role,
         is_active: user.is_active,
         created_at: user.created_at,
-        updated_at: user.updated_at
-      }
-    });
+        updated_at: user.updated_at,
+      },
+    })
 
   } catch (error) {
-    console.error('Profile error:', error);
-    res.status(401).json({ error: 'Invalid token' });
+    console.error('Profile error:', error)
+    res.status(401).json({ error: 'Invalid token' })
   }
-});
+})
 
 // Update user profile
 router.put('/profile', [
   body('full_name').optional().trim().notEmpty(),
-  body('phone').optional().trim()
-], async (req, res) => {
+  body('phone').optional().trim(),
+], async(req, res) => {
   try {
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ errors: errors.array() })
     }
 
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization
     
     if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header required' });
+      return res.status(401).json({ error: 'Authorization header required' })
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    const token = authHeader.split(' ')[1]
+    const decoded = verifyToken(token)
 
-    const { full_name, phone } = req.body;
+    const { full_name, phone } = req.body
 
     const users = await sql`
       UPDATE users 
       SET full_name = ${full_name}, phone = ${phone}, updated_at = NOW()
       WHERE id = ${decoded.userId}
       RETURNING *
-    `;
+    `
 
     if (users.length === 0) {
-      return res.status(500).json({ error: 'Failed to update profile' });
+      return res.status(500).json({ error: 'Failed to update profile' })
     }
 
-    const user = users[0];
+    const user = users[0]
 
     res.json({
       message: 'Profile updated successfully',
@@ -224,110 +224,110 @@ router.put('/profile', [
         full_name: user.full_name,
         email: user.email,
         phone: user.phone,
-        role: user.role
-      }
-    });
+        role: user.role,
+      },
+    })
 
   } catch (error) {
-    console.error('Profile update error:', error);
-    res.status(401).json({ error: 'Invalid token' });
+    console.error('Profile update error:', error)
+    res.status(401).json({ error: 'Invalid token' })
   }
-});
+})
 
 // Change password
 router.put('/change-password', [
   body('current_password').notEmpty(),
-  body('new_password').isLength({ min: 8 })
-], async (req, res) => {
+  body('new_password').isLength({ min: 8 }),
+], async(req, res) => {
   try {
-    const errors = validationResult(req);
+    const errors = validationResult(req)
     if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
+      return res.status(400).json({ errors: errors.array() })
     }
 
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization
     
     if (!authHeader) {
-      return res.status(401).json({ error: 'Authorization header required' });
+      return res.status(401).json({ error: 'Authorization header required' })
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = verifyToken(token);
+    const token = authHeader.split(' ')[1]
+    const decoded = verifyToken(token)
 
-    const { current_password, new_password } = req.body;
+    const { current_password, new_password } = req.body
 
     // Validate new password strength
-    validatePasswordStrength(new_password);
+    validatePasswordStrength(new_password)
 
     // Get current user
     const users = await sql`
       SELECT password_hash FROM users WHERE id = ${decoded.userId}
-    `;
+    `
 
     if (users.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'User not found' })
     }
 
-    const user = users[0];
+    const user = users[0]
 
     // Verify current password
-    const isCurrentPasswordValid = await comparePassword(current_password, user.password_hash);
+    const isCurrentPasswordValid = await comparePassword(current_password, user.password_hash)
     if (!isCurrentPasswordValid) {
-      return res.status(401).json({ error: 'Current password is incorrect' });
+      return res.status(401).json({ error: 'Current password is incorrect' })
     }
 
     // Hash new password
-    const newHashedPassword = await hashPassword(new_password);
+    const newHashedPassword = await hashPassword(new_password)
 
     // Update password
     await sql`
       UPDATE users 
       SET password_hash = ${newHashedPassword}, updated_at = NOW()
       WHERE id = ${decoded.userId}
-    `;
+    `
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully' })
 
   } catch (error) {
-    console.error('Password change error:', error);
-    res.status(400).json({ error: error.message });
+    console.error('Password change error:', error)
+    res.status(400).json({ error: error.message })
   }
-});
+})
 
 // Test database connection endpoint
-router.get('/test-db', async (req, res) => {
+router.get('/test-db', async(req, res) => {
   try {
     // Simple query to test database connection
-    const result = await sql`SELECT NOW() as current_time, 'Database connected successfully!' as message`;
+    const result = await sql`SELECT NOW() as current_time, 'Database connected successfully!' as message`
     
     res.json({
       success: true,
-      message: 'Supabase database connection is working!',
+      message: 'PostgreSQL database connection is working!',
       timestamp: result[0].current_time,
-      database_message: result[0].message
-    });
+      database_message: result[0].message,
+    })
   } catch (error) {
-    console.error('Database connection test failed:', error);
+    console.error('Database connection test failed:', error)
     res.status(500).json({
       success: false,
       error: 'Database connection failed',
-      details: error.message
-    });
+      details: error.message,
+    })
   }
-});
+})
 
 // Setup database tables and demo accounts
-router.post('/setup-database', async (req, res) => {
+router.post('/setup-database', async(req, res) => {
   try {
-    console.log('🚀 Starting database setup via API...');
-    const results = [];
+    console.log('🚀 Starting database setup via API...')
+    const results = []
     
     // 1. Enable UUID extension
     try {
-      await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`;
-      results.push('✅ UUID extension enabled');
+      await sql`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`
+      results.push('✅ UUID extension enabled')
     } catch (error) {
-      results.push('ℹ️  UUID extension already exists');
+      results.push('ℹ️  UUID extension already exists')
     }
     
     // 2. Create users table
@@ -339,17 +339,17 @@ router.post('/setup-database', async (req, res) => {
           password_hash VARCHAR(255) NOT NULL,
           full_name VARCHAR(255) NOT NULL,
           phone VARCHAR(20),
-          role VARCHAR(20) NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'staff', 'customer')),
+          role VARCHAR(20) NOT NULL DEFAULT 'staff' CHECK (role IN ('admin', 'manager', 'staff', 'customer')),
           is_active BOOLEAN DEFAULT true,
           email_verified BOOLEAN DEFAULT false,
           last_login TIMESTAMP WITH TIME ZONE,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-      `;
-      results.push('✅ Users table created');
+      `
+      results.push('✅ Users table created')
     } catch (error) {
-      results.push('ℹ️  Users table already exists');
+      results.push('ℹ️  Users table already exists')
     }
     
     // 3. Create departments table
@@ -364,10 +364,10 @@ router.post('/setup-database', async (req, res) => {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-      `;
-      results.push('✅ Departments table created');
+      `
+      results.push('✅ Departments table created')
     } catch (error) {
-      results.push('ℹ️  Departments table already exists');
+      results.push('ℹ️  Departments table already exists')
     }
     
     // 4. Create profiles table
@@ -395,10 +395,10 @@ router.post('/setup-database', async (req, res) => {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-      `;
-      results.push('✅ Profiles table created');
+      `
+      results.push('✅ Profiles table created')
     } catch (error) {
-      results.push('ℹ️  Profiles table already exists');
+      results.push('ℹ️  Profiles table already exists')
     }
     
     // 5. Create guest_customers table
@@ -421,10 +421,10 @@ router.post('/setup-database', async (req, res) => {
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
-      `;
-      results.push('✅ Guest customers table created');
+      `
+      results.push('✅ Guest customers table created')
     } catch (error) {
-      results.push('ℹ️  Guest customers table already exists');
+      results.push('ℹ️  Guest customers table already exists')
     }
     
     // 6. Insert demo departments
@@ -437,10 +437,10 @@ router.post('/setup-database', async (req, res) => {
         ('Massage Therapy', 'Relaxation and therapeutic massage services', true),
         ('Administration', 'Management and administrative staff', true)
         ON CONFLICT (name) DO NOTHING
-      `;
-      results.push('✅ Demo departments created');
+      `
+      results.push('✅ Demo departments created')
     } catch (error) {
-      results.push('ℹ️  Demo departments already exist');
+      results.push('ℹ️  Demo departments already exist')
     }
     
     // 7. Insert demo admin account
@@ -451,13 +451,13 @@ router.post('/setup-database', async (req, res) => {
         ('admin@vonnex2x.com', '$2b$12$LQv3c1yqBwEHXjp.RweHNe1fF0XgMhOxp5dMChWnkUOib1h.kNjSW', 'Admin Demo', '+2348012345678', 'admin', true, true)
         ON CONFLICT (email) DO NOTHING
         RETURNING id
-      `;
+      `
       
       if (adminResult.length > 0) {
-        results.push('✅ Admin account created');
+        results.push('✅ Admin account created')
         
         // Create admin profile
-        const adminDept = await sql`SELECT id FROM departments WHERE name = 'Administration' LIMIT 1`;
+        const adminDept = await sql`SELECT id FROM departments WHERE name = 'Administration' LIMIT 1`
         if (adminDept.length > 0) {
           await sql`
             INSERT INTO profiles (
@@ -468,14 +468,14 @@ router.post('/setup-database', async (req, res) => {
               'EMP001', CURRENT_DATE - INTERVAL '2 years', 'System Administrator', ${adminDept[0].id}
             )
             ON CONFLICT DO NOTHING
-          `;
-          results.push('✅ Admin profile created');
+          `
+          results.push('✅ Admin profile created')
         }
       } else {
-        results.push('ℹ️  Admin account already exists');
+        results.push('ℹ️  Admin account already exists')
       }
     } catch (error) {
-      results.push('ℹ️  Admin account already exists');
+      results.push('ℹ️  Admin account already exists')
     }
     
     // 8. Insert demo staff account
@@ -486,13 +486,13 @@ router.post('/setup-database', async (req, res) => {
         ('staff@vonnex2x.com', '$2b$12$8Y.VPZaN7pmYpHgeJAoH4.WiAy8qfNjH/Oy6aJqO8qfNjH/Oy6aJqO', 'Staff Demo', '+2348087654321', 'staff', true, true)
         ON CONFLICT (email) DO NOTHING
         RETURNING id
-      `;
+      `
       
       if (staffResult.length > 0) {
-        results.push('✅ Staff account created');
+        results.push('✅ Staff account created')
         
         // Create staff profile
-        const hairDept = await sql`SELECT id FROM departments WHERE name = 'Hair Styling' LIMIT 1`;
+        const hairDept = await sql`SELECT id FROM departments WHERE name = 'Hair Styling' LIMIT 1`
         if (hairDept.length > 0) {
           await sql`
             INSERT INTO profiles (
@@ -503,14 +503,14 @@ router.post('/setup-database', async (req, res) => {
               'EMP002', CURRENT_DATE - INTERVAL '1 year', 150000.00, 15.00, 'Senior Hair Stylist', ${hairDept[0].id}
             )
             ON CONFLICT DO NOTHING
-          `;
-          results.push('✅ Staff profile created');
+          `
+          results.push('✅ Staff profile created')
         }
       } else {
-        results.push('ℹ️  Staff account already exists');
+        results.push('ℹ️  Staff account already exists')
       }
     } catch (error) {
-      results.push('ℹ️  Staff account already exists');
+      results.push('ℹ️  Staff account already exists')
     }
     
     // 9. Insert demo guest customers
@@ -522,10 +522,10 @@ router.post('/setup-database', async (req, res) => {
         ('Fatima', 'Ibrahim', 'fatima.ibrahim@email.com', '+2348145678901', '789 Abuja Central, FCT', 'female', 320, 6, 510000.00, NOW() - INTERVAL '5 days'),
         ('David', 'Okafor', 'david.okafor@email.com', '+2348156789012', '321 Port Harcourt, Rivers', 'male', 180, 3, 285000.00, NOW() - INTERVAL '2 weeks')
         ON CONFLICT DO NOTHING
-      `;
-      results.push('✅ Demo guest customers created');
+      `
+      results.push('✅ Demo guest customers created')
     } catch (error) {
-      results.push('ℹ️  Demo guest customers already exist');
+      results.push('ℹ️  Demo guest customers already exist')
     }
     
     // Verification
@@ -535,21 +535,21 @@ router.post('/setup-database', async (req, res) => {
       WHERE table_schema = 'public' 
       AND table_name IN ('users', 'profiles', 'guest_customers', 'departments')
       ORDER BY table_name
-    `;
+    `
     
     const demoUsers = await sql`
       SELECT email, full_name, role, is_active 
       FROM users 
       WHERE email IN ('admin@vonnex2x.com', 'staff@vonnex2x.com')
       ORDER BY role DESC
-    `;
+    `
     
     const departments = await sql`
       SELECT name, description 
       FROM departments 
       WHERE is_active = true
       ORDER BY name
-    `;
+    `
     
     res.json({
       success: true,
@@ -558,22 +558,22 @@ router.post('/setup-database', async (req, res) => {
       verification: {
         tables: tables.map(t => t.table_name),
         demo_accounts: demoUsers.map(u => ({ email: u.email, role: u.role, name: u.full_name })),
-        departments: departments.map(d => d.name)
+        departments: departments.map(d => d.name),
       },
       credentials: {
         admin: { email: 'admin@vonnex2x.com', password: 'Admin@2024' },
-        staff: { email: 'staff@vonnex2x.com', password: 'Staff@2024' }
-      }
-    });
+        staff: { email: 'staff@vonnex2x.com', password: 'Staff@2024' },
+      },
+    })
     
   } catch (error) {
-    console.error('Database setup failed:', error);
+    console.error('Database setup failed:', error)
     res.status(500).json({
       success: false,
       message: 'Database setup failed',
-      error: error.message
-    });
+      error: error.message,
+    })
   }
-});
+})
 
-export default router;
+export default router

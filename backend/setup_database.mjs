@@ -17,7 +17,7 @@ if (!process.env.DATABASE_URL) {
   console.error('❌ DATABASE_URL environment variable is not set');
   console.log('💡 Please set DATABASE_URL in your .env file with a valid PostgreSQL connection string');
   console.log('💡 Example for local PostgreSQL: postgresql://username:password@localhost:5432/vonne_x2x');
-  console.log('💡 Example for Supabase: postgresql://postgres.username:password@aws-region.pooler.supabase.com:5432/postgres');
+  console.log('💡 Example for cloud PostgreSQL: postgresql://username:password@hostname:5432/database');
   process.exit(1);
 }
 
@@ -26,7 +26,7 @@ if (!process.env.DATABASE_URL) {
 async function setupDatabase() {
   try {
     console.log('🚀 Starting database setup...');
-    console.log('📡 Connecting to Supabase...');
+    console.log('📡 Connecting to database...');
     
     // Connect to the database first
     await client.connect();

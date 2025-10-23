@@ -1,16 +1,16 @@
-import { body, param, query, validationResult } from 'express-validator';
+import { body, param, query, validationResult } from 'express-validator'
 
 // Handle validation errors
 const handleValidationErrors = (req, res, next) => {
-  const errors = validationResult(req);
+  const errors = validationResult(req)
   if (!errors.isEmpty()) {
     return res.status(400).json({
       error: 'Validation failed',
-      details: errors.array()
-    });
+      details: errors.array(),
+    })
   }
-  next();
-};
+  next()
+}
 
 // User validation rules
 const validateUserRegistration = [
@@ -34,10 +34,10 @@ const validateUserRegistration = [
     .isMobilePhone()
     .withMessage('Valid phone number is required'),
   body('role')
-    .isIn(['admin', 'staff'])
+    .isIn(['admin', 'staff', 'manager'])
     .withMessage('Valid role is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 const validateUserLogin = [
   body('email')
@@ -47,8 +47,8 @@ const validateUserLogin = [
   body('password')
     .notEmpty()
     .withMessage('Password is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Service validation rules
 const validateService = [
@@ -67,8 +67,8 @@ const validateService = [
     .trim()
     .isLength({ min: 1 })
     .withMessage('Category cannot be empty'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Product validation rules
 const validateProduct = [
@@ -90,8 +90,8 @@ const validateProduct = [
     .optional()
     .isInt({ min: 0 })
     .withMessage('Low stock threshold must be a non-negative integer'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Booking validation rules
 const validateBooking = [
@@ -111,8 +111,8 @@ const validateBooking = [
     .optional()
     .isUUID()
     .withMessage('Valid customer ID is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Attendance validation rules
 const validateAttendance = [
@@ -130,8 +130,8 @@ const validateAttendance = [
     .optional()
     .isISO8601()
     .withMessage('Valid closing time is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Transaction validation rules
 const validateTransaction = [
@@ -148,16 +148,16 @@ const validateTransaction = [
   body('staff_id')
     .isUUID()
     .withMessage('Valid staff ID is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // UUID parameter validation
 const validateUUID = [
   param('id')
     .isUUID()
     .withMessage('Valid UUID is required'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 // Pagination validation
 const validatePagination = [
@@ -169,8 +169,8 @@ const validatePagination = [
     .optional()
     .isInt({ min: 1, max: 100 })
     .withMessage('Limit must be between 1 and 100'),
-  handleValidationErrors
-];
+  handleValidationErrors,
+]
 
 export {
   handleValidationErrors,
@@ -182,5 +182,5 @@ export {
   validateAttendance,
   validateTransaction,
   validateUUID,
-  validatePagination
-};
+  validatePagination,
+}

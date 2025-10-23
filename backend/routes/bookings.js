@@ -1,466 +1,562 @@
-import express from 'express';
-import { sql } from '../config/database.js';
-import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
-import { validateBooking, validateUUID, validatePagination } from '../middleware/validation.js';
+import express from 'express'
+import { sql } from '../config/database.js'
+import { authenticateToken, requireStaff, requireAdmin, requireManager } from '../middleware/auth.js'
+import { validateBooking, validateUUID, validatePagination } from '../middleware/validation.js'
+import { generateBookingId, logBookingUpdate } from '../utils/booking.js'
 
-const router = express.Router();
+const router = express.Router()
 
 // Get all bookings
-router.get('/', authenticateToken, validatePagination, async (req, res) => {
+router.get('/', authenticateToken, validatePagination, async(req, res) => {
   try {
-    const { page = 1, limit = 20, status, staff_id, guest_customer_id, date_from, date_to } = req.query;
-    const offset = (page - 1) * limit;
+    const { page = 1, limit = 20, status, staff_id, guest_customer_id, date_from, date_to } = req.query
+    const offset = (page - 1) * limit
 
-    let query = supabase
-      .from('bookings')
-      .select(`
-        *,
-        services(name, duration, price, category),
-        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
-        staff:profiles!staff_id(first_name, last_name)
-      `, { count: 'exact' })
-      .range(offset, offset + limit - 1)
-      .order('start_time', { ascending: false });
+    let whereConditions = []
+    let queryParams = []
 
     // Role-based filtering
     if (req.user.role === 'staff') {
-      query = query.eq('staff_id', req.user.id);
+      whereConditions.push(`b.staff_id = $${whereConditions.length + 1}`)
+      queryParams.push(req.user.id)
     }
 
     // Additional filters
     if (status) {
-      query = query.eq('status', status);
+      whereConditions.push(`b.status = $${whereConditions.length + 1}`)
+      queryParams.push(status)
     }
     if (staff_id && req.user.role === 'admin') {
-      query = query.eq('staff_id', staff_id);
+      whereConditions.push(`b.staff_id = $${whereConditions.length + 1}`)
+      queryParams.push(staff_id)
     }
     if (guest_customer_id && ['admin', 'staff'].includes(req.user.role)) {
-      query = query.eq('guest_customer_id', guest_customer_id);
+      whereConditions.push(`b.guest_customer_id = $${whereConditions.length + 1}`)
+      queryParams.push(guest_customer_id)
     }
     if (date_from) {
-      query = query.gte('start_time', date_from);
+      whereConditions.push(`b.start_time >= $${whereConditions.length + 1}`)
+      queryParams.push(date_from)
     }
     if (date_to) {
-      query = query.lte('start_time', date_to);
+      whereConditions.push(`b.start_time <= $${whereConditions.length + 1}`)
+      queryParams.push(date_to)
     }
 
-    const { data: bookings, error, count } = await query;
+    const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch bookings', 
-        message: error.message 
-      });
-    }
+    // Get total count
+    const countQuery = `
+      SELECT COUNT(*) 
+      FROM bookings b
+      ${whereClause}
+    `
+    const countResult = await sql.unsafe(countQuery, queryParams)
+    const totalCount = parseInt(countResult[0].count)
+
+    // Get paginated bookings with related data
+    const bookingsQuery = `
+      SELECT 
+        b.*,
+        s.name as service_name,
+        s.duration as service_duration,
+        s.price as service_price,
+        s.category as service_category,
+        gc.first_name as guest_first_name,
+        gc.last_name as guest_last_name,
+        gc.phone as guest_phone,
+        p.first_name as staff_first_name,
+        p.last_name as staff_last_name
+      FROM bookings b
+      LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN guest_customers gc ON b.guest_customer_id = gc.id
+      LEFT JOIN profiles p ON b.staff_id = p.id
+      ${whereClause}
+      ORDER BY b.start_time DESC
+      LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}
+    `
+
+    const finalParams = [...queryParams, limit, offset]
+    const bookings = await sql.unsafe(bookingsQuery, finalParams)
 
     res.json({
       bookings,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: count,
-        pages: Math.ceil(count / limit)
-      }
-    });
+        total: totalCount,
+        pages: Math.ceil(totalCount / limit),
+      },
+    })
   } catch (error) {
-    console.error('Bookings fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Bookings fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get booking by ID
-router.get('/:id', authenticateToken, validateUUID, async (req, res) => {
+router.get('/:id', authenticateToken, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params
 
-    let query = supabase
-      .from('bookings')
-      .select(`
-        *,
-        services(name, duration, price, category, description),
-        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone, email),
-        staff:profiles!staff_id(first_name, last_name, phone)
-      `)
-      .eq('id', id)
-      .single();
+    let whereConditions = ['b.id = $1']
+    let queryParams = [id]
 
     // Role-based access control
     if (req.user.role === 'staff') {
-      query = query.eq('staff_id', req.user.id);
+      whereConditions.push(`b.staff_id = $${whereConditions.length + 1}`)
+      queryParams.push(req.user.id)
     }
 
-    const { data: booking, error } = await query;
+    const whereClause = whereConditions.join(' AND ')
 
-    if (error) {
+    const bookingQuery = `
+      SELECT 
+        b.*,
+        s.name as service_name,
+        s.duration as service_duration,
+        s.price as service_price,
+        s.category as service_category,
+        s.description as service_description,
+        gc.first_name as guest_first_name,
+        gc.last_name as guest_last_name,
+        gc.phone as guest_phone,
+        gc.email as guest_email,
+        p.first_name as staff_first_name,
+        p.last_name as staff_last_name,
+        p.phone as staff_phone
+      FROM bookings b
+      LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN guest_customers gc ON b.guest_customer_id = gc.id
+      LEFT JOIN profiles p ON b.staff_id = p.id
+      WHERE ${whereClause}
+    `
+
+    const bookings = await sql.unsafe(bookingQuery, queryParams)
+
+    if (bookings.length === 0) {
       return res.status(404).json({ 
-        error: 'Booking not found', 
-        message: error.message 
-      });
+        error: 'Booking not found',
+      })
     }
 
-    res.json({ booking });
+    res.json({ booking: bookings[0] })
   } catch (error) {
-    console.error('Booking fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Booking fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Check staff availability
-router.get('/availability/check', async (req, res) => {
+router.get('/availability/check', async(req, res) => {
   try {
-    const { staff_id, date, service_id } = req.query;
+    const { staff_id, date, service_id } = req.query
 
     if (!staff_id || !date || !service_id) {
       return res.status(400).json({ 
         error: 'Missing required parameters', 
-        message: 'staff_id, date, and service_id are required' 
-      });
+        message: 'staff_id, date, and service_id are required', 
+      })
     }
 
     // Get service duration
-    const { data: service, error: serviceError } = await supabase
-      .from('services')
-      .select('duration')
-      .eq('id', service_id)
-      .single();
+    const serviceQuery = `
+      SELECT duration FROM services 
+      WHERE id = $1 AND is_active = true
+    `
+    const services = await sql.unsafe(serviceQuery, [service_id])
 
-    if (serviceError) {
+    if (services.length === 0) {
       return res.status(404).json({ 
-        error: 'Service not found', 
-        message: serviceError.message 
-      });
+        error: 'Service not found',
+      })
     }
+
+    const service = services[0]
 
     // Get existing bookings for the staff on the date
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = new Date(date)
+    startOfDay.setHours(0, 0, 0, 0)
+    const endOfDay = new Date(date)
+    endOfDay.setHours(23, 59, 59, 999)
 
-    const { data: existingBookings, error: bookingsError } = await supabase
-      .from('bookings')
-      .select('start_time, end_time')
-      .eq('staff_id', staff_id)
-      .in('status', ['scheduled', 'in_progress'])
-      .gte('start_time', startOfDay.toISOString())
-      .lte('start_time', endOfDay.toISOString())
-      .order('start_time', { ascending: true });
-
-    if (bookingsError) {
-      return res.status(400).json({ 
-        error: 'Failed to check availability', 
-        message: bookingsError.message 
-      });
-    }
+    const bookingsQuery = `
+      SELECT start_time, end_time 
+      FROM bookings 
+      WHERE staff_id = $1 
+        AND status IN ('scheduled', 'in_progress')
+        AND start_time >= $2 
+        AND start_time <= $3
+      ORDER BY start_time ASC
+    `
+    
+    const existingBookings = await sql.unsafe(bookingsQuery, [
+      staff_id, 
+      startOfDay.toISOString(), 
+      endOfDay.toISOString(),
+    ])
 
     // Generate available time slots (9 AM to 6 PM, 30-minute intervals)
-    const availableSlots = [];
-    const workStart = new Date(date);
-    workStart.setHours(9, 0, 0, 0);
-    const workEnd = new Date(date);
-    workEnd.setHours(18, 0, 0, 0);
+    const availableSlots = []
+    const workStart = new Date(date)
+    workStart.setHours(9, 0, 0, 0)
+    const workEnd = new Date(date)
+    workEnd.setHours(18, 0, 0, 0)
 
-    const serviceDuration = service.duration; // in minutes
-    const slotInterval = 30; // 30-minute intervals
+    const serviceDuration = service.duration // in minutes
+    const slotInterval = 30 // 30-minute intervals
 
     for (let time = new Date(workStart); time < workEnd; time.setMinutes(time.getMinutes() + slotInterval)) {
-      const slotStart = new Date(time);
-      const slotEnd = new Date(time.getTime() + serviceDuration * 60000);
+      const slotStart = new Date(time)
+      const slotEnd = new Date(time.getTime() + serviceDuration * 60000)
 
       // Check if slot conflicts with existing bookings
       const hasConflict = existingBookings.some(booking => {
-        const bookingStart = new Date(booking.start_time);
-        const bookingEnd = new Date(booking.end_time);
+        const bookingStart = new Date(booking.start_time)
+        const bookingEnd = new Date(booking.end_time)
         
-        return (slotStart < bookingEnd && slotEnd > bookingStart);
-      });
+        return (slotStart < bookingEnd && slotEnd > bookingStart)
+      })
 
       if (!hasConflict && slotEnd <= workEnd) {
         availableSlots.push({
           start_time: slotStart.toISOString(),
-          end_time: slotEnd.toISOString()
-        });
+          end_time: slotEnd.toISOString(),
+        })
       }
     }
 
     res.json({ 
       available_slots: availableSlots,
-      service_duration: serviceDuration
-    });
+      service_duration: serviceDuration,
+    })
   } catch (error) {
-    console.error('Availability check error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Availability check error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Create new booking
-router.post('/', authenticateToken, validateBooking, async (req, res) => {
+router.post('/', authenticateToken, validateBooking, async(req, res) => {
   try {
-    const { service_id, staff_id, start_time, end_time, guest_customer_id, notes } = req.body;
+    const { service_id, staff_id, start_time, end_time, guest_customer_id, notes } = req.body
 
     // Use provided guest customer ID (staff/admin can book for any guest customer)
-    let finalGuestCustomerId = guest_customer_id;
+    let finalGuestCustomerId = guest_customer_id
 
     // Validate service exists
-    const { data: service, error: serviceError } = await supabase
-      .from('services')
-      .select('*')
-      .eq('id', service_id)
-      .eq('is_active', true)
-      .single();
+    const services = await sql`
+      SELECT * FROM services 
+      WHERE id = ${service_id} AND is_active = true
+    `
 
-    if (serviceError) {
+    if (services.length === 0) {
       return res.status(404).json({ 
         error: 'Service not found or inactive', 
-        message: serviceError.message 
-      });
+        message: 'Service not found or is inactive', 
+      })
     }
 
     // Validate staff exists and has staff role
-    const { data: staff, error: staffError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', staff_id)
-      .in('role', ['staff', 'admin'])
-      .single();
+    const staffMembers = await sql`
+      SELECT * FROM profiles 
+      WHERE id = ${staff_id} AND role IN ('staff', 'admin')
+    `
 
-    if (staffError) {
+    if (staffMembers.length === 0) {
       return res.status(404).json({ 
         error: 'Staff member not found', 
-        message: staffError.message 
-      });
+        message: 'Staff member not found or does not have appropriate role', 
+      })
     }
 
     // Check for scheduling conflicts
-    const { data: conflicts, error: conflictError } = await supabase
-      .from('bookings')
-      .select('id')
-      .eq('staff_id', staff_id)
-      .in('status', ['scheduled', 'in_progress'])
-      .or(`and(start_time.lt.${end_time},end_time.gt.${start_time})`);
+    const conflicts = await sql`
+      SELECT id FROM bookings 
+      WHERE staff_id = ${staff_id}
+      AND status IN ('scheduled', 'in_progress')
+      AND (
+        (start_time < ${end_time} AND end_time > ${start_time}) OR
+        (start_time >= ${start_time} AND start_time < ${end_time}) OR
+        (end_time > ${start_time} AND end_time <= ${end_time})
+      )
+    `
 
-    if (conflictError) {
-      return res.status(400).json({ 
-        error: 'Failed to check conflicts', 
-        message: conflictError.message 
-      });
-    }
-
-    if (conflicts && conflicts.length > 0) {
+    if (conflicts.length > 0) {
       return res.status(409).json({ 
         error: 'Time slot conflict', 
-        message: 'The selected time slot conflicts with an existing booking' 
-      });
+        message: 'The selected time slot conflicts with an existing booking', 
+      })
     }
 
-    // Create booking
-    const { data: booking, error } = await supabase
-      .from('bookings')
-      .insert({
-        service_id,
-        staff_id,
-        guest_customer_id: finalGuestCustomerId,
-        start_time,
-        end_time,
-        notes,
-        status: 'scheduled'
-      })
-      .select(`
-        *,
-        services(name, duration, price, category),
-        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
-        staff:profiles!staff_id(first_name, last_name)
-      `)
-      .single();
+    // Generate booking ID
+    const bookingId = await generateBookingId(finalGuestCustomerId)
 
-    if (error) {
+    // Create booking
+    const booking = await sql`
+      INSERT INTO bookings (
+        service_id, staff_id, guest_customer_id, start_time, end_time, 
+        notes, status, booking_id
+      )
+      VALUES (
+        ${service_id}, ${staff_id}, ${finalGuestCustomerId}, ${start_time}, ${end_time},
+        ${notes}, 'scheduled', ${bookingId}
+      )
+      RETURNING *
+    `
+
+    // Get full booking details with joins
+    const fullBooking = await sql`
+      SELECT 
+        b.*,
+        s.name as service_name, s.duration as service_duration, 
+        s.price as service_price, s.category as service_category,
+        gc.first_name as guest_first_name, gc.last_name as guest_last_name, 
+        gc.phone as guest_phone,
+        p.first_name as staff_first_name, p.last_name as staff_last_name
+      FROM bookings b
+      LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN guest_customers gc ON b.guest_customer_id = gc.id
+      LEFT JOIN profiles p ON b.staff_id = p.id
+      WHERE b.id = ${booking[0].id}
+    `
+
+    if (fullBooking.length === 0) {
       return res.status(400).json({ 
         error: 'Failed to create booking', 
-        message: error.message 
-      });
+        message: 'Booking was created but could not retrieve details', 
+      })
     }
 
     res.status(201).json({
       message: 'Booking created successfully',
-      booking
-    });
+      booking: fullBooking[0],
+    })
   } catch (error) {
-    console.error('Booking creation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Booking creation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Update booking
-router.put('/:id', authenticateToken, validateUUID, async (req, res) => {
+router.put('/:id', authenticateToken, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
-    const { service_id, staff_id, start_time, end_time, status, notes } = req.body;
+    const { id } = req.params
+    const { service_id, staff_id, start_time, end_time, status, notes, reason } = req.body
 
     // Check if user can update this booking
-    const { data: existingBooking, error: fetchError } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const existingBooking = await sql`
+      SELECT * FROM bookings WHERE id = ${id}
+    `
 
-    if (fetchError) {
+    if (existingBooking.length === 0) {
       return res.status(404).json({ 
         error: 'Booking not found', 
-        message: fetchError.message 
-      });
+        message: 'No booking found with the specified ID', 
+      })
     }
 
+    const bookingData = existingBooking[0]
+
     // Role-based access control
-    if (req.user.role === 'staff' && existingBooking.staff_id !== req.user.id) {
+    if (req.user.role === 'staff' && bookingData.staff_id !== req.user.id) {
       return res.status(403).json({ 
         error: 'Access denied', 
-        message: 'You can only update your assigned bookings' 
-      });
+        message: 'You can only update your assigned bookings', 
+      })
     }
 
     // Staff and admin can update all fields
     let updateData = {
-      service_id: service_id || existingBooking.service_id,
-      staff_id: staff_id || existingBooking.staff_id,
-      start_time: start_time || existingBooking.start_time,
-      end_time: end_time || existingBooking.end_time,
-      status: status || existingBooking.status,
-      notes: notes !== undefined ? notes : existingBooking.notes
-    };
+      service_id: service_id || bookingData.service_id,
+      staff_id: staff_id || bookingData.staff_id,
+      start_time: start_time || bookingData.start_time,
+      end_time: end_time || bookingData.end_time,
+      status: status || bookingData.status,
+      notes: notes !== undefined ? notes : bookingData.notes,
+    }
 
     // Check for conflicts if time or staff changed
     if ((start_time || end_time || staff_id) && status !== 'cancelled') {
-      const checkStaffId = staff_id || existingBooking.staff_id;
-      const checkStartTime = start_time || existingBooking.start_time;
-      const checkEndTime = end_time || existingBooking.end_time;
+      const checkStaffId = staff_id || bookingData.staff_id
+      const checkStartTime = start_time || bookingData.start_time
+      const checkEndTime = end_time || bookingData.end_time
 
-      const { data: conflicts, error: conflictError } = await supabase
-        .from('bookings')
-        .select('id')
-        .eq('staff_id', checkStaffId)
-        .neq('id', id)
-        .in('status', ['scheduled', 'in_progress'])
-        .or(`and(start_time.lt.${checkEndTime},end_time.gt.${checkStartTime})`);
+      const conflicts = await sql`
+        SELECT id FROM bookings 
+        WHERE staff_id = ${checkStaffId}
+          AND id != ${id}
+          AND status IN ('scheduled', 'in_progress')
+          AND start_time < ${checkEndTime}
+          AND end_time > ${checkStartTime}
+      `
 
-      if (conflicts && conflicts.length > 0) {
+      if (conflicts.length > 0) {
         return res.status(409).json({ 
           error: 'Time slot conflict', 
-          message: 'The updated time slot conflicts with an existing booking' 
-        });
+          message: 'The updated time slot conflicts with an existing booking', 
+        })
       }
     }
 
-    const { data: booking, error } = await supabase
-      .from('bookings')
-      .update(updateData)
-      .eq('id', id)
-      .select(`
-        *,
-        services(name, duration, price, category),
-        guest_customer:guest_customers!guest_customer_id(first_name, last_name, phone),
-        staff:profiles!staff_id(first_name, last_name)
-      `)
-      .single();
+    // Track changes for logging
+    const changes = {}
+    Object.keys(updateData).forEach(key => {
+      if (updateData[key] !== bookingData[key]) {
+        changes[key] = {
+          old: bookingData[key],
+          new: updateData[key],
+        }
+      }
+    })
 
-    if (error) {
+    // Update booking
+    const booking = await sql`
+      UPDATE bookings 
+      SET 
+        service_id = ${updateData.service_id},
+        staff_id = ${updateData.staff_id},
+        start_time = ${updateData.start_time},
+        end_time = ${updateData.end_time},
+        status = ${updateData.status},
+        notes = ${updateData.notes},
+        updated_at = NOW()
+      WHERE id = ${id}
+      RETURNING *
+    `
+
+    if (booking.length === 0) {
       return res.status(400).json({ 
         error: 'Failed to update booking', 
-        message: error.message 
-      });
+        message: 'Booking could not be updated', 
+      })
+    }
+
+    // Get full booking details with joins
+    const fullBooking = await sql`
+      SELECT 
+        b.*,
+        s.name as service_name, s.duration as service_duration, 
+        s.price as service_price, s.category as service_category,
+        gc.first_name as guest_first_name, gc.last_name as guest_last_name, 
+        gc.phone as guest_phone,
+        p.first_name as staff_first_name, p.last_name as staff_last_name
+      FROM bookings b
+      LEFT JOIN services s ON b.service_id = s.id
+      LEFT JOIN guest_customers gc ON b.guest_customer_id = gc.id
+      LEFT JOIN profiles p ON b.staff_id = p.id
+      WHERE b.id = ${id}
+    `
+
+    // Log booking update if changes were made and user is manager/admin
+    if (Object.keys(changes).length > 0 && ['admin', 'manager'].includes(req.user.role)) {
+      await logBookingUpdate(id, req.user.id, changes, reason)
     }
 
     res.json({
       message: 'Booking updated successfully',
-      booking
-    });
+      booking: fullBooking[0],
+    })
   } catch (error) {
-    console.error('Booking update error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Booking update error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Delete booking (Admin only)
-router.delete('/:id', authenticateToken, requireAdmin, validateUUID, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params
 
-    const { error } = await supabase
-      .from('bookings')
-      .delete()
-      .eq('id', id);
+    const result = await sql`
+      DELETE FROM bookings 
+      WHERE id = ${id}
+      RETURNING id
+    `
 
-    if (error) {
+    if (result.length === 0) {
       return res.status(400).json({ 
         error: 'Failed to delete booking', 
-        message: error.message 
-      });
+        message: 'Booking not found or could not be deleted', 
+      })
     }
 
-    res.json({ message: 'Booking deleted successfully' });
+    res.json({ message: 'Booking deleted successfully' })
   } catch (error) {
-    console.error('Booking deletion error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Booking deletion error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get booking statistics (Staff/Admin only)
-router.get('/stats/overview', authenticateToken, requireStaff, async (req, res) => {
+router.get('/stats/overview', authenticateToken, requireStaff, async(req, res) => {
   try {
-    const { date_from, date_to } = req.query;
+    const { date_from, date_to } = req.query
     
-    let baseQuery = supabase.from('bookings');
+    let whereClause = ''
+    let params = []
     
     if (date_from) {
-      baseQuery = baseQuery.gte('start_time', date_from);
+      whereClause += ' AND b.start_time >= $' + (params.length + 1)
+      params.push(date_from)
     }
     if (date_to) {
-      baseQuery = baseQuery.lte('start_time', date_to);
+      whereClause += ' AND b.start_time <= $' + (params.length + 1)
+      params.push(date_to)
+    }
+    
+    // Role-based filtering
+    if (req.user.role === 'staff') {
+      whereClause += ' AND b.staff_id = $' + (params.length + 1)
+      params.push(req.user.id)
+    }
+    
+    // Remove leading ' AND ' if present
+    if (whereClause.startsWith(' AND ')) {
+      whereClause = ' WHERE ' + whereClause.substring(5)
+    }
+    
+    const query = `
+      SELECT 
+        b.status,
+        s.name as service_name
+      FROM bookings b
+      LEFT JOIN services s ON b.service_id = s.id
+      ${whereClause}
+    `
+    
+    const stats = await sql.unsafe(query, params)
+
+    if (stats.length === 0) {
+      return res.json({
+        statusCounts: {},
+        serviceCounts: {},
+        totalBookings: 0,
+      })
     }
 
     // Total bookings by status
-    const { data: statusStats, error: statusError } = await baseQuery
-      .select('status');
-
-    if (statusError) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch booking stats', 
-        message: statusError.message 
-      });
-    }
-
-    const statusCounts = statusStats.reduce((acc, booking) => {
-      acc[booking.status] = (acc[booking.status] || 0) + 1;
-      return acc;
-    }, {});
+    const statusCounts = stats.reduce((acc, booking) => {
+      acc[booking.status] = (acc[booking.status] || 0) + 1
+      return acc
+    }, {})
 
     // Bookings by service
-    const { data: serviceStats, error: serviceError } = await baseQuery
-      .select(`
-        services(name)
-      `);
-
-    if (serviceError) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch service stats', 
-        message: serviceError.message 
-      });
-    }
-
-    const serviceCounts = serviceStats.reduce((acc, booking) => {
-      const serviceName = booking.services?.name || 'Unknown';
-      acc[serviceName] = (acc[serviceName] || 0) + 1;
-      return acc;
-    }, {});
+    const serviceCounts = stats.reduce((acc, booking) => {
+      const serviceName = booking.service_name || 'Unknown'
+      acc[serviceName] = (acc[serviceName] || 0) + 1
+      return acc
+    }, {})
 
     res.json({
       statusCounts,
       serviceCounts,
-      totalBookings: statusStats.length
-    });
+      totalBookings: stats.length,
+    })
   } catch (error) {
-    console.error('Booking stats error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Booking stats error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
-export default router;
+export default router

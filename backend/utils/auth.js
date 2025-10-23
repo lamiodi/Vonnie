@@ -1,112 +1,112 @@
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import CryptoJS from 'crypto-js';
-import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs'
+import jwt from 'jsonwebtoken'
+import CryptoJS from 'crypto-js'
+import dotenv from 'dotenv'
 
 // Configure dotenv
-dotenv.config();
+dotenv.config()
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-256-bit-encryption-key-change-me';
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production'
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-256-bit-encryption-key-change-me'
 
 // Password hashing utilities
-const hashPassword = async (password) => {
+const hashPassword = async(password) => {
   try {
-    const saltRounds = 12;
-    return await bcrypt.hash(password, saltRounds);
+    const saltRounds = 12
+    return await bcrypt.hash(password, saltRounds)
   } catch (error) {
-    throw new Error('Password hashing failed');
+    throw new Error('Password hashing failed')
   }
-};
+}
 
-const comparePassword = async (password, hashedPassword) => {
+const comparePassword = async(password, hashedPassword) => {
   try {
-    return await bcrypt.compare(password, hashedPassword);
+    return await bcrypt.compare(password, hashedPassword)
   } catch (error) {
-    throw new Error('Password comparison failed');
+    throw new Error('Password comparison failed')
   }
-};
+}
 
 // Email encryption/decryption utilities
 const encryptEmail = (email) => {
   try {
-    return CryptoJS.AES.encrypt(email, ENCRYPTION_KEY).toString();
+    return CryptoJS.AES.encrypt(email, ENCRYPTION_KEY).toString()
   } catch (error) {
-    throw new Error('Email encryption failed');
+    throw new Error('Email encryption failed')
   }
-};
+}
 
 const decryptEmail = (encryptedEmail) => {
   try {
-    const bytes = CryptoJS.AES.decrypt(encryptedEmail, ENCRYPTION_KEY);
-    return bytes.toString(CryptoJS.enc.Utf8);
+    const bytes = CryptoJS.AES.decrypt(encryptedEmail, ENCRYPTION_KEY)
+    return bytes.toString(CryptoJS.enc.Utf8)
   } catch (error) {
-    throw new Error('Email decryption failed');
+    throw new Error('Email decryption failed')
   }
-};
+}
 
 // JWT token generation
 const generateToken = (payload, expiresIn = '7d') => {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
-};
+  return jwt.sign(payload, JWT_SECRET, { expiresIn })
+}
 
 const verifyToken = (token) => {
   try {
-    return jwt.verify(token, JWT_SECRET);
+    return jwt.verify(token, JWT_SECRET)
   } catch (error) {
-    throw new Error('Invalid or expired token');
+    throw new Error('Invalid or expired token')
   }
-};
+}
 
 // Token extraction from headers
 const extractToken = (authHeader) => {
   if (!authHeader) {
-    throw new Error('Authorization header missing');
+    throw new Error('Authorization header missing')
   }
   
-  const parts = authHeader.split(' ');
+  const parts = authHeader.split(' ')
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
-    throw new Error('Invalid authorization format');
+    throw new Error('Invalid authorization format')
   }
   
-  return parts[1];
-};
+  return parts[1]
+}
 
 // Password strength validation
 const validatePasswordStrength = (password) => {
-  const minLength = 8;
-  const hasUpperCase = /[A-Z]/.test(password);
-  const hasLowerCase = /[a-z]/.test(password);
-  const hasNumbers = /\d/.test(password);
-  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  const minLength = 8
+  const hasUpperCase = /[A-Z]/.test(password)
+  const hasLowerCase = /[a-z]/.test(password)
+  const hasNumbers = /\d/.test(password)
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password)
   
   if (password.length < minLength) {
-    throw new Error('Password must be at least 8 characters long');
+    throw new Error('Password must be at least 8 characters long')
   }
   if (!hasUpperCase) {
-    throw new Error('Password must contain at least one uppercase letter');
+    throw new Error('Password must contain at least one uppercase letter')
   }
   if (!hasLowerCase) {
-    throw new Error('Password must contain at least one lowercase letter');
+    throw new Error('Password must contain at least one lowercase letter')
   }
   if (!hasNumbers) {
-    throw new Error('Password must contain at least one number');
+    throw new Error('Password must contain at least one number')
   }
   if (!hasSpecialChar) {
-    throw new Error('Password must contain at least one special character');
+    throw new Error('Password must contain at least one special character')
   }
   
-  return true;
-};
+  return true
+}
 
 // Email validation
 const validateEmail = (email) => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!emailRegex.test(email)) {
-    throw new Error('Invalid email format');
+    throw new Error('Invalid email format')
   }
-  return true;
-};
+  return true
+}
 
 export {
   hashPassword,
@@ -119,5 +119,5 @@ export {
   validatePasswordStrength,
   validateEmail,
   JWT_SECRET,
-  ENCRYPTION_KEY
-};
+  ENCRYPTION_KEY,
+}

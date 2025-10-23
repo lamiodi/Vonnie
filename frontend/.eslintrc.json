@@ -1,0 +1,48 @@
+{
+  "env": {
+    "browser": true,
+    "es2021": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "plugin:react/recommended",
+    "plugin:react-hooks/recommended"
+  ],
+  "parserOptions": {
+    "ecmaFeatures": {
+      "jsx": true
+    },
+    "ecmaVersion": "latest",
+    "sourceType": "module"
+  },
+  "plugins": ["react", "react-hooks"],
+  "rules": {
+    "no-unused-vars": "warn",
+    "eqeqeq": "error",
+    "react/prop-types": "off",
+    "react/react-in-jsx-scope": "off",
+    "quotes": ["warn", "single"],
+    "semi": ["warn", "never"],
+    "indent": ["warn", 2],
+    "comma-dangle": ["warn", "always-multiline"],
+    "object-curly-spacing": ["warn", "always"],
+    "array-bracket-spacing": ["warn", "never"],
+    "arrow-spacing": "warn",
+    "keyword-spacing": "warn",
+    "space-before-blocks": "warn",
+    "space-before-function-paren": ["warn", "never"],
+    "space-in-parens": ["warn", "never"]
+  },
+  "settings": {
+    "react": {
+      "version": "detect"
+    }
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "dist/",
+    "build/",
+    "*.min.js",
+    "coverage/"
+  ]
+}

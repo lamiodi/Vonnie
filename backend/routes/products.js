@@ -1,472 +1,420 @@
-import express from 'express';
-import { sql } from '../config/database.js';
-import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js';
-import { validateProduct, validateUUID, validatePagination } from '../middleware/validation.js';
+import express from 'express'
+import { sql } from '../config/database.js'
+import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js'
+import { validateProduct, validateUUID, validatePagination } from '../middleware/validation.js'
 
-const router = express.Router();
+const router = express.Router()
 
 // Get all products
-router.get('/', validatePagination, async (req, res) => {
+router.get('/', validatePagination, async(req, res) => {
   try {
-    const { page = 1, limit = 20, category, is_active = true, low_stock } = req.query;
-    const offset = (page - 1) * limit;
+    const { page = 1, limit = 20, category, is_active = true, low_stock } = req.query
+    const offset = (page - 1) * limit
 
-    let query = supabase
-      .from('products')
-      .select('*', { count: 'exact' })
-      .range(offset, offset + limit - 1)
-      .order('name', { ascending: true });
+    // Build the base query
+    let query = 'SELECT * FROM products'
+    let countQuery = 'SELECT COUNT(*) FROM products'
+    const conditions = []
+    const params = []
+    let paramCount = 0
 
     if (category) {
-      query = query.eq('category', category);
+      paramCount++
+      conditions.push(`category = $${paramCount}`)
+      params.push(category)
     }
 
     if (is_active !== undefined) {
-      query = query.eq('is_active', is_active === 'true');
+      paramCount++
+      conditions.push(`is_active = $${paramCount}`)
+      params.push(is_active === 'true')
     }
 
     if (low_stock === 'true') {
-      query = query.filter('stock_level', 'lte', 'low_stock_threshold');
+      conditions.push('stock_level <= low_stock_threshold')
     }
 
-    const { data: products, error, count } = await query;
-
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch products', 
-        message: error.message 
-      });
+    // Add WHERE clause if there are conditions
+    if (conditions.length > 0) {
+      const whereClause = ` WHERE ${conditions.join(' AND ')}`
+      query += whereClause
+      countQuery += whereClause
     }
+
+    // Add ordering and pagination
+    query += ` ORDER BY name ASC LIMIT $${paramCount + 1} OFFSET $${paramCount + 2}`
+    params.push(parseInt(limit), offset)
+
+    // Execute queries
+    const productsResult = await sql.query(query, params)
+    const countResult = await sql.query(countQuery, params.slice(0, -2)) // Remove limit and offset params for count
+
+    const products = productsResult.rows
+    const total = parseInt(countResult.rows[0].count)
 
     res.json({
       products,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: count,
-        pages: Math.ceil(count / limit)
-      }
-    });
+        total: total,
+        pages: Math.ceil(total / limit),
+      },
+    })
   } catch (error) {
-    console.error('Products fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Products fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get product by ID
-router.get('/:id', validateUUID, async (req, res) => {
+router.get('/:id', validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params
 
-    const { data: product, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', id)
-      .single();
+    const result = await sql.query(
+      'SELECT * FROM products WHERE id = $1',
+      [id],
+    )
 
-    if (error) {
+    if (result.rows.length === 0) {
       return res.status(404).json({ 
         error: 'Product not found', 
-        message: error.message 
-      });
+        message: 'Product with the specified ID was not found', 
+      })
     }
 
-    res.json({ product });
+    res.json({ product: result.rows[0] })
   } catch (error) {
-    console.error('Product fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Product fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Search products by name or SKU
-router.get('/search/:query', async (req, res) => {
+router.get('/search/:query', async(req, res) => {
   try {
-    const { query } = req.params;
-    const { limit = 10 } = req.query;
+    const { query } = req.params
+    const { limit = 10 } = req.query
 
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('*')
-      .or(`name.ilike.%${query}%,sku.ilike.%${query}%`)
-      .eq('is_active', true)
-      .limit(limit);
+    const result = await sql.query(
+      `SELECT * FROM products 
+       WHERE (name ILIKE $1 OR sku ILIKE $1) 
+       AND is_active = true 
+       LIMIT $2`,
+      [`%${query}%`, parseInt(limit)],
+    )
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Search failed', 
-        message: error.message 
-      });
-    }
-
-    res.json({ products });
+    res.json({ products: result.rows })
   } catch (error) {
-    console.error('Product search error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Product search error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Create new product (Staff/Admin only)
-router.post('/', authenticateToken, requireStaff, validateProduct, async (req, res) => {
+router.post('/', authenticateToken, requireStaff, validateProduct, async(req, res) => {
   try {
-    const { name, description, sku, price, category, stock_level, low_stock_threshold, image_url } = req.body;
+    const { name, description, sku, price, category, stock_level, low_stock_threshold, image_url } = req.body
 
     // Check if SKU already exists
-    const { data: existingProduct, error: checkError } = await supabase
-      .from('products')
-      .select('id')
-      .eq('sku', sku)
-      .single();
+    const existingProductResult = await sql.query(
+      'SELECT id FROM products WHERE sku = $1',
+      [sku],
+    )
 
-    if (existingProduct) {
+    if (existingProductResult.rows.length > 0) {
       return res.status(400).json({ 
         error: 'SKU already exists', 
-        message: 'A product with this SKU already exists' 
-      });
-    }
-
-    const { data: product, error } = await supabase
-      .from('products')
-      .insert({
-        name,
-        description,
-        sku,
-        price,
-        category,
-        stock_level,
-        low_stock_threshold: low_stock_threshold || 5,
-        image_url
+        message: 'A product with this SKU already exists', 
       })
-      .select()
-      .single();
-
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to create product', 
-        message: error.message 
-      });
     }
+
+    // Create product
+    const productResult = await sql.query(
+      `INSERT INTO products 
+       (name, description, sku, price, category, stock_level, low_stock_threshold, image_url)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING *`,
+      [name, description, sku, price, category, stock_level, low_stock_threshold || 5, image_url],
+    )
+
+    const product = productResult.rows[0]
 
     // Log initial inventory
-    await supabase
-      .from('inventory_logs')
-      .insert({
-        product_id: product.id,
-        adjustment_type: 'initial',
-        quantity: stock_level,
-        notes: 'Initial stock entry',
-        staff_id: req.user.id
-      });
+    await sql.query(
+      `INSERT INTO inventory_logs 
+       (product_id, adjustment_type, quantity, notes, staff_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [product.id, 'initial', stock_level, 'Initial stock entry', req.user.id],
+    )
 
     res.status(201).json({
       message: 'Product created successfully',
-      product
-    });
+      product,
+    })
   } catch (error) {
-    console.error('Product creation error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Product creation error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Update product (Staff/Admin only)
-router.put('/:id', authenticateToken, requireStaff, validateUUID, validateProduct, async (req, res) => {
+router.put('/:id', authenticateToken, requireStaff, validateUUID, validateProduct, async(req, res) => {
   try {
-    const { id } = req.params;
-    const { name, description, sku, price, category, stock_level, low_stock_threshold, image_url, is_active } = req.body;
+    const { id } = req.params
+    const { name, description, sku, price, category, stock_level, low_stock_threshold, image_url, is_active } = req.body
 
     // Check if SKU already exists for other products
-    const { data: existingProduct, error: checkError } = await supabase
-      .from('products')
-      .select('id')
-      .eq('sku', sku)
-      .neq('id', id)
-      .single();
+    const existingProductResult = await sql.query(
+      'SELECT id FROM products WHERE sku = $1 AND id != $2',
+      [sku, id],
+    )
 
-    if (existingProduct) {
+    if (existingProductResult.rows.length > 0) {
       return res.status(400).json({ 
         error: 'SKU already exists', 
-        message: 'Another product with this SKU already exists' 
-      });
+        message: 'Another product with this SKU already exists', 
+      })
     }
 
-    const { data: product, error } = await supabase
-      .from('products')
-      .update({
-        name,
-        description,
-        sku,
-        price,
-        category,
-        stock_level,
-        low_stock_threshold,
-        image_url,
-        is_active
-      })
-      .eq('id', id)
-      .select()
-      .single();
+    const productResult = await sql.query(
+      `UPDATE products 
+       SET name = $1, description = $2, sku = $3, price = $4, category = $5, 
+           stock_level = $6, low_stock_threshold = $7, image_url = $8, is_active = $9
+       WHERE id = $10
+       RETURNING *`,
+      [name, description, sku, price, category, stock_level, low_stock_threshold, image_url, is_active, id],
+    )
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to update product', 
-        message: error.message 
-      });
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Product not found', 
+        message: 'Product with the specified ID was not found', 
+      })
     }
 
     res.json({
       message: 'Product updated successfully',
-      product
-    });
+      product: productResult.rows[0],
+    })
   } catch (error) {
-    console.error('Product update error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Product update error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Adjust stock level (Staff/Admin only)
-router.patch('/:id/stock', authenticateToken, requireStaff, validateUUID, async (req, res) => {
+router.patch('/:id/stock', authenticateToken, requireStaff, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
-    const { adjustment_type, quantity, notes } = req.body;
+    const { id } = req.params
+    const { adjustment_type, quantity, notes } = req.body
 
     if (!['sale', 'restock', 'adjustment'].includes(adjustment_type)) {
       return res.status(400).json({ 
         error: 'Invalid adjustment type', 
-        message: 'Adjustment type must be sale, restock, or adjustment' 
-      });
+        message: 'Adjustment type must be sale, restock, or adjustment', 
+      })
     }
 
     if (!quantity || typeof quantity !== 'number') {
       return res.status(400).json({ 
         error: 'Invalid quantity', 
-        message: 'Quantity must be a valid number' 
-      });
+        message: 'Quantity must be a valid number', 
+      })
     }
 
     // Get current product
-    const { data: currentProduct, error: fetchError } = await supabase
-      .from('products')
-      .select('stock_level')
-      .eq('id', id)
-      .single();
+    const currentProductResult = await sql.query(
+      'SELECT stock_level FROM products WHERE id = $1',
+      [id],
+    )
 
-    if (fetchError) {
+    if (currentProductResult.rows.length === 0) {
       return res.status(404).json({ 
         error: 'Product not found', 
-        message: fetchError.message 
-      });
+        message: 'Product with the specified ID was not found', 
+      })
     }
 
     // Calculate new stock level
-    let newStockLevel;
+    const currentStock = currentProductResult.rows[0].stock_level
+    let newStockLevel
     if (adjustment_type === 'sale') {
-      newStockLevel = currentProduct.stock_level - Math.abs(quantity);
+      newStockLevel = currentStock - Math.abs(quantity)
     } else if (adjustment_type === 'restock') {
-      newStockLevel = currentProduct.stock_level + Math.abs(quantity);
+      newStockLevel = currentStock + Math.abs(quantity)
     } else { // adjustment
-      newStockLevel = quantity; // Direct set
+      newStockLevel = quantity // Direct set
     }
 
     if (newStockLevel < 0) {
       return res.status(400).json({ 
         error: 'Insufficient stock', 
-        message: 'Stock level cannot be negative' 
-      });
+        message: 'Stock level cannot be negative', 
+      })
     }
 
     // Update product stock
-    const { data: product, error: updateError } = await supabase
-      .from('products')
-      .update({ stock_level: newStockLevel })
-      .eq('id', id)
-      .select()
-      .single();
+    const productResult = await sql.query(
+      'UPDATE products SET stock_level = $1 WHERE id = $2 RETURNING *',
+      [newStockLevel, id],
+    )
 
-    if (updateError) {
-      return res.status(400).json({ 
-        error: 'Failed to update stock', 
-        message: updateError.message 
-      });
+    if (productResult.rows.length === 0) {
+      return res.status(404).json({ 
+        error: 'Product not found', 
+        message: 'Product with the specified ID was not found', 
+      })
     }
 
     // Log inventory adjustment
     const logQuantity = adjustment_type === 'sale' ? -Math.abs(quantity) : 
-                      adjustment_type === 'restock' ? Math.abs(quantity) : 
-                      quantity - currentProduct.stock_level;
+      adjustment_type === 'restock' ? Math.abs(quantity) : 
+        quantity - currentStock
 
-    await supabase
-      .from('inventory_logs')
-      .insert({
-        product_id: id,
-        adjustment_type,
-        quantity: logQuantity,
-        notes,
-        staff_id: req.user.id
-      });
+    await sql.query(
+      'INSERT INTO inventory_logs (product_id, adjustment_type, quantity, notes, staff_id) VALUES ($1, $2, $3, $4, $5)',
+      [id, adjustment_type, logQuantity, notes, req.user.id],
+    )
 
     res.json({
       message: 'Stock adjusted successfully',
-      product,
+      product: productResult.rows[0],
       adjustment: {
         type: adjustment_type,
         quantity: logQuantity,
-        previous_stock: currentProduct.stock_level,
-        new_stock: newStockLevel
-      }
-    });
+        previous_stock: currentStock,
+        new_stock: newStockLevel,
+      },
+    })
   } catch (error) {
-    console.error('Stock adjustment error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Stock adjustment error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get product inventory history (Staff/Admin only)
-router.get('/:id/inventory-history', authenticateToken, requireStaff, validateUUID, async (req, res) => {
+router.get('/:id/inventory-history', authenticateToken, requireStaff, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
-    const { page = 1, limit = 20 } = req.query;
-    const offset = (page - 1) * limit;
+    const { id } = req.params
+    const { page = 1, limit = 20 } = req.query
+    const offset = (page - 1) * limit
 
-    const { data: logs, error, count } = await supabase
-      .from('inventory_logs')
-      .select(`
-        *,
-        profiles(first_name, last_name)
-      `, { count: 'exact' })
-      .eq('product_id', id)
-      .range(offset, offset + limit - 1)
-      .order('created_at', { ascending: false });
+    // Get inventory logs with pagination
+    const logsResult = await sql.query(
+      `SELECT il.*, p.first_name, p.last_name
+       FROM inventory_logs il
+       LEFT JOIN profiles p ON il.staff_id = p.id
+       WHERE il.product_id = $1
+       ORDER BY il.created_at DESC
+       LIMIT $2 OFFSET $3`,
+      [id, limit, offset],
+    )
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch inventory history', 
-        message: error.message 
-      });
-    }
+    // Get total count
+    const countResult = await sql.query(
+      'SELECT COUNT(*) FROM inventory_logs WHERE product_id = $1',
+      [id],
+    )
+    
+    const total = parseInt(countResult.rows[0].count)
 
     res.json({
-      logs,
+      logs: logsResult.rows,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: count,
-        pages: Math.ceil(count / limit)
-      }
-    });
+        total: total,
+        pages: Math.ceil(total / limit),
+      },
+    })
   } catch (error) {
-    console.error('Inventory history error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Inventory history error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Delete product (Admin only)
-router.delete('/:id', authenticateToken, requireAdmin, validateUUID, async (req, res) => {
+router.delete('/:id', authenticateToken, requireAdmin, validateUUID, async(req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params
 
     // Check if product has any transaction items
-    const { data: transactionItems, error: transactionError } = await supabase
-      .from('transaction_items')
-      .select('id')
-      .eq('product_id', id)
-      .limit(1);
+    const transactionItemsResult = await sql.query(
+      'SELECT id FROM transaction_items WHERE product_id = $1 LIMIT 1',
+      [id],
+    )
 
-    if (transactionError) {
-      return res.status(400).json({ 
-        error: 'Failed to check product transactions', 
-        message: transactionError.message 
-      });
-    }
-
-    if (transactionItems && transactionItems.length > 0) {
+    if (transactionItemsResult.rows.length > 0) {
       // Soft delete - deactivate instead of hard delete
-      const { data: product, error } = await supabase
-        .from('products')
-        .update({ is_active: false })
-        .eq('id', id)
-        .select()
-        .single();
+      const deactivateResult = await sql.query(
+        'UPDATE products SET is_active = false WHERE id = $1 RETURNING *',
+        [id],
+      )
 
-      if (error) {
-        return res.status(400).json({ 
-          error: 'Failed to deactivate product', 
-          message: error.message 
-        });
+      if (deactivateResult.rows.length === 0) {
+        return res.status(404).json({ 
+          error: 'Product not found', 
+          message: 'Product with the specified ID was not found', 
+        })
       }
 
       return res.json({
         message: 'Product deactivated successfully (has transaction history)',
-        product
-      });
+        product: deactivateResult.rows[0],
+      })
     }
 
     // Hard delete if no transactions
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+    const deleteResult = await sql.query(
+      'DELETE FROM products WHERE id = $1',
+      [id],
+    )
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to delete product', 
-        message: error.message 
-      });
+    if (deleteResult.rowCount === 0) {
+      return res.status(404).json({ 
+        error: 'Product not found', 
+        message: 'Product with the specified ID was not found', 
+      })
     }
 
-    res.json({ message: 'Product deleted successfully' });
+    res.json({ message: 'Product deleted successfully' })
   } catch (error) {
-    console.error('Product deletion error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Product deletion error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get product categories
-router.get('/categories/list', async (req, res) => {
+router.get('/categories/list', async(req, res) => {
   try {
-    const { data: categories, error } = await supabase
-      .from('products')
-      .select('category')
-      .not('category', 'is', null)
-      .eq('is_active', true);
-
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch categories', 
-        message: error.message 
-      });
-    }
+    const categoriesResult = await sql.query(
+      'SELECT DISTINCT category FROM products WHERE category IS NOT NULL AND is_active = true',
+    )
 
     // Get unique categories
-    const uniqueCategories = [...new Set(categories.map(item => item.category))];
+    const uniqueCategories = categoriesResult.rows.map(item => item.category)
 
-    res.json({ categories: uniqueCategories });
+    res.json({ categories: uniqueCategories })
   } catch (error) {
-    console.error('Categories fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Categories fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
 // Get low stock products (Staff/Admin only)
-router.get('/alerts/low-stock', authenticateToken, requireStaff, async (req, res) => {
+router.get('/alerts/low-stock', authenticateToken, requireStaff, async(req, res) => {
   try {
-    const { data: products, error } = await supabase
-      .from('products')
-      .select('*')
-      .filter('stock_level', 'lte', 'low_stock_threshold')
-      .eq('is_active', true)
-      .order('stock_level', { ascending: true });
+    const productsResult = await sql.query(
+      'SELECT * FROM products WHERE stock_level <= low_stock_threshold AND is_active = true ORDER BY stock_level ASC',
+    )
 
-    if (error) {
-      return res.status(400).json({ 
-        error: 'Failed to fetch low stock products', 
-        message: error.message 
-      });
-    }
-
-    res.json({ products });
+    res.json({ products: productsResult.rows })
   } catch (error) {
-    console.error('Low stock fetch error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Low stock fetch error:', error)
+    res.status(500).json({ error: 'Internal server error' })
   }
-});
+})
 
-export default router;
+export default router
