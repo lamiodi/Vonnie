@@ -330,10 +330,11 @@ router.post('/setup-database', async(req, res) => {
       results.push('ℹ️  UUID extension already exists')
     }
     
-    // 2. Create users table
+    // 2. Create users table (drop if exists to ensure correct constraint)
     try {
+      await sql`DROP TABLE IF EXISTS users CASCADE`
       await sql`
-        CREATE TABLE IF NOT EXISTS users (
+        CREATE TABLE users (
           id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
           email VARCHAR(255) UNIQUE NOT NULL,
           password_hash VARCHAR(255) NOT NULL,
@@ -347,9 +348,10 @@ router.post('/setup-database', async(req, res) => {
           updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
       `
-      results.push('✅ Users table created')
+      results.push('✅ Users table created with correct constraints')
     } catch (error) {
-      results.push('ℹ️  Users table already exists')
+      console.error('Error creating users table:', error)
+      results.push('❌ Error creating users table')
     }
     
     // 3. Create departments table
@@ -513,6 +515,44 @@ router.post('/setup-database', async(req, res) => {
       results.push('ℹ️  Staff account already exists')
     }
     
+    // 8.5 Insert demo manager account
+    try {
+      // First delete any existing manager account to ensure fresh insertion
+      await sql`DELETE FROM users WHERE email = 'manager@vonnex2x.com'`
+      
+      // Password: Manager@2024 (hashed with bcrypt)
+      const managerResult = await sql`
+        INSERT INTO users (email, password_hash, full_name, phone, role, is_active, email_verified) VALUES
+        ('manager@vonnex2x.com', '$2b$12$LQv3c1yqBwEHXjp.RweHNe1fF0XgMhOxp5dMChWnkUOib1h.kNjSW', 'Manager Demo', '+2348098765432', 'manager', true, true)
+        RETURNING id
+      `
+      
+      if (managerResult.length > 0) {
+        results.push('✅ Manager account created')
+        
+        // Create manager profile
+        const adminDept = await sql`SELECT id FROM departments WHERE name = 'Administration' LIMIT 1`
+        if (adminDept.length > 0) {
+          await sql`
+            INSERT INTO profiles (
+              user_id, first_name, last_name, specialization, experience, 
+              employee_id, hire_date, salary, commission_rate, position, department_id
+            ) VALUES (
+              ${managerResult[0].id}, 'Manager', 'Demo', 'Business Management', 'Advanced Level',
+              'EMP003', CURRENT_DATE - INTERVAL '18 months', 250000.00, 10.00, 'Operations Manager', ${adminDept[0].id}
+            )
+            ON CONFLICT DO NOTHING
+          `
+          results.push('✅ Manager profile created')
+        }
+      } else {
+        results.push('ℹ️  Manager account already exists')
+      }
+    } catch (error) {
+      console.error('Manager account insertion error:', error)
+      results.push('❌ Manager account insertion failed: ' + error.message)
+    }
+    
     // 9. Insert demo guest customers
     try {
       await sql`
@@ -540,7 +580,7 @@ router.post('/setup-database', async(req, res) => {
     const demoUsers = await sql`
       SELECT email, full_name, role, is_active 
       FROM users 
-      WHERE email IN ('admin@vonnex2x.com', 'staff@vonnex2x.com')
+      WHERE email IN ('admin@vonnex2x.com', 'staff@vonnex2x.com', 'manager@vonnex2x.com')
       ORDER BY role DESC
     `
     
@@ -562,6 +602,7 @@ router.post('/setup-database', async(req, res) => {
       },
       credentials: {
         admin: { email: 'admin@vonnex2x.com', password: 'Admin@2024' },
+        manager: { email: 'manager@vonnex2x.com', password: 'Manager@2024' },
         staff: { email: 'staff@vonnex2x.com', password: 'Staff@2024' },
       },
     })
@@ -572,6 +613,26 @@ router.post('/setup-database', async(req, res) => {
       success: false,
       message: 'Database setup failed',
       error: error.message,
+    })
+  }
+})
+
+// Test endpoint to check manager account
+router.get('/test-manager', async (req, res) => {
+  try {
+    const manager = await sql`
+      SELECT * FROM users WHERE email = 'manager@vonnex2x.com'
+    `
+    
+    res.json({
+      exists: manager.length > 0,
+      manager: manager.length > 0 ? manager[0] : null
+    })
+  } catch (error) {
+    console.error('Test manager error:', error)
+    res.status(500).json({
+      success: false,
+      error: error.message
     })
   }
 })

@@ -15,6 +15,9 @@ import { sql } from './config/database.js'
 const app = express()
 const PORT = process.env.PORT || 5002
 
+// Trust proxy for proper IP handling behind proxies like Render
+app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false)
+
 // Security middleware
 app.use(helmet())
 app.use(cors({
