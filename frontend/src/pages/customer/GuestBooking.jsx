@@ -6,6 +6,8 @@ import { toast } from 'react-hot-toast'
 import { formatCurrency, formatDate, formatTime, isValidEmail, isValidPhone } from '../../lib/utils'
 import { Helmet } from 'react-helmet-async'
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5002/api'
+
 const GuestBooking = () => {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
@@ -14,6 +16,7 @@ const GuestBooking = () => {
   const [staff, setStaff] = useState([])
   const [availableSlots, setAvailableSlots] = useState([])
   const [loadingSlots, setLoadingSlots] = useState(false)
+  const [bookingResult, setBookingResult] = useState(null)
 
   const [bookingData, setBookingData] = useState({
     // Guest information
@@ -32,61 +35,19 @@ const GuestBooking = () => {
 
   const [errors, setErrors] = useState({})
 
-  // Mock data - replace with actual API calls
+  // Fetch services from API
   useEffect(() => {
     const fetchServices = async () => {
       try {
         setIsLoading(true)
         
-        const mockServices = [
-          {
-            id: 1,
-            name: 'Hair Styling',
-            description: 'Professional hair styling and treatment',
-            duration: 90,
-            price: 85000,
-            category: 'Hair Care',
-            image: '/api/placeholder/300/200'
-          },
-          {
-            id: 2,
-            name: 'Manicure & Pedicure',
-            description: 'Complete nail care and beautification',
-            duration: 60,
-            price: 45000,
-            category: 'Nail Care',
-            image: '/api/placeholder/300/200'
-          },
-          {
-            id: 3,
-            name: 'Facial Treatment',
-            description: 'Deep cleansing and rejuvenating facial',
-            duration: 75,
-            price: 65000,
-            category: 'Skin Care',
-            image: '/api/placeholder/300/200'
-          },
-          {
-            id: 4,
-            name: 'Eyebrow Shaping',
-            description: 'Professional eyebrow threading and shaping',
-            duration: 30,
-            price: 25000,
-            category: 'Beauty',
-            image: '/api/placeholder/300/200'
-          },
-          {
-            id: 5,
-            name: 'Makeup Application',
-            description: 'Professional makeup for special occasions',
-            duration: 45,
-            price: 55000,
-            category: 'Beauty',
-            image: '/api/placeholder/300/200'
-          }
-        ]
+        const response = await fetch(`${API_BASE_URL}/services?is_active=true&limit=50`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch services')
+        }
         
-        setServices(mockServices)
+        const data = await response.json()
+        setServices(data.services || [])
       } catch (error) {
         console.error('Error fetching services:', error)
         toast.error('Failed to load services')
@@ -97,6 +58,28 @@ const GuestBooking = () => {
 
     fetchServices()
   }, [])
+
+  // Fetch staff when services are loaded
+  useEffect(() => {
+    const fetchStaff = async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/auth/profiles?role=staff&limit=50`)
+        if (!response.ok) {
+          throw new Error('Failed to fetch staff')
+        }
+        
+        const data = await response.json()
+        setStaff(data.profiles || [])
+      } catch (error) {
+        console.error('Error fetching staff:', error)
+        toast.error('Failed to load staff members')
+      }
+    }
+
+    if (services.length > 0) {
+      fetchStaff()
+    }
+  }, [services])
 
   useEffect(() => {
     if (bookingData.service_id) {
@@ -200,45 +183,63 @@ const GuestBooking = () => {
     try {
       setIsLoading(true)
       
-      // Simulate API call to create guest booking
-      const guestBooking = {
-        guest_name: bookingData.guest_name,
-        guest_email: bookingData.guest_email,
-        guest_phone: bookingData.guest_phone,
-        service_id: bookingData.service_id,
-        staff_id: bookingData.staff_id,
-        appointment_date: bookingData.appointment_date,
-        appointment_time: bookingData.appointment_time,
-        notes: bookingData.notes,
-        total_amount: bookingData.total_amount,
-        booking_type: 'guest',
-        status: 'pending'
+      // Step 1: Create or get guest customer
+      const guestCustomerResponse = await fetch(`${API_BASE_URL}/guest-customers`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: bookingData.guest_name.split(' ')[0],
+          last_name: bookingData.guest_name.split(' ').slice(1).join(' ') || '',
+          email: bookingData.guest_email,
+          phone: bookingData.guest_phone
+        })
+      })
+
+      if (!guestCustomerResponse.ok) {
+        throw new Error('Failed to create guest customer')
       }
 
-      console.log('Creating guest booking:', guestBooking)
+      const guestCustomerData = await guestCustomerResponse.json()
       
-      // Simulate API delay
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      
-      toast.success('Booking request submitted successfully! We will contact you to confirm your appointment.')
-      
-      // Reset form
-      setBookingData({
-        guest_name: '',
-        guest_email: '',
-        guest_phone: '',
-        service_id: '',
-        staff_id: '',
-        appointment_date: '',
-        appointment_time: '',
-        notes: '',
-        total_amount: 0
+      // Step 2: Create booking
+      const bookingResponse = await fetch(`${API_BASE_URL}/bookings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          guest_customer_id: guestCustomerData.guest_customer.id,
+          service_id: bookingData.service_id,
+          staff_id: bookingData.staff_id,
+          appointment_date: bookingData.appointment_date,
+          appointment_time: bookingData.appointment_time,
+          notes: bookingData.notes,
+          total_amount: bookingData.total_amount,
+          booking_type: 'guest',
+          status: 'pending'
+        })
       })
-      setCurrentStep(1)
+
+      if (!bookingResponse.ok) {
+        const errorData = await bookingResponse.json()
+        throw new Error(errorData.message || 'Failed to create booking')
+      }
+
+      const bookingData_result = await bookingResponse.json()
+      
+      // Store booking result for confirmation display
+      setBookingResult(bookingData_result.booking)
+      
+      // Move to confirmation step (step 6)
+      setCurrentStep(6)
+      
+      toast.success('Booking created successfully!')
       
     } catch (error) {
       console.error('Booking error:', error)
-      toast.error('Failed to submit booking. Please try again.')
+      toast.error(error.message || 'Failed to submit booking. Please try again.')
     } finally {
       setIsLoading(false)
     }
@@ -249,16 +250,16 @@ const GuestBooking = () => {
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center mb-8">
-      {[1, 2, 3, 4, 5].map((step) => (
+      {[1, 2, 3, 4, 5, 6].map((step) => (
         <React.Fragment key={step}>
           <div className={`flex items-center justify-center w-8 h-8 rounded-full text-sm font-medium ${
             step <= currentStep 
               ? 'bg-primary-600 text-white' 
               : 'bg-gray-200 text-gray-600'
           }`}>
-            {step}
+            {step === 6 ? '✓' : step}
           </div>
-          {step < 5 && (
+          {step < 6 && (
             <div className={`w-12 h-1 mx-2 ${
               step < currentStep ? 'bg-primary-600' : 'bg-gray-200'
             }`} />
@@ -578,6 +579,92 @@ const GuestBooking = () => {
     </div>
   )
 
+  const renderBookingSuccess = () => (
+    <div className="max-w-2xl mx-auto text-center">
+      <div className="bg-green-50 border border-green-200 rounded-xl p-8 mb-8">
+        <div className="text-green-600 text-6xl mb-4">✅</div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Booking Confirmed!</h2>
+        
+        {bookingResult && (
+          <div className="bg-white rounded-lg p-6 mb-6 text-left">
+            <div className="text-center mb-4">
+              <div className="text-3xl font-bold text-primary-600 mb-2">
+                {bookingResult.booking_number}
+              </div>
+              <p className="text-sm text-gray-600">Your Booking Number</p>
+            </div>
+            
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Service:</span>
+                <span className="font-medium">{bookingResult.service_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Stylist:</span>
+                <span className="font-medium">{bookingResult.staff_name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Date:</span>
+                <span className="font-medium">{formatDate(bookingResult.appointment_date)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Time:</span>
+                <span className="font-medium">{formatTime(bookingResult.appointment_time)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Duration:</span>
+                <span className="font-medium">{bookingResult.service_duration} minutes</span>
+              </div>
+              <div className="flex justify-between border-t pt-3">
+                <span className="text-gray-600">Total Amount:</span>
+                <span className="font-bold text-lg">{formatCurrency(bookingResult.total_amount)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div className="text-left bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <h3 className="font-semibold text-blue-900 mb-2">What's Next?</h3>
+          <ul className="text-sm text-blue-800 space-y-1">
+            <li>• Save your booking number: <strong>{bookingResult?.booking_number}</strong></li>
+            <li>• We'll send you a confirmation email shortly</li>
+            <li>• Our team will contact you within 24 hours to confirm your appointment</li>
+            <li>• Please arrive 10 minutes before your scheduled time</li>
+          </ul>
+        </div>
+        
+        <div className="flex flex-col sm:flex-row gap-4 justify-center">
+          <button
+            onClick={() => {
+              setBookingResult(null)
+              setBookingData({
+                guest_name: '',
+                guest_email: '',
+                guest_phone: '',
+                service_id: '',
+                staff_id: '',
+                appointment_date: '',
+                appointment_time: '',
+                notes: '',
+                total_amount: 0
+              })
+              setCurrentStep(1)
+            }}
+            className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Book Another Service
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <>
       <Helmet>
@@ -590,12 +677,13 @@ const GuestBooking = () => {
       <div className="min-h-screen bg-gradient-to-br from-primary-50 via-white to-secondary-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto">
           {renderStepIndicator()}
-          
-          {currentStep === 1 && renderServiceSelection()}
-          {currentStep === 2 && renderStaffSelection()}
-          {currentStep === 3 && renderDateTimeSelection()}
-          {currentStep === 4 && renderGuestInfo()}
-          {currentStep === 5 && renderConfirmation()}
+                
+                {currentStep === 1 && renderServiceSelection()}
+                {currentStep === 2 && renderStaffSelection()}
+                {currentStep === 3 && renderDateTimeSelection()}
+                {currentStep === 4 && renderGuestInfo()}
+                {currentStep === 5 && renderConfirmation()}
+                {currentStep === 6 && renderBookingSuccess()}
         </div>
       </div>
 

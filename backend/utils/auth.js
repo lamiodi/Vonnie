@@ -108,6 +108,43 @@ const validateEmail = (email) => {
   return true
 }
 
+// Phone validation
+const validatePhone = (phone) => {
+  // Remove all non-digit characters
+  const cleanPhone = phone.replace(/\D/g, '')
+  
+  // Check if it's a valid Nigerian phone number
+  // Should be 11 digits starting with 0, or 10 digits without leading 0, or 13 digits with +234
+  if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) {
+    return true
+  } else if (cleanPhone.length === 10) {
+    return true
+  } else if (cleanPhone.length === 13 && phone.startsWith('+234')) {
+    return true
+  }
+  
+  throw new Error('Invalid phone number format')
+}
+
+// Helper functions for validation without throwing errors
+const isValidEmail = (email) => {
+  try {
+    validateEmail(email)
+    return true
+  } catch {
+    return false
+  }
+}
+
+const isValidPhone = (phone) => {
+  try {
+    validatePhone(phone)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export {
   hashPassword,
   comparePassword,
@@ -118,6 +155,9 @@ export {
   extractToken,
   validatePasswordStrength,
   validateEmail,
+  validatePhone,
+  isValidEmail,
+  isValidPhone,
   JWT_SECRET,
   ENCRYPTION_KEY,
 }

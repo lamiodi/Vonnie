@@ -1,8 +1,9 @@
 import express from 'express'
 import { sql } from '../config/database.js'
-import { authenticateToken, requireStaff, requireAdmin, requireManager } from '../middleware/auth.js'
+import { authenticateToken, requireStaff, requireAdmin } from '../middleware/auth.js'
 import { validateBooking, validateUUID, validatePagination } from '../middleware/validation.js'
-import { generateBookingId, logBookingUpdate } from '../utils/booking.js'
+import { generateBookingId, logBookingUpdate, validateCoupon } from '../utils/booking.js'
+import { sendGuestBookingConfirmation } from '../utils/notifications.js'
 
 const router = express.Router()
 
@@ -328,9 +329,53 @@ router.post('/', authenticateToken, validateBooking, async(req, res) => {
       })
     }
 
+    const bookingDetails = fullBooking[0]
+
+    // Send booking confirmation email for guest bookings
+    if (bookingDetails.guest_customer_id) {
+      try {
+        // Prepare booking data for email
+        const emailBookingData = {
+          id: bookingDetails.id,
+          booking_number: bookingDetails.booking_id,
+          guest_customer_id: bookingDetails.guest_customer_id,
+          guest_name: `${bookingDetails.guest_first_name} ${bookingDetails.guest_last_name}`.trim(),
+          guest_email: bookingDetails.guest_email || null,
+          service_name: bookingDetails.service_name,
+          service_duration: bookingDetails.service_duration,
+          staff_name: `${bookingDetails.staff_first_name} ${bookingDetails.staff_last_name}`.trim(),
+          appointment_date: bookingDetails.start_time.toISOString().split('T')[0],
+          appointment_time: bookingDetails.start_time.toTimeString().slice(0, 5),
+          total_amount: bookingDetails.service_price
+        }
+
+        // Get guest email from guest_customers table
+        const guestCustomer = await sql`
+          SELECT email FROM guest_customers WHERE id = ${bookingDetails.guest_customer_id}
+        `
+
+        if (guestCustomer.length > 0 && guestCustomer[0].email) {
+          emailBookingData.guest_email = guestCustomer[0].email
+          
+          const emailResult = await sendGuestBookingConfirmation(emailBookingData)
+          
+          if (emailResult.success) {
+            console.log('Booking confirmation email sent successfully:', emailResult.messageId)
+          } else {
+            console.error('Failed to send booking confirmation email:', emailResult.error)
+          }
+        } else {
+          console.warn('No email address found for guest customer:', bookingDetails.guest_customer_id)
+        }
+      } catch (emailError) {
+        console.error('Error sending booking confirmation email:', emailError)
+        // Don't fail the booking creation if email fails
+      }
+    }
+
     res.status(201).json({
       message: 'Booking created successfully',
-      booking: fullBooking[0],
+      booking: bookingDetails,
     })
   } catch (error) {
     console.error('Booking creation error:', error)
