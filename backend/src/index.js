@@ -16,7 +16,7 @@ import reportRoutes from './routes/reports.js';
 import serviceRoutes from './routes/services.js';
 import inventoryRoutes from './routes/inventory.js';
 import publicRoutes from './routes/public.js';
-import testRoutes from './routes/test.js';
+
 import paymentConfirmationRoutes from './routes/payment-confirmation.js';
 import physicalPosPaymentRoutes from './routes/physical-pos-payments.js';
 import adminRoutes from './routes/admin.js';
@@ -74,7 +74,6 @@ app.use('/api/coupons', couponRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/services', serviceRoutes);
 app.use('/api/inventory', inventoryRoutes);
-app.use('/api/test', testRoutes);
 app.use('/api/payment-confirmation', paymentConfirmationRoutes);
 app.use('/api/physical-pos', physicalPosPaymentRoutes);
 app.use('/api/admin', adminRoutes);
