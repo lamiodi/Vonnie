@@ -228,18 +228,17 @@ export default app;
 
 // Start server only if this file is run directly
 // Cross-platform module check
+import { fileURLToPath } from 'url';
+import { dirname, resolve, normalize } from 'path';
+
 const isMainModule = () => {
   try {
-    // Use Node.js path module for cross-platform compatibility
-    const path = require('path');
-    const fileURLToPath = require('url').fileURLToPath;
-    
     // Convert import.meta.url to file path
     const importPath = fileURLToPath(import.meta.url);
-    const processPath = path.resolve(process.argv[1]);
+    const processPath = resolve(process.argv[1]);
     
     // Normalize both paths for comparison
-    return path.normalize(importPath) === path.normalize(processPath);
+    return normalize(importPath) === normalize(processPath);
   } catch (error) {
     console.log('Error in path comparison:', error.message);
     return false;
