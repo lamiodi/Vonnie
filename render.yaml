@@ -4,7 +4,7 @@ services:
     name: vonne-x2x-backend
     env: node
     buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    startCommand: cd backend && cross-env NODE_ENV=production PORT=10000 node src/index.js
     envVars:
       - key: NODE_ENV
         value: production
