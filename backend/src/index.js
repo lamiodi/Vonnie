@@ -50,9 +50,14 @@ const io = new Server(server, {
   }
 });
 
+// Force production environment for Render
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'production';
+}
+
 console.log('Environment:', process.env.NODE_ENV);
 console.log('PORT from env:', process.env.PORT);
-const PORT = process.env.PORT || 5006;
+const PORT = process.env.PORT || 10000;
 console.log('Final PORT:', PORT);
 
 // Middleware
@@ -246,11 +251,13 @@ const isMainModule = () => {
 };
 
 if (isMainModule()) {
-  const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
-  server.listen(PORT, HOST, () => {
-    console.log(`🚀 Server running on ${HOST}:${PORT}`);
+  // Force production settings for Render deployment
+  const HOST = '0.0.0.0';
+  const RENDER_PORT = process.env.PORT || 10000;
+  server.listen(RENDER_PORT, HOST, () => {
+    console.log(`🚀 Server running on ${HOST}:${RENDER_PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`🔗 API Base URL: ${process.env.NODE_ENV === 'production' ? process.env.API_URL : `http://localhost:${PORT}/api`}`);
+    console.log(`🔗 API Base URL: ${process.env.NODE_ENV === 'production' ? process.env.API_URL : `http://localhost:${RENDER_PORT}/api`}`);
     console.log(`⚡ Socket.IO server ready`);
   });
 } else {
