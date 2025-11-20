@@ -227,13 +227,19 @@ app.use('*', (req, res) => {
 export default app;
 
 // Start server only if this file is run directly
-// Fix for Windows path issues with import.meta.url
+// Cross-platform module check
 const isMainModule = () => {
   try {
-    // Convert both paths to the same format for comparison
-    const importPath = decodeURIComponent(import.meta.url.replace('file:///', ''));
-    const processPath = process.argv[1].replace(/\\/g, '/');
-    return importPath === processPath;
+    // Use Node.js path module for cross-platform compatibility
+    const path = require('path');
+    const fileURLToPath = require('url').fileURLToPath;
+    
+    // Convert import.meta.url to file path
+    const importPath = fileURLToPath(import.meta.url);
+    const processPath = path.resolve(process.argv[1]);
+    
+    // Normalize both paths for comparison
+    return path.normalize(importPath) === path.normalize(processPath);
   } catch (error) {
     console.log('Error in path comparison:', error.message);
     return false;
@@ -241,8 +247,9 @@ const isMainModule = () => {
 };
 
 if (isMainModule()) {
-  server.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+  const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+  server.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running on ${HOST}:${PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
     console.log(`🔗 API Base URL: ${process.env.NODE_ENV === 'production' ? process.env.API_URL : `http://localhost:${PORT}/api`}`);
     console.log(`⚡ Socket.IO server ready`);
