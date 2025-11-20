@@ -1,0 +1,13 @@
+{
+  "name": "vonne-x2x-management-system",
+  "version": "1.0.0",
+  "description": "Complete Vonne X2X Management System",
+  "scripts": {
+    "build": "cd backend && npm install && cd ../frontend && npm install && npm run build",
+    "start": "cd backend && npm start",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^7.6.0"
+  }
+}
