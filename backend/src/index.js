@@ -120,6 +120,17 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Root endpoint for Render health checks
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Vonne X2X Management System API is running',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'development',
+    timestamp: new Date().toISOString()
+  });
+});
+
 // Migration endpoint for admin
 app.post('/api/admin/migrate-booking-statuses', async (req, res) => {
   try {
@@ -235,6 +246,29 @@ export default app;
 // Cross-platform module check
 import { fileURLToPath } from 'url';
 import { dirname, resolve, normalize } from 'path';
+
+// Catch-all route for undefined endpoints
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    message: `The endpoint ${req.originalUrl} does not exist`,
+    availableEndpoints: [
+      'GET /',
+      'GET /api/health',
+      'GET /api/auth/*',
+      'GET /api/bookings/*',
+      'GET /api/workers/*',
+      'GET /api/attendance/*',
+      'GET /api/services/*',
+      'GET /api/reports/*',
+      'GET /api/inventory/*',
+      'GET /api/pos/*',
+      'GET /api/coupons/*',
+      'GET /api/queue/*',
+      'GET /api/admin/*'
+    ]
+  });
+});
 
 const isMainModule = () => {
   try {
