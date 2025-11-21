@@ -57,7 +57,7 @@ if (!process.env.NODE_ENV) {
 
 console.log('Environment:', process.env.NODE_ENV);
 console.log('PORT from env:', process.env.PORT);
-const PORT = process.env.PORT || 10000;
+const PORT = process.env.PORT || 5010;  // Use 5010 to match Render's expected port
 console.log('Final PORT:', PORT);
 
 // Middleware
@@ -253,7 +253,7 @@ const isMainModule = () => {
 if (isMainModule()) {
   // Force production settings for Render deployment
   const HOST = '0.0.0.0';
-  const RENDER_PORT = process.env.PORT || 10000;
+  const RENDER_PORT = process.env.PORT || 5010;  // Use 5010 to match Render's expected port
   server.listen(RENDER_PORT, HOST, () => {
     console.log(`🚀 Server running on ${HOST}:${RENDER_PORT}`);
     console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);

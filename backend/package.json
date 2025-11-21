@@ -5,7 +5,7 @@
   "type": "module",
   "main": "src/index.js",
   "scripts": {
-    "start": "cross-env NODE_ENV=production PORT=10000 node src/index.js",
+    "start": "cross-env NODE_ENV=production PORT=5010 node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",

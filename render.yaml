@@ -4,12 +4,12 @@ services:
     name: vonne-x2x-backend
     env: node
     buildCommand: cd backend && npm install
-    startCommand: cd backend && cross-env NODE_ENV=production PORT=10000 node src/index.js
+    startCommand: cd backend && cross-env NODE_ENV=production PORT=5010 node src/index.js
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: 5010
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
