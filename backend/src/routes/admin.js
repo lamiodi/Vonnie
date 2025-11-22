@@ -22,7 +22,7 @@ router.get('/dashboard', authenticate, authorize(['admin', 'manager']), async (r
 });
 
 // Get current signup status
-router.get('/signup-status', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.get('/signup-status', authenticate, authorize(['admin']), async (req, res) => {
   try {
     // Check if signup_status table exists, if not create it
     try {
@@ -74,7 +74,7 @@ router.get('/signup-status', authenticate, authorize(['admin', 'manager']), asyn
 });
 
 // Update signup status
-router.put('/signup-status', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.put('/signup-status', authenticate, authorize(['admin']), async (req, res) => {
   try {
     const { is_enabled, message } = req.body;
     const userId = req.user.id;

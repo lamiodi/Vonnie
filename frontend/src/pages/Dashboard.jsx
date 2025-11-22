@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
 import Analytics from '../components/Analytics';
+import AdminSettings from '../components/AdminSettings';
 import { apiGet, apiPut, API_ENDPOINTS } from '../utils/api';
 import { handleError } from '../utils/errorHandler';
 import { createNigeriaISOString } from '../utils/formatters';
@@ -349,8 +350,8 @@ const Dashboard = () => {
           </div>
         </section>
 
-        {/* Signup Status Toggle (Admin/Manager Only) */}
-        {(user?.role === 'admin' || user?.role === 'manager') && (
+        {/* Signup Status Toggle (Admin Only) */}
+        {user?.role === 'admin' && (
           <section className="mb-8 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl p-6 border border-indigo-100" aria-label="Signup status management">
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -395,6 +396,11 @@ const Dashboard = () => {
               </div>
             )}
           </section>
+        )}
+
+        {/* Admin Settings Panel (Admin Only) */}
+        {user?.role === 'admin' && (
+          <AdminSettings />
         )}
 
         {/* Quick Actions */}

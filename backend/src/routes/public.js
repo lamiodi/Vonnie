@@ -3,8 +3,10 @@ import { query } from '../config/db.js';
 import { sendEmail } from '../services/email.js';
 import { sendWhatsApp, sendBookingConfirmationWhatsApp } from '../services/whatsapp.js';
 import axios from 'axios';
+import crypto from 'crypto';
 import { createBooking } from '../services/bookingService.js';
 import { successResponse, errorResponse } from '../utils/apiResponse.js';
+import { verifyPaymentWithFallbacks, logPaymentVerification, storeWebhookData } from '../services/paymentService.js';
 
 const router = express.Router();
 
@@ -316,17 +318,13 @@ router.post('/payment/verify', async (req, res) => {
   }
   
   try {
-    // Verify the payment with Paystack
-    const response = await axios.get(
-      `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`
-        }
-      }
-    );
+    // Use enhanced payment verification with fallback methods
+    const verificationResult = await verifyPaymentWithFallbacks(reference);
     
-    if (response.data.data.status === 'success') {
+    // Log the verification attempt
+    await logPaymentVerification(reference, verificationResult);
+    
+    if (verificationResult.success) {
       // Extract booking number from reference (format: BOOKINGNUMBER_timestamp)
       // Handle multiple underscore formats and edge cases
       let booking_number = reference;
@@ -339,12 +337,12 @@ router.post('/payment/verify', async (req, res) => {
       // If booking number is too long (likely contains timestamp), try alternative extraction
       if (booking_number.length > 20) {
         // Look for the booking number in metadata if available
-        if (response.data.data.metadata && response.data.data.metadata.booking_number) {
-          booking_number = response.data.data.metadata.booking_number;
+        if (verificationResult.data.metadata && verificationResult.data.metadata.booking_number) {
+          booking_number = verificationResult.data.metadata.booking_number;
         }
       }
       
-      console.log('Payment verification - Reference:', reference, 'Extracted booking number:', booking_number);
+      console.log('Payment verification successful - Reference:', reference, 'Method:', verificationResult.method, 'Extracted booking number:', booking_number);
       
       // Update booking payment status
       const bookingResult = await query(
@@ -451,6 +449,49 @@ Vonne X2X Team`
       error: 'Payment verification failed',
       message: error.message 
     });
+  }
+});
+
+// Paystack webhook endpoint for payment notifications
+router.post('/payment/webhook', async (req, res) => {
+  try {
+    const webhookData = req.body;
+    
+    // Verify webhook signature (optional but recommended)
+    const signature = req.headers['x-paystack-signature'];
+    if (signature && process.env.PAYSTACK_SECRET_KEY) {
+      const hash = crypto
+        .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
+        .update(JSON.stringify(webhookData))
+        .digest('hex');
+      
+      if (hash !== signature) {
+        return res.status(401).json({ success: false, error: 'Invalid signature' });
+      }
+    }
+    
+    // Store webhook data for fallback verification
+    await storeWebhookData(webhookData);
+    
+    // Process successful payments
+    if (webhookData.event === 'charge.success') {
+      const { reference, data } = webhookData;
+      
+      // Auto-verify the payment
+      try {
+        const verificationResult = await verifyPaymentWithFallbacks(reference);
+        await logPaymentVerification(reference, verificationResult, null);
+        
+        console.log(`Webhook payment verification completed for reference: ${reference}`);
+      } catch (verifyError) {
+        console.error('Error during webhook payment verification:', verifyError);
+      }
+    }
+    
+    res.status(200).json({ success: true, message: 'Webhook processed' });
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    res.status(500).json({ success: false, error: 'Webhook processing failed' });
   }
 });
 

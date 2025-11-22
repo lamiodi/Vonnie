@@ -12,8 +12,13 @@ const PaystackPayment = ({
   currency = 'NGN',
   bookingNumber,
   buttonText,
-  buttonClass
+  buttonClass,
+  onRetry,
+  maxRetries = 3
 }) => {
+  const [retryCount, setRetryCount] = React.useState(0);
+  const [isVerifying, setIsVerifying] = React.useState(false);
+  
   const config = {
     reference: reference || `${bookingNumber}_${new Date().getTime()}`,
     email: email,
@@ -23,11 +28,18 @@ const PaystackPayment = ({
     metadata: {
       ...metadata,
       booking_number: bookingNumber,
+      retry_count: retryCount,
+      verification_method: 'enhanced',
       custom_fields: [
         {
           display_name: "Payment For",
           variable_name: "payment_for",
           value: "Booking Payment"
+        },
+        {
+          display_name: "Booking Number",
+          variable_name: "booking_number",
+          value: bookingNumber
         }
       ]
     }
@@ -35,38 +47,115 @@ const PaystackPayment = ({
 
   const initializePayment = usePaystackPayment(config);
 
+  const verifyPaymentWithRetry = async (reference) => {
+    setIsVerifying(true);
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        console.log(`Payment verification attempt ${attempt + 1} for reference: ${reference}`);
+        
+        const response = await fetch('/api/public/payment/verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ reference })
+        });
+
+        const result = await response.json();
+        
+        if (result.success) {
+          console.log('Payment verification successful:', result);
+          setIsVerifying(false);
+          return result;
+        } else {
+          console.log(`Verification attempt ${attempt + 1} failed:`, result);
+          
+          if (attempt < maxRetries - 1) {
+            // Wait before retrying (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+          }
+        }
+      } catch (error) {
+        console.error(`Verification attempt ${attempt + 1} error:`, error);
+        
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+    
+    setIsVerifying(false);
+    return null;
+  };
+
   const handlePayment = () => {
     console.log('Initializing Paystack payment...');
     console.log('Config:', config);
     
-    const handleSuccess = (reference) => {
+    const handleSuccess = async (reference) => {
       console.log('Paystack payment success:', reference);
-
-      // Use booking number from props instead of localStorage
-      const bookingData = {
-        booking_number: config.metadata.booking_number,
-        payment_status: 'completed'
-      };
-
-      // Post a PAYMENT_SUCCESS message to this window; PublicBooking listens and will navigate
-      try {
-        const payload = {
-          type: 'PAYMENT_SUCCESS',
-          reference,
-          bookingData: bookingData
+      
+      // Enhanced verification with retry logic
+      const verificationResult = await verifyPaymentWithRetry(reference);
+      
+      if (verificationResult) {
+        console.log('Payment verification completed successfully');
+        
+        // Use booking number from props instead of localStorage
+        const bookingData = {
+          booking_number: config.metadata.booking_number,
+          payment_status: 'completed',
+          verification_method: verificationResult.method || 'enhanced',
+          verification_attempts: retryCount + 1
         };
-        console.log('Posting PAYMENT_SUCCESS to window');
-        window.postMessage(payload, '*');
-      } catch (e) {
-        console.warn('Error posting PAYMENT_SUCCESS message:', e);
-      }
 
-      if (onSuccess) {
+        // Post a PAYMENT_SUCCESS message to this window; PublicBooking listens and will navigate
         try {
-          onSuccess({ reference, bookingData: bookingData });
+          const payload = {
+            type: 'PAYMENT_SUCCESS',
+            reference,
+            bookingData: bookingData,
+            verificationResult: verificationResult
+          };
+          console.log('Posting PAYMENT_SUCCESS to window');
+          window.postMessage(payload, '*');
         } catch (e) {
-          console.warn('Error calling onSuccess with bookingData, falling back to reference only:', e);
-          onSuccess(reference);
+          console.warn('Error posting PAYMENT_SUCCESS message:', e);
+        }
+
+        if (onSuccess) {
+          try {
+            onSuccess({ reference, bookingData: bookingData, verificationResult });
+          } catch (e) {
+            console.warn('Error calling onSuccess with bookingData, falling back to reference only:', e);
+            onSuccess(reference);
+          }
+        }
+      } else {
+        console.error('Payment verification failed after all retries');
+        
+        // Handle verification failure
+        if (onRetry && retryCount < maxRetries - 1) {
+          setRetryCount(retryCount + 1);
+          console.log(`Retrying payment verification (attempt ${retryCount + 2})`);
+          
+          // Allow parent component to handle retry
+          onRetry({ reference, attempt: retryCount + 1 });
+        } else {
+          console.error('Maximum verification retries exceeded');
+          
+          // Still consider payment successful from Paystack perspective
+          // but log the verification issue
+          const bookingData = {
+            booking_number: config.metadata.booking_number,
+            payment_status: 'completed',
+            verification_warning: 'verification_failed_after_retries'
+          };
+          
+          if (onSuccess) {
+            onSuccess({ reference, bookingData });
+          }
         }
       }
 
