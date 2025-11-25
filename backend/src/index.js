@@ -48,6 +48,7 @@ const io = new Server(server, {
     origin: [
       'http://localhost:5173', 
       'http://localhost:5174', 
+      'http://localhost:5174', 
       'http://localhost:5175', 
       'http://localhost:5176', 
       'http://localhost:5177', 
@@ -55,7 +56,8 @@ const io = new Server(server, {
       'http://localhost:5179', 
       'http://localhost:5180', 
       'http://localhost:5181',
-      'https://vonnie.vercel.app'  // Add your production frontend URL
+      'https://vonnie.vercel.app',  // Add your production frontend URL
+      'https://www.vonneex2x.store'  // Add your production frontend URL
     ],
     credentials: true
   }
@@ -84,7 +86,8 @@ app.use(cors({
     'http://localhost:5180', 
     'http://localhost:5181', 
     'http://localhost:5182',
-    'https://vonnie.vercel.app'  // Add your production frontend URL
+    'https://vonnie.vercel.app',  // Add your production frontend URL
+    'https://www.vonneex2x.store'  // Add your production frontend URL
   ],
   credentials: true
 }));
