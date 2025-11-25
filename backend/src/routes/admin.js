@@ -142,12 +142,13 @@ router.get('/settings', authenticate, authorize(['admin']), async (req, res) => 
       `);
       
       if (!result.rows[0].exists) {
-        // Create simplified admin_settings table
+        // Create simplified admin_settings table with maintenance mode
         await query(`
           CREATE TABLE admin_settings (
             id SERIAL PRIMARY KEY,
             enable_online_booking BOOLEAN DEFAULT true,
             enable_email_notifications BOOLEAN DEFAULT true,
+            enable_maintenance_mode BOOLEAN DEFAULT false,
             updated_by UUID REFERENCES users(id),
             updated_at TIMESTAMP DEFAULT NOW()
           )
@@ -156,8 +157,8 @@ router.get('/settings', authenticate, authorize(['admin']), async (req, res) => 
         // Insert default record with simplified settings
         await query(`
           INSERT INTO admin_settings (
-            enable_online_booking, enable_email_notifications
-          ) VALUES (true, true)
+            enable_online_booking, enable_email_notifications, enable_maintenance_mode
+          ) VALUES (true, true, false)
         `);
       }
     } catch (error) {
@@ -171,7 +172,8 @@ router.get('/settings', authenticate, authorize(['admin']), async (req, res) => 
       // Return simplified default settings if no record exists
       return res.json({
         enable_online_booking: true,
-        enable_email_notifications: true
+        enable_email_notifications: true,
+        enable_maintenance_mode: false
       });
     }
     
@@ -187,25 +189,27 @@ router.put('/settings', authenticate, authorize(['admin']), async (req, res) => 
   try {
     const {
       enable_online_booking,
-      enable_email_notifications
+      enable_email_notifications,
+      enable_maintenance_mode
     } = req.body;
     
     const userId = req.user.id;
     
     // Validate required fields
-    if (enable_online_booking === undefined || enable_email_notifications === undefined) {
-      return res.status(400).json({ error: 'Missing required fields: enable_online_booking and enable_email_notifications' });
+    if (enable_online_booking === undefined || enable_email_notifications === undefined || enable_maintenance_mode === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: enable_online_booking, enable_email_notifications, and enable_maintenance_mode' });
     }
     
     // Update or insert settings (simplified)
     const updateResult = await query(`
       INSERT INTO admin_settings (
-        enable_online_booking, enable_email_notifications, updated_by
-      ) VALUES ($1, $2, $3)
+        enable_online_booking, enable_email_notifications, enable_maintenance_mode, updated_by
+      ) VALUES ($1, $2, $3, $4)
       RETURNING *
     `, [
       enable_online_booking,
       enable_email_notifications,
+      enable_maintenance_mode,
       userId
     ]);
     

@@ -7,7 +7,8 @@ const AdminSettings = () => {
   const { user, hasRole } = useAuth();
   const [settings, setSettings] = useState({
     enable_online_booking: true,
-    enable_email_notifications: true
+    enable_email_notifications: true,
+    enable_maintenance_mode: false
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,6 +117,20 @@ const AdminSettings = () => {
                 />
                 <label htmlFor="enable_email_notifications" className="ml-3 block text-sm font-medium text-gray-700">
                   Enable Email Notifications
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="enable_maintenance_mode"
+                  name="enable_maintenance_mode"
+                  checked={settings.enable_maintenance_mode}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-orange-600 focus:ring-orange-500 border-gray-300 rounded"
+                />
+                <label htmlFor="enable_maintenance_mode" className="ml-3 block text-sm font-medium text-gray-700">
+                  Enable Maintenance Mode
                 </label>
               </div>
             </div>

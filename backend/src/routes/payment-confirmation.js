@@ -5,7 +5,6 @@ import { checkManagerRole } from '../middleware/roleCheck.js';
 import PaymentConfirmationValidator from '../utils/paymentConfirmationValidator.js';
 import { pool } from '../config/database.js';
 import { sendEmail, sendPaymentConfirmation } from '../services/email.js';
-import { sendWhatsApp } from '../services/whatsapp.js';
 const router = express.Router();
 
 /**
@@ -442,19 +441,7 @@ async function sendPaymentConfirmationNotifications(client, bookingId, paymentSt
                 }
             }
             
-            // Send WhatsApp notification to customer
-            if (booking.customer_phone) {
-                try {
-                    // Format phone number for WhatsApp (remove spaces, add country code if needed)
-                    const formattedPhone = booking.customer_phone.replace(/\s/g, '');
-                    const whatsappMessage = `✅ *Payment Confirmed*\n\nDear ${booking.customer_name},\n\nYour payment for booking *#${booking.booking_number}* has been confirmed!\n\n📅 Date: ${formattedDate}\n🕐 Time: ${formattedTime}\n💅 Service: ${booking.service_name}\n💰 Amount: $${booking.service_price}\n\nThank you for choosing Vonne X2X!\n\nSee you soon! 😊`;
-                    
-                    await sendWhatsApp(formattedPhone, whatsappMessage);
-                    console.log('✅ WhatsApp notification sent to customer:', booking.customer_phone);
-                } catch (whatsappError) {
-                    console.error('❌ WhatsApp notification failed:', whatsappError.message);
-                }
-            }
+            // WhatsApp notifications removed - using email only
         }
         
     } catch (error) {

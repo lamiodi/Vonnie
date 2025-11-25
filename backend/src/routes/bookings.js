@@ -3,7 +3,6 @@ import express from 'express';
 import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendEmail, sendUnifiedBookingConfirmation, sendPaymentConfirmation } from '../services/email.js';
-import { sendWhatsApp, sendBookingConfirmationWhatsApp, sendBookingStatusUpdate } from '../services/whatsapp.js';
 import { createBooking } from '../services/bookingService.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { validateBookingData, validateBookingTimeConflict, validateWorkerAvailability } from '../services/validationService.js';
@@ -579,15 +578,7 @@ Thank you for your understanding.`;
         emailMessage
       );
     }
-    // Send WhatsApp notification for important status changes
-    if (status === 'scheduled' || status === 'in-progress' || status === 'completed' || status === 'cancelled') {
-      await sendBookingStatusUpdate(
-        booking.customer_phone,
-        {
-          booking_number: booking.booking_number,
-          service_name: updatedBooking.service_name,
-          scheduled_time: booking.scheduled_time,
-          status: status
+    // WhatsApp notifications removed - using email only
         },
         status
       );
@@ -1005,17 +996,7 @@ router.post('/:id/approve', authenticate, authorize(['admin', 'manager']), async
       }
     );
     
-    // Send WhatsApp notification
-    await sendBookingStatusUpdate(
-      booking.customer_phone,
-      {
-        booking_number: booking.booking_number,
-        service_name: serviceNames,
-        scheduled_time: booking.scheduled_time,
-        status: 'scheduled'
-      },
-      'scheduled'
-    );
+    // WhatsApp notifications removed - using email only
     
     res.json(successResponse({
       ...updatedBooking,

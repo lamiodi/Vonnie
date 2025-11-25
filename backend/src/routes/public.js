@@ -1,7 +1,6 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { sendEmail } from '../services/email.js';
-import { sendWhatsApp, sendBookingConfirmationWhatsApp } from '../services/whatsapp.js';
 import axios from 'axios';
 import crypto from 'crypto';
 import { createBooking } from '../services/bookingService.js';

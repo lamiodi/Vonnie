@@ -1,6 +1,5 @@
 import { query, getClient } from '../config/db.js';
 import { sendEmail } from './email.js';
-import { sendWhatsApp, sendBookingConfirmationWhatsApp } from './whatsapp.js';
 import { generateUniqueBookingNumber, generateBookingNumberWithName } from '../utils/bookingUtils.js';
 
 /**
@@ -178,14 +177,7 @@ If you have any questions, please don't hesitate to contact us.
 Thank you for choosing Vonne X2X!`
         );
 
-        // Send WhatsApp confirmation
-        await sendBookingConfirmationWhatsApp(customer_phone, {
-          booking_number: bookingNumber,
-          customer_name: customer_name,
-          scheduled_time: scheduled_time,
-          total_price: totalPrice,
-          services: services.map(s => s.name).join(', ')
-        });
+        // WhatsApp notifications removed - using email only
 
       } catch (notificationError) {
         console.error('Notification error:', notificationError);
