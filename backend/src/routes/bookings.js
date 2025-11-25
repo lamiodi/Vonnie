@@ -578,11 +578,6 @@ Thank you for your understanding.`;
         emailMessage
       );
     }
-    // WhatsApp notifications removed - using email only
-        },
-        status
-      );
-    }
     // Update worker status based on booking status changes
     if (status === 'completed' || status === 'cancelled') {
       // Get all workers assigned to this booking

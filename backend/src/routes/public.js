@@ -494,4 +494,18 @@ router.post('/payment/webhook', async (req, res) => {
   }
 });
 
+// Health check endpoint for UptimeRobot monitoring
+router.get('/health', async (req, res) => {
+  try {
+    // Basic health check - verify database connection
+    await query('SELECT 1');
+    
+    // Return simple 'healthy' response
+    res.status(200).send('healthy');
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(503).send('unhealthy');
+  }
+});
+
 export default router;
