@@ -2,7 +2,7 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendUnifiedBookingConfirmation, sendPaymentConfirmation } from '../services/email.js';
 import { sendWhatsApp, sendBookingConfirmationWhatsApp, sendBookingStatusUpdate } from '../services/whatsapp.js';
 import { createBooking } from '../services/bookingService.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
@@ -546,6 +546,7 @@ Status: Scheduled
 We look forward to serving you. If you have any questions, please don't hesitate to contact us.
 Thank you for choosing Vonne X2X!`;
     } else if (status === 'cancelled') {
+      // For cancelled bookings, we'll still use the basic email since it's a different flow
       emailSubject = 'Booking Cancelled';
       emailMessage = `Dear ${booking.customer_name},
 We regret to inform you that your booking has been cancelled.
@@ -555,12 +556,29 @@ Date & Time: ${new Date(booking.scheduled_time).toLocaleString()}
 If you have any questions or would like to reschedule, please contact us.
 Thank you for your understanding.`;
     }
+    
     // Send status update notification
-    await sendEmail(
-      booking.customer_email,
-      emailSubject,
-      emailMessage
-    );
+    if (status === 'scheduled') {
+      // Use unified booking confirmation for new confirmations
+      await sendUnifiedBookingConfirmation(
+        booking.customer_email,
+        {
+          bookingNumber: booking.booking_number,
+          customerName: booking.customer_name,
+          serviceName: updatedBooking.service_name,
+          bookingDate: booking.scheduled_time,
+          bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          price: booking.service_price
+        }
+      );
+    } else {
+      // Use basic email for other status updates
+      await sendEmail(
+        booking.customer_email,
+        emailSubject,
+        emailMessage
+      );
+    }
     // Send WhatsApp notification for important status changes
     if (status === 'scheduled' || status === 'in-progress' || status === 'completed' || status === 'cancelled') {
       await sendBookingStatusUpdate(
@@ -974,21 +992,17 @@ router.post('/:id/approve', authenticate, authorize(['admin', 'manager']), async
     // Prepare service names for notifications
     const serviceNames = booking.service_names?.filter(name => name).join(', ') || 'Service';
     
-    // Send confirmation email
-    await sendEmail(
+    // Send confirmation email using unified function
+    await sendUnifiedBookingConfirmation(
       booking.customer_email,
-      'Booking Confirmed!',
-      `Dear ${booking.customer_name},
-Great news! Your booking has been confirmed and scheduled.
-Booking Number: ${booking.booking_number}
-Service: ${serviceNames}
-Date & Time: ${new Date(booking.scheduled_time).toLocaleString()}
-Status: Scheduled
-
-Please note: A worker will be assigned to your service shortly. You will receive another notification once your assigned worker is confirmed.
-
-We look forward to serving you. If you have any questions, please don't hesitate to contact us.
-Thank you for choosing Vonne X2X!`
+      {
+        bookingNumber: booking.booking_number,
+        customerName: booking.customer_name,
+        serviceName: serviceNames,
+        bookingDate: booking.scheduled_time,
+        bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        price: booking.service_price
+      }
     );
     
     // Send WhatsApp notification

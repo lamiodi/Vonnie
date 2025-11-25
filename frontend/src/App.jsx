@@ -19,6 +19,7 @@ import Workers from './pages/Workers';
 import Analytics from './components/Analytics';
 import Attendance from './pages/Attendance';
 import TransactionManagement from './components/TransactionManagement';
+import AdminSettings from './pages/AdminSettings';
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
             <Route path="reports" element={<Reports />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="transactions" element={<TransactionManagement />} />
+            <Route path="admin-settings" element={<AdminSettings />} />
           </Route>
           
           {/* Catch all route */}

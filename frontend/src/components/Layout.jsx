@@ -14,7 +14,8 @@ import {
   LogoutIcon,
   MenuIcon,
   XIcon,
-  UserIcon
+  UserIcon,
+  CogIcon
 } from '@heroicons/react/outline';
 
 const Layout = () => {
@@ -34,6 +35,7 @@ const Layout = () => {
     { name: 'Reports', href: '/reports', icon: DocumentReportIcon },
     { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
     { name: 'Transactions', href: '/transactions', icon: DocumentReportIcon },
+    { name: 'Admin Settings', href: '/admin-settings', icon: CogIcon },
   ];
 
   const handleLogout = () => {

@@ -1,7 +1,7 @@
 import express from 'express';
 import { query, getClient } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendInventoryAlert } from '../services/email.js';
 import { successResponse, errorResponse, notFoundResponse, validationErrorResponse } from '../utils/apiResponse.js';
 import { validateRequiredFields } from '../utils/validation.js';
 
@@ -98,11 +98,11 @@ router.patch('/:id', authenticate, authorize(['admin', 'manager']), async (req, 
     const product = result.rows[0];
     
     if (stock_level < 5) {
-      await sendEmail(
-        'admin@vonx2x.com',
-        'Low Stock Alert',
-        `Product ${product.name} (SKU: ${product.sku}) is low on stock: ${stock_level} units remaining.`
-      );
+      await sendInventoryAlert({
+        alertType: 'low_stock',
+        products: [{ name: product.name, sku: product.sku, stock_level: stock_level }],
+        recipientEmail: 'admin@vonneex2x.store'
+      });
     }
 
     res.json(successResponse(product, 'Product stock updated successfully'));
@@ -133,11 +133,11 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
     const product = result.rows[0];
     
     if (stock_level < 5) {
-      await sendEmail(
-        'admin@vonx2x.com',
-        'Low Stock Alert',
-        `Product ${product.name} (SKU: ${product.sku}) is low on stock: ${stock_level} units remaining.`
-      );
+      await sendInventoryAlert({
+        alertType: 'low_stock',
+        products: [{ name: product.name, sku: product.sku, stock_level: stock_level }],
+        recipientEmail: 'admin@vonneex2x.store'
+      });
     }
 
     res.json(successResponse(product, 'Product updated successfully'));

@@ -1,7 +1,7 @@
 // Fixed backend pos.js (fixed allowedStatusesForPOS, standardized customer_type, added items handling in /transaction for backward compatibility)
 import express from 'express';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendPOSTransactionEmail, sendPaymentConfirmation } from '../services/email.js';
 import { getClient } from '../config/db.js';
 import { query } from '../config/database.js';
 import { successResponse, errorResponse, notFoundResponse, validationErrorResponse } from '../utils/apiResponse.js';
@@ -291,27 +291,34 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         ['completed', booking.id]
       );
      
-      // Send completion notification
-      await sendEmail(
-        booking.customer_email,
-        'Service Completed - Thank You!',
-        `Dear ${booking.customer_name},
-Thank you for choosing Vonne X2X! Your service has been completed successfully.
-Booking Number: ${booking.booking_number}
-Service: ${booking.service_name}
-Total Amount Paid: ₦${formattedTotalAmount.toFixed(2)}
-We hope you enjoyed your experience with us. We look forward to serving you again!
-Best regards,
-Vonne X2X Team`
-      );
+      // Send completion notification using unified payment confirmation
+      if (booking) {
+        await sendPaymentConfirmation(
+          booking.customer_email,
+          {
+            bookingNumber: booking.booking_number,
+            customerName: booking.customer_name,
+            amount: formattedTotalAmount,
+            paymentMethod: 'POS transaction',
+            source: 'pos'
+          }
+        );
+      }
     }
    
-    // Send receipt email
+    // Send receipt email using unified POS transaction function
     if (booking) {
-      await sendEmail(
+      await sendPOSTransactionEmail(
         booking.customer_email,
-        'Transaction Receipt',
-        `Receipt for transaction. Total: ₦${formattedTotalAmount.toFixed(2)}`
+        {
+          customerName: booking.customer_name,
+          transactionId: transaction.id,
+          items: products.map(p => ({ name: p.name, amount: p.price * p.quantity })),
+          totalAmount: formattedTotalAmount,
+          paymentMethod: 'POS',
+          bookingNumber: booking.booking_number,
+          includeReceipt: true
+        }
       );
     }
    
@@ -773,20 +780,16 @@ router.post('/payment/webhook', async (req, res) => {
         );
         const serviceName = serviceResult.rows[0]?.name || 'Service';
        
-        // Send payment confirmation email
-        await sendEmail(
+        // Send payment confirmation email using unified function
+        await sendPaymentConfirmation(
           booking.customer_email,
-          'Payment Confirmed - Your Booking is Confirmed!',
-          `Dear ${booking.customer_name},
-Great news! Your payment has been successfully processed and your booking is now confirmed.
-Booking Number: ${booking_number}
-Service: ${serviceName}
-Payment Amount: ₦${(amount / 100).toFixed(2)}
-Payment Method: Card
-Payment Reference: ${reference}
-Thank you for choosing Vonne X2X! We look forward to serving you.
-Best regards,
-Vonne X2X Team`
+          {
+            bookingNumber: booking_number,
+            customerName: booking.customer_name,
+            amount: amount / 100,
+            paymentMethod: 'Card',
+            source: 'booking'
+          }
         );
        
         // Also update POS transaction if it exists

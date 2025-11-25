@@ -312,6 +312,7 @@ export const API_ENDPOINTS = {
   
   // Admin
   ADMIN_SIGNUP_STATUS: '/admin/signup-status',
+  ADMIN_SETTINGS: '/admin/settings',
   
   // Queue
   QUEUE_TODAY: '/queue/today',
@@ -570,6 +571,35 @@ export async function apiPatchEnhanced(endpoint, data = {}, config = {}) {
  */
 export async function apiDeleteEnhanced(endpoint, config = {}) {
   return apiRequestEnhanced(endpoint, { method: 'DELETE' }, config);
+}
+
+/**
+ * Get admin settings
+ * @returns {Promise} Admin settings data
+ */
+export async function getAdminSettings() {
+  try {
+    const response = await apiGet(API_ENDPOINTS.ADMIN_SETTINGS);
+    return response.data || response;
+  } catch (error) {
+    console.error('Error fetching admin settings:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update admin settings
+ * @param {Object} settings - Admin settings to update
+ * @returns {Promise} Updated admin settings
+ */
+export async function updateAdminSettings(settings) {
+  try {
+    const response = await apiPut(API_ENDPOINTS.ADMIN_SETTINGS, settings);
+    return response.data || response;
+  } catch (error) {
+    console.error('Error updating admin settings:', error);
+    throw error;
+  }
 }
 
 export default api;

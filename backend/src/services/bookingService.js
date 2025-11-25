@@ -1,7 +1,7 @@
 import { query, getClient } from '../config/db.js';
 import { sendEmail } from './email.js';
 import { sendWhatsApp, sendBookingConfirmationWhatsApp } from './whatsapp.js';
-import { generateUniqueBookingNumber } from '../utils/bookingUtils.js';
+import { generateUniqueBookingNumber, generateBookingNumberWithName } from '../utils/bookingUtils.js';
 
 /**
  * Create a new booking with comprehensive validation and notification
@@ -76,7 +76,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
   const totalDuration = services.reduce((sum, service) => sum + parseInt(service.duration || 0), 0);
 
   // Generate server-side booking number (ignore frontend-provided number to prevent conflicts)
-  const bookingNumber = await generateUniqueBookingNumber(customer_type);
+  const bookingNumber = await generateBookingNumberWithName(customer_name);
 
   // Check worker availability if worker_id is provided
   if (worker_id) {

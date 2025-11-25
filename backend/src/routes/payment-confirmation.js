@@ -4,7 +4,7 @@ import { authenticate } from '../middleware/auth.js';
 import { checkManagerRole } from '../middleware/roleCheck.js';
 import PaymentConfirmationValidator from '../utils/paymentConfirmationValidator.js';
 import { pool } from '../config/database.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendPaymentConfirmation } from '../services/email.js';
 import { sendWhatsApp } from '../services/whatsapp.js';
 const router = express.Router();
 
@@ -423,37 +423,19 @@ async function sendPaymentConfirmationNotifications(client, bookingId, paymentSt
                 'sent'
             ]);
             
-            // Send email notification to customer
+            // Send email notification to customer using unified payment confirmation
             if (booking.customer_email) {
                 try {
-                    await sendEmail({
-                        to: booking.customer_email,
-                        subject: `Payment Confirmed - Booking #${booking.booking_number}`,
-                        html: `
-                            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                                <h2 style="color: #4CAF50;">Payment Confirmation</h2>
-                                <p>Dear ${booking.customer_name},</p>
-                                <p>Your payment has been successfully confirmed by our manager <strong>${managerName}</strong>.</p>
-                                
-                                <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                                    <h3>Booking Details:</h3>
-                                    <p><strong>Booking Number:</strong> ${booking.booking_number}</p>
-                                    <p><strong>Service:</strong> ${booking.service_name}</p>
-                                    <p><strong>Date:</strong> ${formattedDate}</p>
-                                    <p><strong>Time:</strong> ${formattedTime}</p>
-                                    <p><strong>Payment Status:</strong> ${formattedStatus}</p>
-                                    <p><strong>Amount Paid:</strong> $${booking.service_price}</p>
-                                </div>
-                                
-                                <p>Thank you for choosing Vonne X2X. We look forward to serving you!</p>
-                                <p>Best regards,<br>Vonne X2X Team</p>
-                                
-                                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px;">
-                                    <p>If you have any questions, please contact us at [contact email] or call [phone number].</p>
-                                </div>
-                            </div>
-                        `
-                    });
+                    await sendPaymentConfirmation(
+                        booking.customer_email,
+                        {
+                            bookingNumber: booking.booking_number,
+                            customerName: booking.customer_name,
+                            amount: booking.service_price,
+                            paymentMethod: paymentMethod || 'manager confirmation',
+                            source: 'booking'
+                        }
+                    );
                     console.log('✅ Email notification sent to customer:', booking.customer_email);
                 } catch (emailError) {
                     console.error('❌ Email notification failed:', emailError.message);

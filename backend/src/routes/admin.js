@@ -128,4 +128,97 @@ router.put('/signup-status', authenticate, authorize(['admin']), async (req, res
   }
 });
 
+// Admin Settings Endpoints - Simplified version
+// Get admin settings (simplified: only online bookings and email notifications)
+router.get('/settings', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    // Check if admin_settings table exists, if not create it with simplified structure
+    try {
+      const result = await query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'admin_settings'
+        )
+      `);
+      
+      if (!result.rows[0].exists) {
+        // Create simplified admin_settings table
+        await query(`
+          CREATE TABLE admin_settings (
+            id SERIAL PRIMARY KEY,
+            enable_online_booking BOOLEAN DEFAULT true,
+            enable_email_notifications BOOLEAN DEFAULT true,
+            updated_by UUID REFERENCES users(id),
+            updated_at TIMESTAMP DEFAULT NOW()
+          )
+        `);
+        
+        // Insert default record with simplified settings
+        await query(`
+          INSERT INTO admin_settings (
+            enable_online_booking, enable_email_notifications
+          ) VALUES (true, true)
+        `);
+      }
+    } catch (error) {
+      console.error('Error checking/creating admin_settings table:', error);
+    }
+    
+    // Get current settings
+    const settingsResult = await query('SELECT * FROM admin_settings ORDER BY id DESC LIMIT 1');
+    
+    if (settingsResult.rows.length === 0) {
+      // Return simplified default settings if no record exists
+      return res.json({
+        enable_online_booking: true,
+        enable_email_notifications: true
+      });
+    }
+    
+    res.json(settingsResult.rows[0]);
+  } catch (error) {
+    console.error('Error fetching admin settings:', error);
+    res.status(500).json({ error: 'Failed to fetch admin settings' });
+  }
+});
+
+// Update admin settings (simplified version)
+router.put('/settings', authenticate, authorize(['admin']), async (req, res) => {
+  try {
+    const {
+      enable_online_booking,
+      enable_email_notifications
+    } = req.body;
+    
+    const userId = req.user.id;
+    
+    // Validate required fields
+    if (enable_online_booking === undefined || enable_email_notifications === undefined) {
+      return res.status(400).json({ error: 'Missing required fields: enable_online_booking and enable_email_notifications' });
+    }
+    
+    // Update or insert settings (simplified)
+    const updateResult = await query(`
+      INSERT INTO admin_settings (
+        enable_online_booking, enable_email_notifications, updated_by
+      ) VALUES ($1, $2, $3)
+      RETURNING *
+    `, [
+      enable_online_booking,
+      enable_email_notifications,
+      userId
+    ]);
+    
+    res.json({
+      success: true,
+      data: updateResult.rows[0],
+      message: 'Admin settings updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error updating admin settings:', error);
+    res.status(500).json({ error: 'Failed to update admin settings' });
+  }
+});
+
 export default router;

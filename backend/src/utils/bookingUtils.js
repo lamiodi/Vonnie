@@ -4,16 +4,63 @@
  */
 
 /**
- * Generate a unique booking number with format: VN{timestamp}{random}
- * Format: VN + 8-digit timestamp (last 8 chars) + 2-digit random
- * Example: VN1234567890
+ * Get the next sequential number for a given name prefix
+ * @param {string} prefix - Name prefix (e.g., 'JOHN', 'MARY')
+ * @returns {Promise<number>} Next sequential number
+ */
+const getNextSequenceNumber = async (prefix) => {
+  try {
+    const { query } = await import('../config/db.js');
+    
+    // Get the highest existing number for this prefix
+    const result = await query(
+      `SELECT booking_number FROM bookings 
+       WHERE booking_number LIKE $1 
+       ORDER BY created_at DESC 
+       LIMIT 1`,
+      [`${prefix}-%`]
+    );
+    
+    if (result.rows.length === 0) {
+      return 1; // First booking for this prefix
+    }
+    
+    // Extract number from existing booking (format: PREFIX-###)
+    const lastBookingNumber = result.rows[0].booking_number;
+    const numberMatch = lastBookingNumber.match(/-(\d+)$/);
+    
+    if (numberMatch) {
+      const lastNumber = parseInt(numberMatch[1]);
+      return lastNumber + 1;
+    }
+    
+    return 1; // Fallback if pattern doesn't match
+  } catch (error) {
+    console.error('Error getting next sequence number:', error);
+    return 1; // Fallback to 1 on error
+  }
+};
+
+/**
+ * Generate a unique booking number with format: NamePrefix-Increment
+ * Format: [CustomerNamePrefix]-[SequentialNumber]
+ * Example: JOHN-001, MARY-002, etc.
  * 
+ * @param {string} customerName - Customer name to extract prefix from
  * @returns {string} Unique booking number
  */
-export const generateBookingNumber = () => {
-  const timestamp = Date.now().toString().slice(-8); // Last 8 digits of timestamp
-  const random = Math.floor(Math.random() * 100).toString().padStart(2, '0'); // 2-digit random
-  return `VN${timestamp}${random}`;
+export const generateBookingNumberWithName = async (customerName) => {
+  // Extract first 3-4 characters from customer name (uppercase, alphanumeric only)
+  const namePrefix = customerName
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 4)
+    .padEnd(3, 'X'); // Ensure at least 3 characters
+  
+  // Get the next sequential number for this prefix
+  const nextNumber = await getNextSequenceNumber(namePrefix);
+  
+  return `${namePrefix}-${nextNumber.toString().padStart(3, '0')}`;
 };
 
 /**
