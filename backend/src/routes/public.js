@@ -26,7 +26,7 @@ router.get('/services', async (req, res) => {
 router.get('/workers', async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, name, email 
+      `SELECT id, name, email, specialty, current_status 
        FROM users 
        WHERE role IN ('staff', 'manager') AND is_active = true 
        ORDER BY name`

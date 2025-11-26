@@ -10,7 +10,8 @@ const Signup = () => {
     phone: '',
     password: '',
     confirmPassword: '',
-    role: 'staff'
+    role: 'staff',
+    specialty: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -282,6 +283,35 @@ const Signup = () => {
                 </select>
               </div>
             </div>
+            
+            {/* Specialty Field - Only show for staff/manager roles */}
+            {(formData.role === 'staff' || formData.role === 'manager') && (
+              <div>
+                <label htmlFor="specialty" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                  <span>⭐</span>
+                  Specialty (Optional)
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <input
+                    id="specialty"
+                    name="specialty"
+                    type="text"
+                    className="appearance-none block w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base transition-all duration-200"
+                    placeholder="e.g., Hair Styling, Nail Art, Massage"
+                    value={formData.specialty}
+                    onChange={handleChange}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  Describe your area of expertise to help with assignment decisions
+                </p>
+              </div>
+            )}
             
             {/* Password Field */}
             <div>

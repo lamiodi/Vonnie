@@ -1,6 +1,15 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
+CREATE TABLE public.admin_settings (
+  id integer NOT NULL DEFAULT nextval('admin_settings_id_seq'::regclass),
+  enable_online_booking boolean DEFAULT true,
+  enable_email_notifications boolean DEFAULT true,
+  updated_by uuid,
+  updated_at timestamp without time zone DEFAULT now(),
+  CONSTRAINT admin_settings_pkey PRIMARY KEY (id),
+  CONSTRAINT admin_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id)
+);
 CREATE TABLE public.attendance (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   worker_id uuid NOT NULL,
@@ -45,20 +54,12 @@ CREATE TABLE public.booking_workers (
   CONSTRAINT booking_workers_worker_id_fkey FOREIGN KEY (worker_id) REFERENCES public.users(id),
   CONSTRAINT booking_workers_assigned_by_fkey FOREIGN KEY (assigned_by) REFERENCES public.users(id)
 );
-
--- Indexes and constraints to support booking workflows
-CREATE UNIQUE INDEX IF NOT EXISTS booking_workers_unique ON public.booking_workers(booking_id, worker_id);
-
-CREATE INDEX IF NOT EXISTS idx_bookings_scheduled_time ON public.bookings(scheduled_time);
-CREATE INDEX IF NOT EXISTS idx_bookings_status ON public.bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_payment_status ON public.bookings(payment_status);
-CREATE INDEX IF NOT EXISTS idx_booking_services_booking_id ON public.booking_services(booking_id);
 CREATE TABLE public.bookings (
-  id uuid NOT NULL DEFAULT uuid_generate_v4(),0
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
   customer_name character varying NOT NULL,
   customer_email character varying,
   customer_phone character varying,
-  status character varying NOT NULL DEFAULT 'pending_confirmation'::character varying CHECK (status::text = ANY (ARRAY['pending_confirmation'::character varying, 'scheduled'::character varying, 'in-progress'::character varying, 'completed'::character varying, 'cancelled'::character varying]::text[])),
+  status character varying NOT NULL DEFAULT 'pending_confirmation'::character varying CHECK (status::text = ANY (ARRAY['scheduled'::character varying, 'in-progress'::character varying, 'completed'::character varying, 'cancelled'::character varying, 'pending_confirmation'::character varying]::text[])),
   total_amount numeric NOT NULL,
   notes text,
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
@@ -278,6 +279,7 @@ CREATE TABLE public.users (
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   current_status character varying NOT NULL DEFAULT 'available'::character varying CHECK (current_status::text = ANY (ARRAY['available'::text, 'busy'::text, 'offline'::text])),
+  specialty character varying,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.walk_in_customers (
@@ -294,4 +296,27 @@ CREATE TABLE public.walk_in_customers (
   updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT walk_in_customers_pkey PRIMARY KEY (id),
   CONSTRAINT walk_in_customers_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
+);
+CREATE TABLE public.webhook_deliveries (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  endpoint_id uuid,
+  event_type character varying NOT NULL,
+  payload jsonb NOT NULL,
+  response jsonb,
+  success boolean NOT NULL,
+  delivered_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT webhook_deliveries_pkey PRIMARY KEY (id),
+  CONSTRAINT webhook_deliveries_endpoint_id_fkey FOREIGN KEY (endpoint_id) REFERENCES public.webhook_endpoints(id)
+);
+CREATE TABLE public.webhook_endpoints (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name character varying NOT NULL,
+  url text NOT NULL,
+  secret character varying NOT NULL,
+  event_types ARRAY NOT NULL DEFAULT ARRAY['*'::text],
+  is_active boolean DEFAULT true,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT webhook_endpoints_pkey PRIMARY KEY (id)
 );

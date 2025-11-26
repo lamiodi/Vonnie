@@ -13,7 +13,7 @@ const router = express.Router();
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role = 'staff', phone } = req.body;
+    const { name, email, password, role = 'staff', phone, specialty } = req.body;
     
     // Validate required fields
     if (!email || !password) {
@@ -115,8 +115,8 @@ router.post('/register', async (req, res) => {
     const userName = name || email.split('@')[0];
 
     const result = await query(
-      'INSERT INTO users (name, email, password_hash, role, phone) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-      [userName, email, hashedPassword, role, phone || null]
+      'INSERT INTO users (name, email, password_hash, role, phone, specialty) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [userName, email, hashedPassword, role, phone || null, specialty || null]
     );
 
     const user = result.rows[0];
@@ -129,6 +129,7 @@ router.post('/register', async (req, res) => {
       email: user.email,
       role: user.role,
       phone: user.phone,
+      specialty: user.specialty,
       is_active: user.is_active,
       current_status: user.current_status
     };

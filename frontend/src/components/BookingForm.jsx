@@ -551,6 +551,12 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
               {workers.map(worker => {
                 const isSelected = formData.workers.some(w => w.worker_id === worker.id);
+                const statusColor = {
+                  'available': 'bg-green-100 text-green-800',
+                  'busy': 'bg-red-100 text-red-800',
+                  'offline': 'bg-gray-100 text-gray-800'
+                }[worker.current_status] || 'bg-gray-100 text-gray-800';
+                
                 return (
                   <div
                     key={worker.id}
@@ -562,15 +568,25 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <div>
+                      <div className="flex-1">
                         <div className="font-medium text-gray-900">{worker.name}</div>
                         <div className="text-sm text-gray-600">{worker.role}</div>
+                        {worker.specialty && (
+                          <div className="text-xs text-purple-600 font-medium mt-1">
+                            🎯 {worker.specialty}
+                          </div>
+                        )}
                       </div>
-                      {isSelected && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Selected
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
+                          {worker.current_status || 'available'}
                         </span>
-                      )}
+                        {isSelected && (
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Selected
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
