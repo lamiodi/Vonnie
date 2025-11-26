@@ -5,12 +5,8 @@ import { toast } from 'react-hot-toast';
 
 const AdminSettings = () => {
   const [settings, setSettings] = useState({
-    siteName: 'Vonne X2X',
-    contactEmail: 'admin@vonnex2x.com',
-    maxBookingsPerDay: 10,
     enableOnlineBooking: true,
     enableEmailNotifications: true,
-    enableWhatsAppNotifications: true,
     maintenanceMode: false
   });
   
@@ -25,7 +21,12 @@ const AdminSettings = () => {
     try {
       setLoading(true);
       const response = await apiGet('/admin/settings');
-      setSettings(response);
+      // Filter to only include the settings we want to display
+      setSettings({
+        enableOnlineBooking: response.enableOnlineBooking || response.enable_online_booking || true,
+        enableEmailNotifications: response.enableEmailNotifications || response.enable_email_notifications || true,
+        maintenanceMode: response.maintenanceMode || response.maintenance_mode || false
+      });
     } catch (error) {
       console.error('Error fetching settings:', error);
       handleError(error);
@@ -37,7 +38,13 @@ const AdminSettings = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      await apiPut('/admin/settings', settings);
+      // Only save the settings we want to manage
+      const filteredSettings = {
+        enable_online_booking: settings.enableOnlineBooking,
+        enable_email_notifications: settings.enableEmailNotifications,
+        maintenance_mode: settings.maintenanceMode
+      };
+      await apiPut('/admin/settings', filteredSettings);
       toast.success('Settings updated successfully');
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -67,56 +74,11 @@ const AdminSettings = () => {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Admin Settings</h2>
-        <p className="text-gray-600 mt-1">Manage system-wide configurations</p>
+        <h2 className="text-2xl font-bold text-gray-900">System Settings</h2>
+        <p className="text-gray-600 mt-1">Manage core system functionality</p>
       </div>
 
       <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Site Name
-            </label>
-            <input
-              type="text"
-              name="siteName"
-              value={settings.siteName}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="Vonne X2X"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Contact Email
-            </label>
-            <input
-              type="email"
-              name="contactEmail"
-              value={settings.contactEmail}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-              placeholder="admin@vonnex2x.com"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Max Bookings Per Day
-            </label>
-            <input
-              type="number"
-              name="maxBookingsPerDay"
-              value={settings.maxBookingsPerDay}
-              onChange={handleInputChange}
-              min="1"
-              max="100"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
-          </div>
-        </div>
-        
         <div className="space-y-4">
           <div className="flex items-center">
             <input
@@ -143,20 +105,7 @@ const AdminSettings = () => {
               Enable Email Notifications
             </label>
           </div>
-          
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              name="enableWhatsAppNotifications"
-              checked={settings.enableWhatsAppNotifications}
-              onChange={handleInputChange}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-            />
-            <label className="ml-2 block text-sm text-gray-900">
-              Enable WhatsApp Notifications
-            </label>
-          </div>
-          
+
           <div className="flex items-center">
             <input
               type="checkbox"
