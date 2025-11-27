@@ -237,6 +237,47 @@ const PublicBooking = () => {
     }
   };
 
+  // Unified function to normalize time slots to HH:mm format
+  const normalizeTimeSlot = (slot) => {
+    try {
+      if (!slot) return null;
+      
+      // Handle string slots
+      if (typeof slot === 'string') {
+        // If it's already in HH:mm format, return as is
+        if (slot.match(/^\d{2}:\d{2}$/)) {
+          return slot;
+        }
+        
+        // If it's an ISO timestamp, extract time
+        if (slot.includes('T')) {
+          const timePart = slot.split('T')[1];
+          return timePart ? timePart.substring(0, 5) : null;
+        }
+        
+        // Try to parse as a date
+        const date = new Date(slot);
+        if (!isNaN(date.getTime())) {
+          return date.toTimeString().substring(0, 5);
+        }
+        
+        // Return null for unparseable strings
+        return null;
+      }
+      
+      // Handle object slots
+      if (slot && typeof slot === 'object') {
+        const timeValue = slot.formatted_time || slot.time || slot.start_time;
+        return timeValue ? normalizeTimeSlot(timeValue) : null;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Error normalizing time slot:', slot, error);
+      return null;
+    }
+  };
+
   const fetchAvailableSlots = async () => {
     setSlotsLoading(true);
     setSlotsError(null);
@@ -247,31 +288,32 @@ const PublicBooking = () => {
       const url = `${endpoints.availableSlots}?date=${dateStr}&service_ids=${serviceIds.join(',')}`;
       const response = await axios.get(url);
 
-      let slots = [];
       console.log('Available slots API response:', response.data);
       
+      let slots = [];
+      
+      // Handle different API response formats
       if (Array.isArray(response.data)) {
-        slots = response.data.map(slot => {
-          if (typeof slot === 'string') return slot;
-          if (slot && typeof slot === 'object') {
-            return slot.formatted_time || slot.time || slot.start_time || JSON.stringify(slot);
-          }
-          return '';
-        }).filter(slot => slot !== '');
+        slots = response.data;
       } else if (response.data && typeof response.data === 'object') {
-        if (response.data.available_slots && Array.isArray(response.data.available_slots)) {
-          slots = response.data.available_slots;
-        } else if (response.data.slots && Array.isArray(response.data.slots)) {
-          slots = response.data.slots;
-        } else if (response.data.times && Array.isArray(response.data.times)) {
-          slots = response.data.times;
-        }
+        // Try different possible property names
+        slots = response.data.available_slots || 
+                response.data.slots || 
+                response.data.times || 
+                [];
       }
       
-      console.log('Processed slots:', slots);
-
-      setAvailableSlots(slots);
-      if (slots.length === 0) {
+      // Normalize all slots to HH:mm format and filter out invalid ones
+      const normalizedSlots = slots
+        .map(slot => normalizeTimeSlot(slot))
+        .filter(slot => slot !== null)
+        .sort(); // Sort times chronologically
+      
+      console.log('Normalized slots:', normalizedSlots);
+      
+      setAvailableSlots(normalizedSlots);
+      
+      if (normalizedSlots.length === 0) {
         setSlotsError('No available time slots for this date. Please try another date.');
       }
     } catch (error) {
@@ -288,13 +330,14 @@ const PublicBooking = () => {
   };
 
   const handleServiceToggle = (service) => {
+    console.log('Service toggle requested:', service.name, 'ID:', service.id);
     setSelectedServices(prev => {
       const isSelected = prev.find(s => s.id === service.id);
-      if (isSelected) {
-        return prev.filter(s => s.id !== service.id);
-      } else {
-        return [...prev, service];
-      }
+      const newSelection = isSelected 
+        ? prev.filter(s => s.id !== service.id)
+        : [...prev, service];
+      console.log('Updated service selection:', newSelection.map(s => s.name));
+      return newSelection;
     });
     setFormData(prev => ({ ...prev, booking_time: '' }));
   };
@@ -315,6 +358,7 @@ const PublicBooking = () => {
   const handleDateChange = (date) => {
     // Ensure date is always a Date object
     const dateObj = date instanceof Date ? date : new Date(date);
+    console.log('Date selected:', dateObj.toDateString());
     setFormData(prev => ({
       ...prev,
       booking_date: dateObj,
@@ -361,40 +405,23 @@ const PublicBooking = () => {
     
     setLoading(true);
 
-    // Debug: Log current form data state
-    console.log('Current formData before submission:', {
-      booking_date: formData.booking_date,
-      booking_date_type: typeof formData.booking_date,
-      booking_time: formData.booking_time
-    });
-
     try {
       const serviceIds = selectedServices.map(s => s.id);
-      // Booking number is generated server-side, no need for client-side generation
-
-      // Create proper ISO datetime string for scheduled_time
-      // Ensure booking_date is a Date object before calling toISOString
-      console.log('formData.booking_date type:', typeof formData.booking_date);
-      console.log('formData.booking_date value:', formData.booking_date);
-      console.log('formData.booking_time value:', formData.booking_time);
       
-      const bookingDate = formData.booking_date instanceof Date ? formData.booking_date : new Date(formData.booking_date);
-      console.log('bookingDate after conversion:', bookingDate);
+      // Simplified date/time handling - booking_time is already in HH:mm format
+      const bookingDate = new Date(formData.booking_date);
+      const dateStr = bookingDate.toISOString().split('T')[0];
+      const timeStr = formData.booking_time; // Already in HH:mm format from time slot selection
       
-      const dateOnly = bookingDate.toISOString().split('T')[0];
-      console.log('dateOnly:', dateOnly);
+      // Create ISO datetime string
+      const scheduledTime = `${dateStr}T${timeStr}:00`;
       
-      const timeWithSeconds = formData.booking_time.length === 5 ? `${formData.booking_time}:00` : formData.booking_time;
-      console.log('timeWithSeconds:', timeWithSeconds);
+      console.log('Submitting booking with scheduled time:', scheduledTime);
       
-      // Convert to Nigeria timezone ISO string for consistent datetime handling
-      const dateTimeStr = convertToNigeriaISOString(`${dateOnly}T${timeWithSeconds}`);
-      
-      console.log('Generated dateTimeStr:', dateTimeStr);
       const bookingData = {
         service_ids: serviceIds,
         worker_id: null,
-        scheduled_time: dateTimeStr,
+        scheduled_time: scheduledTime,
         duration: totalDuration,
         customer_name: formData.customer_name,
         customer_email: formData.customer_email,
@@ -810,17 +837,11 @@ const handlePaymentClose = () => {
                         key={slot}
                         onClick={() => {
                           console.log('Selected time slot:', slot);
-                          // Extract time part from ISO string if it's a full timestamp
-                          let timePart = slot;
-                          if (slot.includes('T')) {
-                            // This is a full ISO timestamp, extract just the time
-                            timePart = slot.split('T')[1].substring(0, 5); // Get HH:mm part
-                          }
-                          console.log('Extracted time part:', timePart);
-                          setFormData(prev => ({ ...prev, booking_time: timePart }));
+                          // Since slots are now normalized to HH:mm format, use directly
+                          setFormData(prev => ({ ...prev, booking_time: slot }));
                         }}
                         className={`p-4 rounded-xl text-center font-medium transition-all duration-300 transform hover:scale-105 ${
-                          formData.booking_time === (slot.includes('T') ? slot.split('T')[1].substring(0, 5) : slot)
+                          formData.booking_time === slot
                             ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg ring-2 ring-purple-300 ring-opacity-50'
                             : 'bg-white text-gray-700 hover:bg-purple-50 hover:text-purple-700 border-2 border-gray-200 hover:border-purple-300 shadow-md'
                         }`}

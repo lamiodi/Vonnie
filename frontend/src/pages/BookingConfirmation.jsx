@@ -3,10 +3,46 @@ import { useLocation, Link } from 'react-router-dom';
 
 const BookingConfirmation = () => {
   const location = useLocation();
-  const bookingData = location.state?.bookingData || {};
-  const paymentCompleted = location.state?.paymentCompleted || false;
+  
+  // Enhanced state handling with localStorage fallback
+  let bookingData = location.state?.bookingData || {};
+  let paymentCompleted = location.state?.paymentCompleted || false;
+  
+  // If no booking data from navigation, try to load from localStorage
+  if (Object.keys(bookingData).length === 0) {
+    console.log('No booking data from navigation state, checking localStorage...');
+    const savedBooking = localStorage.getItem('lastBooking');
+    if (savedBooking) {
+      try {
+        const parsed = JSON.parse(savedBooking);
+        bookingData = parsed.bookingData || {};
+        paymentCompleted = parsed.paymentCompleted || false;
+        console.log('Loaded booking data from localStorage:', bookingData);
+      } catch (error) {
+        console.error('Error parsing saved booking data:', error);
+      }
+    } else {
+      console.warn('No booking data found in navigation state or localStorage');
+    }
+  }
+  
+  // Save booking data to localStorage when available
+  useEffect(() => {
+    if (Object.keys(bookingData).length > 0) {
+      const bookingInfo = {
+        bookingData,
+        paymentCompleted,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('lastBooking', JSON.stringify(bookingInfo));
+      console.log('Saved booking data to localStorage:', bookingInfo);
+    }
+  }, [bookingData, paymentCompleted]);
   
   // Enhanced data validation to prevent NaN and missing data issues
+  console.log('Booking confirmation received data:', bookingData);
+  console.log('Payment completed status:', paymentCompleted);
+  
   const validatedBookingData = {
     booking_number: bookingData?.booking_number || 'Generating...',
     total_amount: bookingData?.total_amount || 0,
@@ -20,6 +56,8 @@ const BookingConfirmation = () => {
     status: bookingData?.status || 'pending_confirmation',
     payment_status: bookingData?.payment_status || 'pending'
   };
+  
+  console.log('Validated booking data:', validatedBookingData);
 
   console.log('BookingConfirmation received data:', validatedBookingData);
   console.log('BookingConfirmation received paymentCompleted:', paymentCompleted);
@@ -62,28 +100,62 @@ const BookingConfirmation = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'Date to be confirmed';
     
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'long', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date string provided:', dateString);
+        return 'Invalid date';
+      }
+      
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    } catch (error) {
+      console.error('Error formatting date:', dateString, error);
+      return 'Date formatting error';
+    }
   };
 
   const formatTime = (timeString) => {
     if (!timeString) return 'Time to be confirmed';
     
-    if (timeString.includes('T')) {
-      const date = new Date(timeString);
-      return date.toLocaleTimeString('en-US', { 
-        hour: 'numeric', 
-        minute: '2-digit',
-        hour12: true 
-      });
+    try {
+      // Handle ISO timestamps
+      if (timeString.includes('T')) {
+        const date = new Date(timeString);
+        if (isNaN(date.getTime())) {
+          console.warn('Invalid time string provided:', timeString);
+          return 'Invalid time';
+        }
+        return date.toLocaleTimeString('en-US', { 
+          hour: 'numeric', 
+          minute: '2-digit',
+          hour12: true 
+        });
+      }
+      
+      // Handle HH:mm format
+      if (timeString.match(/^\d{2}:\d{2}/)) {
+        const [hours, minutes] = timeString.split(':');
+        const hour = parseInt(hours);
+        if (isNaN(hour) || hour < 0 || hour > 23) {
+          console.warn('Invalid hour in time string:', timeString);
+          return 'Invalid time';
+        }
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour % 12 || 12;
+        return `${displayHour}:${minutes} ${period}`;
+      }
+      
+      // Return as is for other formats
+      return timeString;
+    } catch (error) {
+      console.error('Error formatting time:', timeString, error);
+      return 'Time formatting error';
     }
-    
-    return timeString;
   };
 
   const formatCurrency = (amount) => {
