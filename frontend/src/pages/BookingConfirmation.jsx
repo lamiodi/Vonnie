@@ -3,26 +3,41 @@ import { useLocation, Link } from 'react-router-dom';
 
 const BookingConfirmation = () => {
   const location = useLocation();
-  const bookingData = location.state?.bookingData;
+  const bookingData = location.state?.bookingData || {};
   const paymentCompleted = location.state?.paymentCompleted || false;
+  
+  // Enhanced data validation to prevent NaN and missing data issues
+  const validatedBookingData = {
+    booking_number: bookingData?.booking_number || 'Generating...',
+    total_amount: bookingData?.total_amount || 0,
+    customer_name: bookingData?.customer_name || 'Name not provided',
+    customer_email: bookingData?.customer_email || 'Email not provided',
+    customer_phone: bookingData?.customer_phone || 'Phone not provided',
+    booking_date: bookingData?.booking_date || null,
+    booking_time: bookingData?.booking_time || null,
+    service_name: bookingData?.service_name || 'Service to be confirmed',
+    duration: bookingData?.duration || null,
+    status: bookingData?.status || 'pending_confirmation',
+    payment_status: bookingData?.payment_status || 'pending'
+  };
 
-  console.log('BookingConfirmation received data:', bookingData);
+  console.log('BookingConfirmation received data:', validatedBookingData);
   console.log('BookingConfirmation received paymentCompleted:', paymentCompleted);
   console.log('Booking data structure:', {
-    booking_number: bookingData?.booking_number,
-    total_amount: bookingData?.total_amount,
-    customer_name: bookingData?.customer_name,
-    customer_email: bookingData?.customer_email,
-    customer_phone: bookingData?.customer_phone,
-    booking_date: bookingData?.booking_date,
-    booking_time: bookingData?.booking_time,
-    service_name: bookingData?.service_name,
-    duration: bookingData?.duration,
-    status: bookingData?.status,
-    payment_status: bookingData?.payment_status
+    booking_number: validatedBookingData.booking_number,
+    total_amount: validatedBookingData.total_amount,
+    customer_name: validatedBookingData.customer_name,
+    customer_email: validatedBookingData.customer_email,
+    customer_phone: validatedBookingData.customer_phone,
+    booking_date: validatedBookingData.booking_date,
+    booking_time: validatedBookingData.booking_time,
+    service_name: validatedBookingData.service_name,
+    duration: validatedBookingData.duration,
+    status: validatedBookingData.status,
+    payment_status: validatedBookingData.payment_status
   });
 
-  if (!bookingData) {
+  if (Object.keys(bookingData).length === 0) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full text-center">
@@ -95,18 +110,18 @@ const BookingConfirmation = () => {
 
   // Determine the confirmation message based on payment status
   const getConfirmationTitle = () => {
-    if (paymentCompleted || bookingData.payment_status === 'completed') {
+    if (paymentCompleted || validatedBookingData.payment_status === 'completed') {
       return 'Booking & Payment Confirmed!';
-    } else if (bookingData.payment_status === 'pending') {
+    } else if (validatedBookingData.payment_status === 'pending') {
       return 'Booking Confirmed - Payment Pending!';
     }
     return 'Booking Confirmed!';
   };
 
   const getConfirmationMessage = () => {
-    if (paymentCompleted || bookingData.payment_status === 'completed') {
+    if (paymentCompleted || validatedBookingData.payment_status === 'completed') {
       return 'Your appointment has been successfully scheduled and payment confirmed.';
-    } else if (bookingData.payment_status === 'pending') {
+    } else if (validatedBookingData.payment_status === 'pending') {
       return 'Your appointment is scheduled. Please complete payment to confirm your booking.';
     }
     return 'Your appointment has been successfully scheduled';
@@ -118,8 +133,8 @@ const BookingConfirmation = () => {
         {/* Success Header */}
         <div className="bg-white rounded-2xl shadow-xl p-8 mb-6 text-center">
           <div className={`mb-4 ${
-            paymentCompleted || bookingData.payment_status === 'completed' ? 'text-green-500' :
-            bookingData.payment_status === 'pending' ? 'text-yellow-500' :
+            paymentCompleted || validatedBookingData.payment_status === 'completed' ? 'text-green-500' :
+            validatedBookingData.payment_status === 'pending' ? 'text-yellow-500' :
             'text-green-500'
           }`}>
             <svg className="w-20 h-20 mx-auto" fill="currentColor" viewBox="0 0 20 20">
@@ -170,12 +185,12 @@ const BookingConfirmation = () => {
             <div className="text-center">
                 <p className="text-sm text-gray-600 mb-2">Your Booking Number</p>
                 <div className="text-3xl font-bold text-purple-600 mb-2 font-mono tracking-wider">
-                  {bookingData.booking_number || 'Generating...'}
+                  {validatedBookingData.booking_number}
                 </div>
-                {bookingData.booking_number && (
+                {validatedBookingData.booking_number && validatedBookingData.booking_number !== 'Generating...' && (
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(bookingData.booking_number);
+                      navigator.clipboard.writeText(validatedBookingData.booking_number);
                       alert('Booking number copied to clipboard!');
                     }}
                     className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
@@ -191,98 +206,98 @@ const BookingConfirmation = () => {
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Service:</span>
               <span className="text-gray-800 font-semibold">
-                {bookingData.service_name || 'Service to be confirmed'}
+                {validatedBookingData.service_name}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Date:</span>
               <span className="text-gray-800 font-semibold">
-                {formatDate(bookingData.booking_date)}
+                {formatDate(validatedBookingData.booking_date)}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Time:</span>
               <span className="text-gray-800 font-semibold">
-                {formatTime(bookingData.booking_time)}
+                {formatTime(validatedBookingData.booking_time)}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Duration:</span>
               <span className="text-gray-800 font-semibold">
-                {bookingData.duration ? `${bookingData.duration} minutes` : 'Duration to be confirmed'}
+                {validatedBookingData.duration ? `${validatedBookingData.duration} minutes` : 'Duration to be confirmed'}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Customer Name:</span>
               <span className="text-gray-800 font-semibold">
-                {bookingData.customer_name || 'Name not provided'}
+                {validatedBookingData.customer_name}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Email:</span>
               <span className="text-gray-800 font-semibold">
-                {bookingData.customer_email || 'Email not provided'}
+                {validatedBookingData.customer_email}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Phone:</span>
               <span className="text-gray-800 font-semibold">
-                {bookingData.customer_phone || 'Phone not provided'}
+                {validatedBookingData.customer_phone}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Booking Status:</span>
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                bookingData.status === 'scheduled' ? 'bg-green-100 text-green-800' :
-                bookingData.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-800' :
-                bookingData.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
-                bookingData.status === 'completed' ? 'bg-purple-100 text-purple-800' :
-                bookingData.status === 'cancelled' ? 'bg-red-100 text-red-800' :
+                validatedBookingData.status === 'scheduled' ? 'bg-green-100 text-green-800' :
+                validatedBookingData.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-800' :
+                validatedBookingData.status === 'in-progress' ? 'bg-blue-100 text-blue-800' :
+                validatedBookingData.status === 'completed' ? 'bg-purple-100 text-purple-800' :
+                validatedBookingData.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {bookingData.status ? 
-                  bookingData.status.charAt(0).toUpperCase() + bookingData.status.slice(1) : 
+                {validatedBookingData.status ? 
+                  validatedBookingData.status.charAt(0).toUpperCase() + validatedBookingData.status.slice(1) : 
                   'Status pending'
                 }
               </span>
             </div>
             
-            {bookingData.payment_status && (
+            {validatedBookingData.payment_status && (
               <div className="flex justify-between items-center py-3 border-b border-gray-200">
                 <span className="text-gray-600 font-medium">Payment Status:</span>
                 <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-                  bookingData.payment_status === 'completed' ? 'bg-green-100 text-green-800' :
-                  bookingData.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  bookingData.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
-                  bookingData.payment_status === 'refunded' ? 'bg-blue-100 text-blue-800' :
+                  validatedBookingData.payment_status === 'completed' ? 'bg-green-100 text-green-800' :
+                  validatedBookingData.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  validatedBookingData.payment_status === 'failed' ? 'bg-red-100 text-red-800' :
+                  validatedBookingData.payment_status === 'refunded' ? 'bg-blue-100 text-blue-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
-                  {bookingData.payment_status ? 
-                    bookingData.payment_status.charAt(0).toUpperCase() + bookingData.payment_status.slice(1) : 
+                  {validatedBookingData.payment_status ? 
+                    validatedBookingData.payment_status.charAt(0).toUpperCase() + validatedBookingData.payment_status.slice(1) : 
                     'Payment status unknown'
                   }
                 </span>
               </div>
             )}
             
-            {bookingData.notes && (
+            {validatedBookingData.notes && (
               <div className="flex justify-between items-start py-3 border-b border-gray-200">
                 <span className="text-gray-600 font-medium">Notes:</span>
-                <span className="text-gray-800 font-semibold text-right max-w-xs">{bookingData.notes}</span>
+                <span className="text-gray-800 font-semibold text-right max-w-xs">{validatedBookingData.notes}</span>
               </div>
             )}
             
             <div className="flex justify-between items-center py-3">
               <span className="text-gray-600 font-medium">Total Amount:</span>
               <span className="text-2xl font-bold text-purple-600">
-                {formatCurrency(bookingData.total_amount)}
+                {formatCurrency(validatedBookingData.total_amount)}
               </span>
             </div>
           </div>

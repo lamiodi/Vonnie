@@ -431,7 +431,14 @@ const PublicBooking = () => {
       };
     } else {
       // Use the properly structured bookingResponse from handleSubmit
-      bookingInfo = { ...bookingResponse };
+      bookingInfo = { 
+        ...bookingResponse,
+        // Ensure critical fields are always present
+        booking_number: bookingResponse.booking_number || 'UNKNOWN',
+        total_amount: bookingResponse.total_amount || totalPrice,
+        service_name: bookingResponse.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service',
+        duration: bookingResponse.duration || totalDuration
+      };
     }
 
     // If Paystack component provided bookingData, prefer merging it
@@ -443,10 +450,10 @@ const PublicBooking = () => {
     bookingInfo.payment_status = 'completed';
     
     // Ensure we have all required fields with proper values
-    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice;
+    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice || 0;
     bookingInfo.booking_number = bookingInfo.booking_number || 'UNKNOWN';
     bookingInfo.service_name = bookingInfo.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service';
-    bookingInfo.duration = bookingInfo.duration || totalDuration;
+    bookingInfo.duration = bookingInfo.duration || totalDuration || 0;
     
     console.log('Updated booking info with payment status:', bookingInfo);
     console.log('Booking info being sent to confirmation page:', {
@@ -473,14 +480,14 @@ const PublicBooking = () => {
     // Removed localStorage dependency - booking data is managed through state
     console.log('Payment completed, booking data managed through state');
     
-    if (hasNavigatedRef.current) {
-      console.log('Navigation already performed via message; skipping direct navigate');
-      return;
-    }
-    hasNavigatedRef.current = true;
+    // Always navigate directly to ensure booking data is passed
+    // The message listener is a backup but direct navigation is more reliable
     console.log('About to navigate to booking-confirmation with state:', { bookingData: bookingInfo });
     navigate('/booking-confirmation', {
-      state: { bookingData: bookingInfo }
+      state: { 
+        bookingData: bookingInfo,
+        paymentCompleted: true 
+      }
     });
   };
 

@@ -95,7 +95,12 @@ export const useBookings = () => {
       if (!isAuthenticated()) {
         throw new Error('Authentication required to assign workers');
       }
-      const updatedBooking = await apiPost(API_ENDPOINTS.BOOKING_ASSIGN_WORKERS(id), { worker_ids: workerIds });
+      // Convert worker IDs array to workers array with role (default to 'primary')
+      const workers = workerIds.map(worker_id => ({
+        worker_id,
+        role: 'primary'
+      }));
+      const updatedBooking = await apiPost(API_ENDPOINTS.BOOKING_ASSIGN_WORKERS(id), { workers });
       setBookings(prev => prev.map(booking => 
         booking.id === id ? updatedBooking : booking
       ));

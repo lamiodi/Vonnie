@@ -959,6 +959,29 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       console.log('Booking time range:', bookingStart.toISOString(), 'to', bookingEnd.toISOString());
       console.log('Current booking ID:', booking.id);
       
+      // **VALIDATION**: Check if booking time is valid
+      if (isNaN(bookingStart.getTime()) || isNaN(bookingEnd.getTime())) {
+        console.error('Invalid booking time detected');
+        setWorkerConflicts([{
+          workerId: 'invalid_time',
+          message: 'Invalid booking time detected',
+          type: 'validation_error'
+        }]);
+        return;
+      }
+      
+      // **VALIDATION**: Check if booking is in the past
+      const now = new Date();
+      if (bookingEnd < now) {
+        console.error('Cannot assign workers to past booking');
+        setWorkerConflicts([{
+          workerId: 'past_booking',
+          message: 'Cannot assign workers to bookings in the past',
+          type: 'validation_error'
+        }]);
+        return;
+      }
+      
       // Check for conflicts with selected workers
       const conflictUrl = `/api/bookings/conflicts?workerIds=${workerIds.join(',')}&startTime=${bookingStart.toISOString()}&endTime=${bookingEnd.toISOString()}&excludeBookingId=${booking.id}`;
       console.log('Making conflict check request to:', conflictUrl);
@@ -983,11 +1006,45 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
         }
       }
       
+      // **ADDITIONAL VALIDATION**: Check worker availability status
+      const unavailableWorkers = workerIds.filter(workerId => {
+        const worker = workers.find(w => w.id === workerId);
+        return worker && (worker.status === 'unavailable' || worker.status === 'on_leave');
+      });
+      
+      if (unavailableWorkers.length > 0) {
+        conflicts.push(...unavailableWorkers.map(workerId => ({
+          workerId: workerId,
+          message: 'Worker is currently unavailable',
+          type: 'availability'
+        })));
+      }
+      
+      // **ADDITIONAL VALIDATION**: Check if workers have required skills for the service
+      if (booking.service_id) {
+        const unqualifiedWorkers = workerIds.filter(workerId => {
+          const worker = workers.find(w => w.id === workerId);
+          return worker && worker.specialties && !worker.specialties.includes(booking.service_name);
+        });
+        
+        if (unqualifiedWorkers.length > 0) {
+          conflicts.push(...unqualifiedWorkers.map(workerId => ({
+            workerId: workerId,
+            message: 'Worker does not have required specialty for this service',
+            type: 'qualification'
+          })));
+        }
+      }
+      
       console.log('Processed conflicts:', conflicts);
       setWorkerConflicts(conflicts);
     } catch (error) {
       console.error('Error checking worker conflicts:', error);
-      setWorkerConflicts([]);
+      setWorkerConflicts([{
+        workerId: 'system_error',
+        message: 'Unable to check worker availability. Please try again.',
+        type: 'system_error'
+      }]);
     }
   };
 
@@ -1026,15 +1083,54 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
 
   const handleWorkerChange = (workerId) => {
     setSelectedWorkers(prev => {
-      const newSelection = prev.includes(workerId) 
-        ? prev.filter(id => id !== workerId)
-        : [...prev, workerId];
+      let newSelection;
+      
+      if (prev.includes(workerId)) {
+        // Removing worker - always allowed
+        newSelection = prev.filter(id => id !== workerId);
+      } else {
+        // Adding worker - validate first
+        const worker = workers.find(w => w.id === workerId);
+        
+        if (worker) {
+          // **VALIDATION**: Check if worker is inactive
+          if (worker.status === 'inactive' || worker.status === 'suspended') {
+            setError(`Cannot select ${worker.name}: Worker is ${worker.status}`);
+            return prev; // Don't add the worker
+          }
+          
+          // **VALIDATION**: Check if worker is marked as busy
+          const isBusy = busyWorkers.some(busy => 
+            (busy.worker_id === workerId || busy.id === workerId)
+          );
+          if (isBusy) {
+            setError(`Cannot select ${worker.name}: Worker is currently busy`);
+            return prev; // Don't add the worker
+          }
+          
+          // **VALIDATION**: Check if worker has required specialty
+          if (booking.service_name && worker.specialties && worker.specialties.length > 0) {
+            const hasRequiredSpecialty = worker.specialties.includes(booking.service_name);
+            if (!hasRequiredSpecialty) {
+              setError(`Cannot select ${worker.name}: Worker does not have required specialty for ${booking.service_name}`);
+              return prev; // Don't add the worker
+            }
+          }
+        }
+        
+        newSelection = [...prev, workerId];
+      }
       
       // Check conflicts for the new selection
       if (newSelection.length > 0) {
         checkWorkerConflicts(newSelection);
       } else {
         setWorkerConflicts([]);
+      }
+      
+      // Clear any selection errors when selection changes
+      if (error) {
+        setError('');
       }
       
       return newSelection;
@@ -1051,21 +1147,93 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
     setError('');
     
     try {
+      // **PRE-VALIDATION STEP**: Check for conflicts before attempting assignment
+      console.log('Starting pre-validation for worker assignment...');
+      
+      // Check conflicts for selected workers
+      await checkWorkerConflicts(selectedWorkers);
+      
+      // Wait a moment for state to update, then check if there are conflicts
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // **CONFLICT DETECTION**: Prevent assignment if conflicts exist
+      if (workerConflicts.length > 0) {
+        const conflictedWorkerNames = workerConflicts
+          .map(conflict => workers.find(w => w.id === conflict.workerId)?.name || `Worker ${conflict.workerId}`)
+          .filter(name => name)
+          .join(', ');
+        
+        setError(`Cannot assign workers due to scheduling conflicts: ${conflictedWorkerNames}. Please select different workers or adjust the booking time.`);
+        setLoading(false);
+        return;
+      }
+      
+      // **AVAILABILITY CHECK**: Verify selected workers are not busy
+      const busySelectedWorkers = selectedWorkers.filter(workerId => 
+        busyWorkers.some(busy => busy.worker_id === workerId || busy.id === workerId)
+      );
+      
+      if (busySelectedWorkers.length > 0) {
+        const busyWorkerNames = busySelectedWorkers
+          .map(workerId => workers.find(w => w.id === workerId)?.name || `Worker ${workerId}`)
+          .filter(name => name)
+          .join(', ');
+        
+        setError(`The following workers are marked as busy: ${busyWorkerNames}. Please select available workers.`);
+        setLoading(false);
+        return;
+      }
+      
+      // **DUPLICATE CHECK**: Prevent assigning the same worker multiple times
+      const uniqueWorkers = [...new Set(selectedWorkers)];
+      if (uniqueWorkers.length !== selectedWorkers.length) {
+        setError('Cannot assign the same worker multiple times. Please review your selection.');
+        setLoading(false);
+        return;
+      }
+      
+      // **WORKER STATUS VALIDATION**: Ensure selected workers are active
+      const inactiveWorkers = selectedWorkers.filter(workerId => {
+        const worker = workers.find(w => w.id === workerId);
+        return worker && (worker.status === 'inactive' || worker.status === 'suspended');
+      });
+      
+      if (inactiveWorkers.length > 0) {
+        const inactiveWorkerNames = inactiveWorkers
+          .map(workerId => workers.find(w => w.id === workerId)?.name || `Worker ${workerId}`)
+          .filter(name => name)
+          .join(', ');
+        
+        setError(`Cannot assign inactive workers: ${inactiveWorkerNames}. Please select active workers.`);
+        setLoading(false);
+        return;
+      }
+      
+      console.log('Pre-validation passed. Proceeding with worker assignment...');
+      
       // Create consistent worker assignment payload
-      const workers = selectedWorkers.map(workerId => ({
-        worker_id: workerId,
-        role: 'primary',
-        assigned_at: new Date().toISOString()
-      }));
+      const workers = selectedWorkers.map(workerId => {
+        const worker = workers.find(w => w.id === workerId);
+        return {
+          worker_id: workerId,
+          role: 'primary',
+          assigned_at: new Date().toISOString(),
+          worker_name: worker?.name || `Worker ${workerId}`
+        };
+      });
       
       // Retry mechanism for failed assignments
       const assignWithRetry = async (maxRetries = 3) => {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
-            return await apiPost(API_ENDPOINTS.BOOKING_ASSIGN_WORKERS(booking.id), {
+            console.log(`Assignment attempt ${attempt} of ${maxRetries}`);
+            const result = await apiPost(API_ENDPOINTS.BOOKING_ASSIGN_WORKERS(booking.id), {
               workers
             });
+            console.log('Assignment successful:', result);
+            return result;
           } catch (error) {
+            console.error(`Assignment attempt ${attempt} failed:`, error);
             if (attempt === maxRetries) throw error;
             // Exponential backoff: 1s, 2s, 4s
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
@@ -1502,17 +1670,32 @@ const Bookings = () => {
       }
       return true;
     });
-    // Sort bookings for manager/admin queue view - prioritize by payment status and queue priority
+    // Sort bookings - prioritize today's bookings first, then by payment status and queue priority
     return filtered.sort((a, b) => {
+      const now = new Date();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      
+      const aDate = new Date(a.scheduled_time);
+      const bDate = new Date(b.scheduled_time);
+      
+      // Priority 1: Today's bookings first
+      const aIsToday = aDate >= startOfDay && aDate < endOfDay;
+      const bIsToday = bDate >= startOfDay && bDate < endOfDay;
+      
+      if (aIsToday && !bIsToday) return -1;
+      if (!aIsToday && bIsToday) return 1;
+      
+      // Priority 2: Payment status (unpaid first)
       if (a.payment_status !== 'completed' && b.payment_status === 'completed') return -1;
       if (a.payment_status === 'completed' && b.payment_status !== 'completed') return 1;
      
-      // Priority 2: Queue priority (1 = highest, 3 = lowest)
+      // Priority 3: Queue priority (1 = highest, 3 = lowest)
       if (a.queue_priority !== b.queue_priority) {
         return a.queue_priority - b.queue_priority;
       }
      
-      // Priority 3: Scheduled time - earlier bookings first
+      // Priority 4: Scheduled time - earlier bookings first
       return new Date(a.scheduled_time) - new Date(b.scheduled_time);
     });
   }, [bookings, searchTerm, statusFilter, customerTypeFilter, dateFilter]);
