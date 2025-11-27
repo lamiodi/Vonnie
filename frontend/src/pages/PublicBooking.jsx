@@ -39,15 +39,44 @@ const PublicBooking = () => {
 
   const buildBookingInfo = (override = {}) => {
     const baseServiceName = selectedServices.map(s => s.name).join(', ');
+    
+    // Format date and time for display
+    const formatDateForDisplay = (date) => {
+      if (!date) return null;
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'long', 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      });
+    };
+    
+    const formatTimeForDisplay = (time) => {
+      if (!time) return null;
+      if (typeof time === 'string') {
+        // If it's already a formatted time string, return as is
+        if (time.includes(':')) return time;
+        // If it's a time string without formatting, try to format it
+        const [hours, minutes] = time.split(':');
+        if (hours && minutes) {
+          const hourNum = parseInt(hours);
+          const period = hourNum >= 12 ? 'PM' : 'AM';
+          const displayHour = hourNum % 12 || 12;
+          return `${displayHour}:${minutes} ${period}`;
+        }
+      }
+      return time;
+    };
+    
     const base = {
       booking_number: 'Generating...',
       customer_name: formData.customer_name || 'Unknown Customer',
       customer_email: formData.customer_email || '',
       customer_phone: formData.customer_phone || '',
       service_name: baseServiceName || 'Unknown Service',
-      booking_date: formData.booking_date,
-      booking_time: formData.booking_time,
-      duration: totalDuration || 0,
+      booking_date: formatDateForDisplay(formData.booking_date),
+      booking_time: formatTimeForDisplay(formData.booking_time),
+      duration: totalDuration ? `${totalDuration} minutes` : 'Duration to be confirmed',
       total_amount: totalPrice || 0,
       status: 'scheduled',
       payment_status: 'pending',
