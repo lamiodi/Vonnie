@@ -56,10 +56,23 @@ const BookingConfirmation = () => {
   };
 
   const formatCurrency = (amount) => {
+    // Handle null, undefined, NaN, or invalid amounts
+    if (amount === null || amount === undefined || isNaN(amount) || amount === '') {
+      return '₦0';
+    }
+    
+    // Convert to number if it's a string
+    const numericAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+    
+    // Check again if it's NaN after conversion
+    if (isNaN(numericAmount)) {
+      return '₦0';
+    }
+    
     const formatted = new Intl.NumberFormat('en-NG', {
       style: 'currency',
       currency: 'NGN'
-    }).format(amount);
+    }).format(numericAmount);
     
     return formatted.replace(/\.00$/, '');
   };
@@ -139,57 +152,73 @@ const BookingConfirmation = () => {
           {/* Booking Number */}
           <div className="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-6 mb-6">
             <div className="text-center">
-              <p className="text-sm text-gray-600 mb-2">Your Booking Number</p>
-              <div className="text-3xl font-bold text-purple-600 mb-2 font-mono tracking-wider">
-                {bookingData.booking_number}
+                <p className="text-sm text-gray-600 mb-2">Your Booking Number</p>
+                <div className="text-3xl font-bold text-purple-600 mb-2 font-mono tracking-wider">
+                  {bookingData.booking_number || 'Generating...'}
+                </div>
+                {bookingData.booking_number && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(bookingData.booking_number);
+                      alert('Booking number copied to clipboard!');
+                    }}
+                    className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
+                  >
+                    Copy Number
+                  </button>
+                )}
               </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(bookingData.booking_number);
-                  alert('Booking number copied to clipboard!');
-                }}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm"
-              >
-                Copy Number
-              </button>
-            </div>
           </div>
 
           {/* Rest of the booking details... */}
           <div className="space-y-4">
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Service:</span>
-              <span className="text-gray-800 font-semibold">{bookingData.service_name}</span>
+              <span className="text-gray-800 font-semibold">
+                {bookingData.service_name || 'Service to be confirmed'}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Date:</span>
-              <span className="text-gray-800 font-semibold">{formatDate(bookingData.booking_date)}</span>
+              <span className="text-gray-800 font-semibold">
+                {formatDate(bookingData.booking_date)}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Time:</span>
-              <span className="text-gray-800 font-semibold">{formatTime(bookingData.booking_time)}</span>
+              <span className="text-gray-800 font-semibold">
+                {formatTime(bookingData.booking_time)}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Duration:</span>
-              <span className="text-gray-800 font-semibold">{bookingData.duration} minutes</span>
+              <span className="text-gray-800 font-semibold">
+                {bookingData.duration ? `${bookingData.duration} minutes` : 'Duration to be confirmed'}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Customer Name:</span>
-              <span className="text-gray-800 font-semibold">{bookingData.customer_name}</span>
+              <span className="text-gray-800 font-semibold">
+                {bookingData.customer_name || 'Name not provided'}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Email:</span>
-              <span className="text-gray-800 font-semibold">{bookingData.customer_email}</span>
+              <span className="text-gray-800 font-semibold">
+                {bookingData.customer_email || 'Email not provided'}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Phone:</span>
-              <span className="text-gray-800 font-semibold">{bookingData.customer_phone}</span>
+              <span className="text-gray-800 font-semibold">
+                {bookingData.customer_phone || 'Phone not provided'}
+              </span>
             </div>
             
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
@@ -202,7 +231,10 @@ const BookingConfirmation = () => {
                 bookingData.status === 'cancelled' ? 'bg-red-100 text-red-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {bookingData.status?.charAt(0).toUpperCase() + bookingData.status?.slice(1)}
+                {bookingData.status ? 
+                  bookingData.status.charAt(0).toUpperCase() + bookingData.status.slice(1) : 
+                  'Status pending'
+                }
               </span>
             </div>
             
@@ -216,7 +248,10 @@ const BookingConfirmation = () => {
                   bookingData.payment_status === 'refunded' ? 'bg-blue-100 text-blue-800' :
                   'bg-gray-100 text-gray-800'
                 }`}>
-                  {bookingData.payment_status?.charAt(0).toUpperCase() + bookingData.payment_status?.slice(1)}
+                  {bookingData.payment_status ? 
+                    bookingData.payment_status.charAt(0).toUpperCase() + bookingData.payment_status.slice(1) : 
+                    'Payment status unknown'
+                  }
                 </span>
               </div>
             )}
@@ -230,7 +265,9 @@ const BookingConfirmation = () => {
             
             <div className="flex justify-between items-center py-3">
               <span className="text-gray-600 font-medium">Total Amount:</span>
-              <span className="text-2xl font-bold text-purple-600">{formatCurrency(bookingData.total_amount)}</span>
+              <span className="text-2xl font-bold text-purple-600">
+                {formatCurrency(bookingData.total_amount)}
+              </span>
             </div>
           </div>
         </div>

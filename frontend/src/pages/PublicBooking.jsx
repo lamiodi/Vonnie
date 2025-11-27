@@ -341,22 +341,28 @@ const PublicBooking = () => {
       console.log('Sending booking data to backend:', JSON.stringify(bookingData, null, 2));
 
       const response = await axios.post(endpoints.createBooking, bookingData);
-      setBookingResponse(response.data);
-      console.log('Booking created successfully:', response.data);
+      const serverBookingData = response.data;
+      setBookingResponse(serverBookingData);
+      console.log('Booking created successfully:', serverBookingData);
 
+      // Use the server response data which includes booking_number and proper structure
       const bookingInfo = {
-        customer_name: formData.customer_name,
-        customer_email: formData.customer_email,
-        customer_phone: formData.customer_phone,
-        service_name: selectedServices.map(s => s.name).join(', '),
-        booking_date: formData.booking_date,
-        booking_time: formData.booking_time,
-        duration: totalDuration,
-        total_amount: totalPrice,
-        status: 'scheduled',
-        payment_status: 'pending',
-        notes: formData.notes
+        booking_number: serverBookingData.booking_number || serverBookingData.bookingNumber,
+        customer_name: serverBookingData.customer_name || formData.customer_name,
+        customer_email: serverBookingData.customer_email || formData.customer_email,
+        customer_phone: serverBookingData.customer_phone || formData.customer_phone,
+        service_name: serverBookingData.services ? 
+          serverBookingData.services.map(s => s.name).join(', ') : 
+          selectedServices.map(s => s.name).join(', '),
+        booking_date: serverBookingData.scheduled_time || formData.booking_date,
+        booking_time: serverBookingData.scheduled_time || formData.booking_time,
+        duration: serverBookingData.duration || totalDuration,
+        total_amount: serverBookingData.total_amount || serverBookingData.totalAmount || totalPrice,
+        status: serverBookingData.status || 'scheduled',
+        payment_status: serverBookingData.payment_status || serverBookingData.paymentStatus || 'pending',
+        notes: serverBookingData.notes || formData.notes
       };
+      
       // Use state instead of localStorage - server handles booking number generation
       setBookingResponse(bookingInfo);
       console.log('Saved booking data to state:', bookingInfo);
