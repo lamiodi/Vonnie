@@ -30,6 +30,7 @@ const PublicBooking = () => {
   const [bookingResponse, setBookingResponse] = useState(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const hasNavigatedRef = useRef(false);
+  const slotsControllerRef = useRef(null);
 
   const endpoints = {
     services: '/api/public/services',
@@ -279,14 +280,21 @@ const PublicBooking = () => {
   };
 
   const fetchAvailableSlots = async () => {
+    if (slotsControllerRef.current) {
+      try { slotsControllerRef.current.abort(); } catch (e) {}
+    }
     setSlotsLoading(true);
     setSlotsError(null);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller) {
+      slotsControllerRef.current = controller;
+    }
 
     try {
       const dateStr = new Date(formData.booking_date).toISOString().split('T')[0];
       const serviceIds = selectedServices.map(s => s.id);
       const url = `${endpoints.availableSlots}?date=${dateStr}&service_ids=${serviceIds.join(',')}`;
-      const response = await axios.get(url);
+      const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
 
       console.log('Available slots API response:', response.data);
       
@@ -326,6 +334,7 @@ const PublicBooking = () => {
       setAvailableSlots([]);
     } finally {
       setSlotsLoading(false);
+      slotsControllerRef.current = null;
     }
   };
 
@@ -829,7 +838,40 @@ const handlePaymentClose = () => {
                 </div>
               </div>
               
-              {availableSlots.length > 0 ? (
+              {slotsLoading ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+                    <svg className="w-10 h-10 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading available time slots...</h3>
+                  <p className="text-sm text-gray-500">This may take a moment</p>
+                  <div className="mt-4 w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                  </div>
+                </div>
+              ) : slotsError ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">{slotsError}</h3>
+                  <div className="flex justify-center mt-4">
+                    <button
+                      onClick={fetchAvailableSlots}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                      </svg>
+                      Refresh Times
+                    </button>
+                  </div>
+                </div>
+              ) : availableSlots.length > 0 ? (
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {availableSlots.map(slot => (
@@ -837,7 +879,6 @@ const handlePaymentClose = () => {
                         key={slot}
                         onClick={() => {
                           console.log('Selected time slot:', slot);
-                          // Since slots are now normalized to HH:mm format, use directly
                           setFormData(prev => ({ ...prev, booking_time: slot }));
                         }}
                         className={`p-4 rounded-xl text-center font-medium transition-all duration-300 transform hover:scale-105 ${
@@ -851,7 +892,6 @@ const handlePaymentClose = () => {
                       </button>
                     ))}
                   </div>
-                  
                   <div className="flex justify-center">
                     <button
                       onClick={fetchAvailableSlots}
@@ -866,15 +906,23 @@ const handlePaymentClose = () => {
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                    <svg className="w-10 h-10 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                    <svg className="w-10 h-10 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10A8 8 0 11.002 10 8 8 0 0118 10zm-8-3a1 1 0 011 1v2a1 1 0 01-2 0V8a1 1 0 011-1zm1 7a1 1 0 10-2 0 1 1 0 002 0z" clipRule="evenodd" />
                     </svg>
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading available time slots...</h3>
-                  <p className="text-sm text-gray-500">This may take a moment</p>
-                  <div className="mt-4 w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse" style={{width: '60%'}}></div>
+                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No available time slots for this date</h3>
+                  <p className="text-sm text-gray-500">Try selecting another date or different services</p>
+                  <div className="flex justify-center mt-4">
+                    <button
+                      onClick={fetchAvailableSlots}
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                      </svg>
+                      Refresh Times
+                    </button>
                   </div>
                 </div>
               )}
