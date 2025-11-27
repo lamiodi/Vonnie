@@ -25,12 +25,13 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
         b.booking_number,
         b.scheduled_time,
         b.status,
+        b.duration,
         u.name as worker_name,
         u.id as worker_id,
         CASE 
-          WHEN b.scheduled_time <= $1 AND b.scheduled_time + interval '1 hour' > $1 THEN 'starts_during'
-          WHEN b.scheduled_time < $2 AND b.scheduled_time + interval '1 hour' >= $2 THEN 'ends_during'
-          WHEN b.scheduled_time >= $1 AND b.scheduled_time + interval '1 hour' <= $2 THEN 'completely_overlaps'
+          WHEN b.scheduled_time <= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $1 THEN 'starts_during'
+          WHEN b.scheduled_time < $2 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') >= $2 THEN 'ends_during'
+          WHEN b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2 THEN 'completely_overlaps'
           ELSE 'adjacent'
         END as conflict_type
       FROM bookings b
@@ -38,9 +39,9 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
       LEFT JOIN users u ON bw.worker_id = u.id
       WHERE b.status IN ('scheduled', 'in-progress', 'confirmed')
         AND (
-          (b.scheduled_time <= $1 AND b.scheduled_time + interval '1 hour' > $1) OR
-          (b.scheduled_time < $2 AND b.scheduled_time + interval '1 hour' >= $2) OR
-          (b.scheduled_time >= $1 AND b.scheduled_time + interval '1 hour' <= $2)
+          (b.scheduled_time <= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $1) OR
+          (b.scheduled_time < $2 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') >= $2) OR
+          (b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2)
         )
     `;
     

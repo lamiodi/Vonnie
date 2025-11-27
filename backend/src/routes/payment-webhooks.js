@@ -5,18 +5,15 @@ import { successResponse, errorResponse } from '../utils/apiResponse.js';
 
 const router = express.Router();
 
-// Verify Paystack signature
 const verifyPaystackSignature = (req, secret) => {
   const hash = crypto
     .createHmac('sha512', secret)
-    .update(JSON.stringify(req.body))
+    .update(req.body) // req.body is Buffer when using express.raw
     .digest('hex');
-  
   return hash === req.headers['x-paystack-signature'];
 };
 
-// Paystack webhook handler
-router.post('/paystack-webhook', express.json({ type: 'application/json' }), async (req, res) => {
+router.post('/paystack-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
     
@@ -26,8 +23,8 @@ router.post('/paystack-webhook', express.json({ type: 'application/json' }), asy
       return res.status(401).json(errorResponse('Invalid signature', 'INVALID_SIGNATURE', 401));
     }
 
-    const event = req.body;
-    console.log('Paystack webhook received:', event.event, event.data.reference);
+    const event = JSON.parse(req.body.toString('utf8'));
+    console.log('Paystack webhook received:', event.event, event.data?.reference);
 
     // Handle different event types
     switch (event.event) {
@@ -70,8 +67,8 @@ async function handleSuccessfulCharge(data) {
            payment_method = 'paystack',
            payment_reference = $1,
            payment_date = NOW(),
-           payment_updated_at = NOW()
-       WHERE id = $2 AND payment_status = 'pending'
+           updated_at = NOW()
+       WHERE id = $2 AND payment_status != 'completed'
        RETURNING id, status, customer_type, scheduled_time`,
       [reference, metadata?.booking_id]
     );

@@ -179,7 +179,7 @@ router.post('/confirm-payment/:bookingId', authenticate, checkManagerRole, async
 
         // Step 8: Send confirmation notifications (async - don't fail the transaction if notifications fail)
         try {
-            await sendPaymentConfirmationNotifications(client, bookingId, newPaymentStatus, managerFullName);
+            await sendPaymentConfirmationNotifications(client, bookingId, newPaymentStatus, managerFullName, paymentMethod);
         } catch (notificationError) {
             console.error('Notification sending failed:', notificationError);
             // Don't rollback the transaction for notification failures
@@ -380,7 +380,7 @@ async function updateInventoryForConfirmedPayment(client, bookingId, managerId, 
 /**
  * Helper function to send payment confirmation notifications
  */
-async function sendPaymentConfirmationNotifications(client, bookingId, paymentStatus, managerName) {
+async function sendPaymentConfirmationNotifications(client, bookingId, paymentStatus, managerName, paymentMethod) {
     try {
         // Get booking details with customer info
         const bookingQuery = `

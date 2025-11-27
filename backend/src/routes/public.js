@@ -102,11 +102,12 @@ router.get('/bookings/available-slots', async (req, res) => {
     const totalDuration = parseInt(serviceResult.rows[0].total_duration);
 
     // Get existing bookings for the worker on the specified date
-    // If worker_id is empty, get bookings for all workers to find common available slots
+    // If worker_id is empty, get bookings for all workers to find slots where at least one worker is free
     let bookingsResult;
+    let workerIds = [];
     if (worker_id && worker_id !== '') {
       bookingsResult = await query(
-        `SELECT b.scheduled_time, bw.worker_id 
+        `SELECT b.scheduled_time, b.duration, bw.worker_id 
          FROM bookings b
          JOIN booking_workers bw ON b.id = bw.booking_id
          WHERE bw.worker_id = $1 
@@ -114,20 +115,21 @@ router.get('/bookings/available-slots', async (req, res) => {
          AND b.status IN ('scheduled', 'in-progress')`,
         [worker_id, date]
       );
+      workerIds = [worker_id];
     } else {
       // Get all workers to check availability across all of them
       const workersResult = await query(
         `SELECT id FROM users 
          WHERE role IN ('staff', 'manager') AND is_active = true`
       );
-      const workerIds = workersResult.rows.map(row => row.id);
+      workerIds = workersResult.rows.map(row => row.id);
       
       if (workerIds.length === 0) {
         return res.status(404).json(errorResponse('No available workers found', 'NO_AVAILABLE_WORKERS', 404));
       }
       
       bookingsResult = await query(
-        `SELECT b.scheduled_time, bw.worker_id 
+        `SELECT b.scheduled_time, b.duration, bw.worker_id 
          FROM bookings b
          JOIN booking_workers bw ON b.id = bw.booking_id
          WHERE bw.worker_id = ANY($1) 
@@ -137,7 +139,16 @@ router.get('/bookings/available-slots', async (req, res) => {
       );
     }
 
-    const bookedSlots = bookingsResult.rows.map(row => new Date(row.scheduled_time));
+    const bookingsByWorker = {};
+    bookingsResult.rows.forEach(row => {
+      const wid = row.worker_id;
+      const dur = parseInt(row.duration || 60);
+      if (!bookingsByWorker[wid]) bookingsByWorker[wid] = [];
+      bookingsByWorker[wid].push({
+        start: new Date(row.scheduled_time),
+        duration: dur
+      });
+    });
 
     // Generate available slots (9 AM to 6 PM, 30-minute intervals)
     const availableSlots = [];
@@ -151,28 +162,41 @@ router.get('/bookings/available-slots', async (req, res) => {
     // Create date objects for comparison (without time portion)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(date);
-    selectedDate.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(`${date}T00:00:00`);
     
     const isToday = today.getTime() === selectedDate.getTime();
 
+    const pad = (n) => String(n).padStart(2, '0');
+    const overlaps = (slotStart, slotDuration, bookedStart, bookedDuration) => {
+      const slotEnd = new Date(slotStart.getTime() + slotDuration * 60000);
+      const bookedEnd = new Date(bookedStart.getTime() + bookedDuration * 60000);
+      return (slotStart < bookedEnd && slotEnd > bookedStart);
+    };
+
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
-        const slotTime = new Date(date);
-        slotTime.setHours(hour, minute, 0, 0);
+        const slotTime = new Date(`${date}T${pad(hour)}:${pad(minute)}:00`);
         
         // Skip past times for current day - only show future times
         if (isToday && slotTime < now) {
           continue;
         }
         
-        // Check if this slot conflicts with existing bookings
-        const isAvailable = !bookedSlots.some(bookedTime => {
-          const bookedEnd = new Date(bookedTime.getTime() + totalDuration * 60000);
-          const slotEnd = new Date(slotTime.getTime() + totalDuration * 60000);
-          
-          return (slotTime < bookedEnd && slotEnd > bookedTime);
-        });
+        const slotEndForBusinessHours = new Date(slotTime.getTime() + totalDuration * 60000);
+        if (slotEndForBusinessHours.getHours() > endHour || (slotEndForBusinessHours.getHours() === endHour && slotEndForBusinessHours.getMinutes() > 0)) {
+          continue;
+        }
+
+        let isAvailable = false;
+        if (worker_id && worker_id !== '') {
+          const bookings = bookingsByWorker[worker_id] || [];
+          isAvailable = !bookings.some(b => overlaps(slotTime, totalDuration, b.start, b.duration));
+        } else {
+          isAvailable = workerIds.some(wid => {
+            const bookings = bookingsByWorker[wid] || [];
+            return !bookings.some(b => overlaps(slotTime, totalDuration, b.start, b.duration));
+          });
+        }
 
         if (isAvailable) {
           availableSlots.push(slotTime.toISOString());
@@ -416,7 +440,7 @@ Vonne X2X Team`
         res.json({ 
           success: true, 
           message: 'Payment verified and booking updated',
-          data: response.data.data 
+          data: verificationResult.data 
         });
       } else {
         // Booking not found with the extracted booking number
@@ -437,7 +461,7 @@ Vonne X2X Team`
           res.json({ 
             success: true, 
             message: 'Payment already processed',
-            data: response.data.data 
+            data: verificationResult.data 
           });
         } else {
           // No booking found at all
@@ -453,7 +477,7 @@ Vonne X2X Team`
       res.status(400).json({ 
         success: false, 
         error: 'Payment verification failed',
-        data: response.data.data 
+        data: verificationResult.data 
       });
     }
     
