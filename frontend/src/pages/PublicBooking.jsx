@@ -37,6 +37,57 @@ const PublicBooking = () => {
     createBooking: '/api/public/bookings'
   };
 
+  const buildBookingInfo = (override = {}) => {
+    const baseServiceName = selectedServices.map(s => s.name).join(', ');
+    const base = {
+      booking_number: 'Generating...',
+      customer_name: formData.customer_name || 'Unknown Customer',
+      customer_email: formData.customer_email || '',
+      customer_phone: formData.customer_phone || '',
+      service_name: baseServiceName || 'Unknown Service',
+      booking_date: formData.booking_date,
+      booking_time: formData.booking_time,
+      duration: totalDuration || 0,
+      total_amount: totalPrice || 0,
+      status: 'scheduled',
+      payment_status: 'pending',
+      notes: formData.notes || ''
+    };
+
+    let info = { ...base };
+
+    if (bookingResponse) {
+      const scheduled = bookingResponse.scheduled_time || bookingResponse.booking_date || null;
+      const timeVal = bookingResponse.booking_time || scheduled || base.booking_time;
+      const srvName = bookingResponse.service_name || (Array.isArray(bookingResponse.services) ? bookingResponse.services.map(s => s.name).join(', ') : base.service_name);
+      const amt = typeof bookingResponse.total_amount === 'string' ? parseFloat(bookingResponse.total_amount) : bookingResponse.total_amount;
+      const dur = typeof bookingResponse.duration === 'string' ? parseInt(bookingResponse.duration) : bookingResponse.duration;
+      info = {
+        ...info,
+        ...bookingResponse,
+        booking_number: bookingResponse.booking_number || info.booking_number,
+        service_name: srvName || info.service_name,
+        booking_date: scheduled || info.booking_date,
+        booking_time: timeVal || info.booking_time,
+        total_amount: !isNaN(amt) && amt !== undefined ? amt : info.total_amount,
+        duration: !isNaN(dur) && dur !== undefined ? dur : info.duration,
+        status: bookingResponse.status || info.status
+      };
+    }
+
+    if (override && typeof override === 'object') {
+      info = { ...info, ...override };
+    }
+
+    if (!info.service_name) info.service_name = base.service_name;
+    if (!info.total_amount || isNaN(Number(info.total_amount))) info.total_amount = base.total_amount;
+    if (!info.duration || isNaN(Number(info.duration))) info.duration = base.duration;
+    if (!info.status || info.status === 'NaN') info.status = 'scheduled';
+    if (override && override.payment_status === 'completed') info.payment_status = 'completed';
+
+    return info;
+  };
+
 
 
   // Service images mapping
@@ -80,20 +131,15 @@ const PublicBooking = () => {
       console.log('Event origin:', origin);
       console.log('Message type:', raw?.type);
 
-      // Case 1: Our custom message posted from PaystackPayment onSuccess
       if (raw?.type === 'PAYMENT_SUCCESS') {
-        console.log('Custom PAYMENT_SUCCESS message:', raw.bookingData);
         if (hasNavigatedRef.current) {
-          console.log('Navigation already performed; ignoring duplicate message');
           return;
         }
         hasNavigatedRef.current = true;
+        const composed = buildBookingInfo({ ...(raw.bookingData || {}), payment_status: 'completed' });
         try {
-          navigate('/booking-confirmation', { state: { bookingData: raw.bookingData } });
-          console.log('Navigated via custom PAYMENT_SUCCESS');
-        } catch (error) {
-          console.error('Error navigating via custom message:', error);
-        }
+          navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
+        } catch (error) {}
         return;
       }
 
@@ -117,21 +163,14 @@ const PublicBooking = () => {
         );
 
         if (isSuccess) {
-          console.log('Detected Paystack success message:', dataObj);
           if (hasNavigatedRef.current) {
-            console.log('Navigation already performed; ignoring duplicate Paystack success');
             return;
           }
           hasNavigatedRef.current = true;
+          const composed = buildBookingInfo({ payment_status: 'completed' });
           try {
-            // Use bookingResponse state instead of localStorage
-            let bookingData = bookingResponse || {};
-            bookingData.payment_status = 'completed';
-            navigate('/booking-confirmation', { state: { bookingData } });
-            console.log('Navigated via Paystack success message');
-          } catch (error) {
-            console.error('Error navigating via Paystack message:', error);
-          }
+            navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
+          } catch (error) {}
         }
       }
     };
@@ -405,141 +444,30 @@ const PublicBooking = () => {
   };
 
   const handlePaymentSuccess = async (result) => {
-    // result may be a plain reference string or an object { reference, bookingData }
-    const txRef = typeof result === 'string' ? result : result?.reference;
-    console.log('Payment successful with reference:', txRef);
+    const txRef = typeof result === 'string' ? result : (result && result.reference);
     setPaymentCompleted(true);
-
-    // Use bookingResponse state instead of localStorage
-    let bookingInfo;
-
-    if (!bookingResponse) {
-      console.log('No booking response available, creating fallback');
-      bookingInfo = {
-        booking_number: 'UNKNOWN',
-        customer_name: formData.customer_name || 'Unknown Customer',
-        customer_email: formData.customer_email || '',
-        customer_phone: formData.customer_phone || '',
-        service_name: selectedServices.map(s => s.name).join(', ') || 'Unknown Service',
-        booking_date: formData.booking_date,
-        booking_time: formData.booking_time,
-        duration: totalDuration,
-        total_amount: totalPrice,
-        status: 'scheduled',
-        payment_status: 'completed',
-        notes: formData.notes || ''
-      };
-    } else {
-      // Use the properly structured bookingResponse from handleSubmit
-      bookingInfo = { 
-        ...bookingResponse,
-        // Ensure critical fields are always present
-        booking_number: bookingResponse.booking_number || 'UNKNOWN',
-        total_amount: bookingResponse.total_amount || totalPrice,
-        service_name: bookingResponse.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service',
-        duration: bookingResponse.duration || totalDuration
-      };
-    }
-
-    // If Paystack component provided bookingData, prefer merging it
-    if (result && typeof result === 'object' && result.bookingData) {
-      bookingInfo = { ...bookingInfo, ...result.bookingData };
-    }
-
-    // Ensure payment_status is set to completed
-    bookingInfo.payment_status = 'completed';
-    
-    // Ensure we have all required fields with proper values
-    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice || 0;
-    bookingInfo.booking_number = bookingInfo.booking_number || 'UNKNOWN';
-    bookingInfo.service_name = bookingInfo.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service';
-    bookingInfo.duration = bookingInfo.duration || totalDuration || 0;
-    
-    console.log('Updated booking info with payment status:', bookingInfo);
-    console.log('Booking info being sent to confirmation page:', {
-      booking_number: bookingInfo.booking_number,
-      total_amount: bookingInfo.total_amount,
-      customer_name: bookingInfo.customer_name,
-      customer_email: bookingInfo.customer_email,
-      customer_phone: bookingInfo.customer_phone,
-      booking_date: bookingInfo.booking_date,
-      booking_time: bookingInfo.booking_time,
-      service_name: bookingInfo.service_name,
-      duration: bookingInfo.duration,
-      status: bookingInfo.status,
-      payment_status: bookingInfo.payment_status
-    });
-
+    const override = result && typeof result === 'object' ? (result.bookingData || {}) : {};
+    const bookingInfo = buildBookingInfo({ ...override, payment_status: 'completed' });
     try {
       await axios.post('/api/public/payment/verify', { reference: txRef });
-      console.log('Payment verification successful');
-    } catch (verifyError) {
-      console.error('Payment verification failed:', verifyError);
+    } catch (verifyError) {}
+    if (hasNavigatedRef.current) {
+      return;
     }
-
-    // Removed localStorage dependency - booking data is managed through state
-    console.log('Payment completed, booking data managed through state');
-    
-    // Always navigate directly to ensure booking data is passed
-    // The message listener is a backup but direct navigation is more reliable
-    console.log('About to navigate to booking-confirmation with state:', { bookingData: bookingInfo });
+    hasNavigatedRef.current = true;
     navigate('/booking-confirmation', {
-      state: { 
-        bookingData: bookingInfo,
-        paymentCompleted: true 
-      }
+      state: { bookingData: bookingInfo, paymentCompleted: true }
     });
   };
 
 const handlePaymentClose = () => {
-    console.log('Payment cancelled or closed');
     handleError(null, 'Payment was cancelled. Your booking is pending payment.');
-
-    // Use bookingResponse state instead of localStorage
-    let bookingInfo;
-
-    if (!bookingResponse) {
-      console.log('No booking response available, creating fallback');
-      bookingInfo = {
-        booking_number: 'UNKNOWN',
-        customer_name: formData.customer_name || 'Unknown Customer',
-        customer_email: formData.customer_email || '',
-        customer_phone: formData.customer_phone || '',
-        service_name: selectedServices.map(s => s.name).join(', ') || 'Unknown Service',
-        booking_date: formData.booking_date,
-        booking_time: formData.booking_time,
-        duration: totalDuration,
-        total_amount: totalPrice,
-        status: 'scheduled',
-        payment_status: 'pending',
-        notes: formData.notes || ''
-      };
-    } else {
-      // Use the properly structured bookingResponse from handleSubmit
-      bookingInfo = { ...bookingResponse };
-    }
-
-    // Ensure payment_status is set to pending
-    bookingInfo.payment_status = 'pending';
-    
-    // Ensure we have all required fields with proper values
-    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice;
-    bookingInfo.booking_number = bookingInfo.booking_number || 'UNKNOWN';
-    bookingInfo.service_name = bookingInfo.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service';
-    bookingInfo.duration = bookingInfo.duration || totalDuration;
-
-    // Removed localStorage dependency - booking data managed through state
-    console.log('Payment cancelled, booking data managed through state');
-    
     if (hasNavigatedRef.current) {
-      console.log('Navigation already performed; skipping close navigation');
       return;
     }
     hasNavigatedRef.current = true;
-    console.log('About to navigate to booking-confirmation with state:', { bookingData: bookingInfo });
-    navigate('/booking-confirmation', {
-      state: { bookingData: bookingInfo }
-    });
+    const bookingInfo = buildBookingInfo({ payment_status: 'pending' });
+    navigate('/booking-confirmation', { state: { bookingData: bookingInfo } });
   };
 
   const nextStep = () => {

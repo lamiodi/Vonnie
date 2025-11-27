@@ -320,3 +320,25 @@ CREATE TABLE public.webhook_endpoints (
   updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT webhook_endpoints_pkey PRIMARY KEY (id)
 );
+
+-- Add missing columns to pos_transactions table for POS API functionality
+ALTER TABLE public.pos_transactions 
+ADD COLUMN IF NOT EXISTS payment_status character varying DEFAULT 'pending'::character varying 
+CHECK (payment_status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text]));
+
+ALTER TABLE public.pos_transactions 
+ADD COLUMN IF NOT EXISTS status character varying DEFAULT 'pending'::character varying 
+CHECK (status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'cancelled'::text]));
+
+ALTER TABLE public.pos_transactions 
+ADD COLUMN IF NOT EXISTS booking_id uuid 
+CONSTRAINT pos_transactions_booking_id_fkey REFERENCES public.bookings(id);
+
+ALTER TABLE public.pos_transactions 
+ADD COLUMN IF NOT EXISTS payment_reference character varying;
+
+-- Create indexes for better performance
+CREATE INDEX IF NOT EXISTS idx_pos_transactions_payment_status ON public.pos_transactions(payment_status);
+CREATE INDEX IF NOT EXISTS idx_pos_transactions_status ON public.pos_transactions(status);
+CREATE INDEX IF NOT EXISTS idx_pos_transactions_booking_id ON public.pos_transactions(booking_id);
+CREATE INDEX IF NOT EXISTS idx_pos_transactions_payment_reference ON public.pos_transactions(payment_reference);
