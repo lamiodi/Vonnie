@@ -6,6 +6,22 @@ const BookingConfirmation = () => {
   const bookingData = location.state?.bookingData;
   const paymentCompleted = location.state?.paymentCompleted || false;
 
+  console.log('BookingConfirmation received data:', bookingData);
+  console.log('BookingConfirmation received paymentCompleted:', paymentCompleted);
+  console.log('Booking data structure:', {
+    booking_number: bookingData?.booking_number,
+    total_amount: bookingData?.total_amount,
+    customer_name: bookingData?.customer_name,
+    customer_email: bookingData?.customer_email,
+    customer_phone: bookingData?.customer_phone,
+    booking_date: bookingData?.booking_date,
+    booking_time: bookingData?.booking_time,
+    service_name: bookingData?.service_name,
+    duration: bookingData?.duration,
+    status: bookingData?.status,
+    payment_status: bookingData?.payment_status
+  });
+
   if (!bookingData) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 flex items-center justify-center p-4">

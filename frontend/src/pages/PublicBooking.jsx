@@ -341,27 +341,38 @@ const PublicBooking = () => {
       console.log('Sending booking data to backend:', JSON.stringify(bookingData, null, 2));
 
       const response = await axios.post(endpoints.createBooking, bookingData);
-      const serverBookingData = response.data;
-      setBookingResponse(serverBookingData);
-      console.log('Booking created successfully:', serverBookingData);
+        const serverBookingData = response.data;
+        setBookingResponse(serverBookingData);
+        console.log('Booking created successfully:', serverBookingData);
+        console.log('Server booking data structure:', {
+          booking_number: serverBookingData.booking_number,
+          total_amount: serverBookingData.total_amount,
+          customer_name: serverBookingData.customer_name,
+          customer_email: serverBookingData.customer_email,
+          customer_phone: serverBookingData.customer_phone,
+          scheduled_time: serverBookingData.scheduled_time,
+          status: serverBookingData.status,
+          payment_status: serverBookingData.payment_status,
+          services: serverBookingData.services
+        });
 
       // Use the server response data which includes booking_number and proper structure
-      const bookingInfo = {
-        booking_number: serverBookingData.booking_number || serverBookingData.bookingNumber,
-        customer_name: serverBookingData.customer_name || formData.customer_name,
-        customer_email: serverBookingData.customer_email || formData.customer_email,
-        customer_phone: serverBookingData.customer_phone || formData.customer_phone,
-        service_name: serverBookingData.services ? 
-          serverBookingData.services.map(s => s.name).join(', ') : 
-          selectedServices.map(s => s.name).join(', '),
-        booking_date: serverBookingData.scheduled_time || formData.booking_date,
-        booking_time: serverBookingData.scheduled_time || formData.booking_time,
-        duration: serverBookingData.duration || totalDuration,
-        total_amount: serverBookingData.total_amount || serverBookingData.totalAmount || totalPrice,
-        status: serverBookingData.status || 'scheduled',
-        payment_status: serverBookingData.payment_status || serverBookingData.paymentStatus || 'pending',
-        notes: serverBookingData.notes || formData.notes
-      };
+        const bookingInfo = {
+          booking_number: serverBookingData.booking_number,
+          customer_name: serverBookingData.customer_name,
+          customer_email: serverBookingData.customer_email,
+          customer_phone: serverBookingData.customer_phone,
+          service_name: serverBookingData.services ? 
+            serverBookingData.services.map(s => s.name).join(', ') : 
+            selectedServices.map(s => s.name).join(', '),
+          booking_date: serverBookingData.scheduled_time,
+          booking_time: serverBookingData.scheduled_time,
+          duration: totalDuration,
+          total_amount: serverBookingData.total_amount,
+          status: serverBookingData.status,
+          payment_status: serverBookingData.payment_status,
+          notes: serverBookingData.notes
+        };
       
       // Use state instead of localStorage - server handles booking number generation
       setBookingResponse(bookingInfo);
@@ -419,7 +430,8 @@ const PublicBooking = () => {
         notes: formData.notes || ''
       };
     } else {
-      bookingInfo = bookingResponse;
+      // Use the properly structured bookingResponse from handleSubmit
+      bookingInfo = { ...bookingResponse };
     }
 
     // If Paystack component provided bookingData, prefer merging it
@@ -427,8 +439,29 @@ const PublicBooking = () => {
       bookingInfo = { ...bookingInfo, ...result.bookingData };
     }
 
+    // Ensure payment_status is set to completed
     bookingInfo.payment_status = 'completed';
+    
+    // Ensure we have all required fields with proper values
+    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice;
+    bookingInfo.booking_number = bookingInfo.booking_number || 'UNKNOWN';
+    bookingInfo.service_name = bookingInfo.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service';
+    bookingInfo.duration = bookingInfo.duration || totalDuration;
+    
     console.log('Updated booking info with payment status:', bookingInfo);
+    console.log('Booking info being sent to confirmation page:', {
+      booking_number: bookingInfo.booking_number,
+      total_amount: bookingInfo.total_amount,
+      customer_name: bookingInfo.customer_name,
+      customer_email: bookingInfo.customer_email,
+      customer_phone: bookingInfo.customer_phone,
+      booking_date: bookingInfo.booking_date,
+      booking_time: bookingInfo.booking_time,
+      service_name: bookingInfo.service_name,
+      duration: bookingInfo.duration,
+      status: bookingInfo.status,
+      payment_status: bookingInfo.payment_status
+    });
 
     try {
       await axios.post('/api/public/payment/verify', { reference: txRef });
@@ -475,8 +508,18 @@ const handlePaymentClose = () => {
         notes: formData.notes || ''
       };
     } else {
-      bookingInfo = bookingResponse;
+      // Use the properly structured bookingResponse from handleSubmit
+      bookingInfo = { ...bookingResponse };
     }
+
+    // Ensure payment_status is set to pending
+    bookingInfo.payment_status = 'pending';
+    
+    // Ensure we have all required fields with proper values
+    bookingInfo.total_amount = bookingInfo.total_amount || totalPrice;
+    bookingInfo.booking_number = bookingInfo.booking_number || 'UNKNOWN';
+    bookingInfo.service_name = bookingInfo.service_name || selectedServices.map(s => s.name).join(', ') || 'Unknown Service';
+    bookingInfo.duration = bookingInfo.duration || totalDuration;
 
     // Removed localStorage dependency - booking data managed through state
     console.log('Payment cancelled, booking data managed through state');
