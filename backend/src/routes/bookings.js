@@ -880,14 +880,20 @@ router.get('/available-slots', authenticate, async (req, res) => {
     const start = new Date(`${date}T${start_time}`);
     const end = new Date(`${date}T${end_time}`);
     const now = new Date();
-   
+    
+    // Create date objects for comparison (without time portion)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+    
     let currentTime = new Date(start);
    
     while (currentTime < end) {
       const slotEnd = new Date(currentTime.getTime() + serviceDuration * 60000);
      
       // Skip past times for current day - only show future times
-      const isToday = new Date().toDateString() === currentTime.toDateString();
+      const isToday = today.getTime() === selectedDate.getTime();
       const isPastTime = isToday && currentTime < now;
      
       if (slotEnd <= end && !isPastTime) {

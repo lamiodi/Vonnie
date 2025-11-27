@@ -144,11 +144,27 @@ router.get('/bookings/available-slots', async (req, res) => {
     const startHour = 9;
     const endHour = 18;
     const slotInterval = 30; // minutes
+    
+    // Get current time for filtering past slots
+    const now = new Date();
+    
+    // Create date objects for comparison (without time portion)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+    
+    const isToday = today.getTime() === selectedDate.getTime();
 
     for (let hour = startHour; hour < endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
         const slotTime = new Date(date);
         slotTime.setHours(hour, minute, 0, 0);
+        
+        // Skip past times for current day - only show future times
+        if (isToday && slotTime < now) {
+          continue;
+        }
         
         // Check if this slot conflicts with existing bookings
         const isAvailable = !bookedSlots.some(bookedTime => {
