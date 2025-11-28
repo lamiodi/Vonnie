@@ -156,73 +156,53 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     // Send notifications unless skipped
     if (!skipNotification) {
       try {
-        // Send email confirmation with professional design matching PublicBooking.jsx
+        // Send email confirmation with simplified design using Patrick Hand font
         const bookingConfirmationHtml = `
-          <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-            <!-- Header with gradient matching PublicBooking.jsx -->
-            <div style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); padding: 40px 30px; text-align: center; color: white;">
-              <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; background: linear-gradient(45deg, #ffffff, #f0f0f0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+          <div style="font-family: 'Patrick Hand', cursive; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 15px; overflow: hidden; border: 2px solid #9333ea;">
+            <!-- Simple Header -->
+            <div style="background: #9333ea; padding: 30px 20px; text-align: center; color: white;">
+              <h1 style="margin: 0; font-size: 28px; font-family: 'Patrick Hand', cursive; font-weight: bold;">
                 ✨ Booking Confirmed!
               </h1>
-              <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your beauty experience awaits</p>
-            </div>
-            
-            <!-- Progress steps indicator -->
-            <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
-              <div style="display: flex; justify-content: space-between; align-items: center; max-width: 400px; margin: 0 auto;">
-                <div style="text-align: center;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">✓</div>
-                  <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">Booked</p>
-                </div>
-                <div style="flex: 1; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899); margin: 0 10px;"></div>
-                <div style="text-align: center;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">2</div>
-                  <p style="margin: 0; font-size: 12px; color: #64748b;">Confirmed</p>
-                </div>
-                <div style="flex: 1; height: 2px; background: #e2e8f0; margin: 0 10px;"></div>
-                <div style="text-align: center;">
-                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">3</div>
-                  <p style="margin: 0; font-size: 12px; color: #64748b;">Complete</p>
-                </div>
-              </div>
+              <p style="margin: 8px 0 0 0; font-size: 16px;">Your appointment is booked</p>
             </div>
             
             <!-- Main content -->
-            <div style="padding: 30px;">
-              <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${customer_name}</strong>,</p>
-              <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+            <div style="padding: 25px 20px;">
+              <p style="font-size: 16px; color: #333; margin-bottom: 15px; font-family: 'Patrick Hand', cursive;">Dear <strong style="color: #9333ea;">${customer_name}</strong>,</p>
+              <p style="font-size: 14px; color: #555; line-height: 1.5; margin-bottom: 20px; font-family: 'Patrick Hand', cursive;">
                 Thank you for booking with Vonne X2X! Your appointment has been received and is being prepared for you.
               </p>
               
-              <!-- Service cards matching PublicBooking.jsx styling -->
-              <div style="background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%); border: 2px solid #e879f9; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.1);">
-                <h3 style="color: #9333ea; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #9333ea, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+              <!-- Simple Booking Details -->
+              <div style="background: #f9f5ff; border: 1px solid #e0d4f7; border-radius: 10px; padding: 20px; margin: 20px 0;">
+                <h3 style="color: #9333ea; margin: 0 0 15px 0; font-size: 18px; font-family: 'Patrick Hand', cursive; font-weight: bold;">
                   📋 Your Booking Details
                 </h3>
                 
-                <div style="display: grid; gap: 15px;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
-                    <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
-                    <span style="color: #9333ea; font-weight: bold; font-size: 18px; font-family: monospace;">${bookingNumber}</span>
+                <div style="display: grid; gap: 12px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e0d4f7;">
+                    <span style="font-weight: 600; color: #666; font-family: 'Patrick Hand', cursive;">Booking Number:</span>
+                    <span style="color: #9333ea; font-weight: bold; font-size: 16px; font-family: 'Patrick Hand', cursive;">${bookingNumber}</span>
                   </div>
                   
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ec4899;">
-                    <span style="font-weight: 600; color: #6b7280;">Date & Time:</span>
-                    <span style="color: #1f2937; font-weight: 600;">${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e0d4f7;">
+                    <span style="font-weight: 600; color: #666; font-family: 'Patrick Hand', cursive;">Date & Time:</span>
+                    <span style="color: #333; font-weight: 600; font-family: 'Patrick Hand', cursive;">${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   
-                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
-                    <span style="font-weight: 600; color: #6b7280;">Total Price:</span>
-                    <span style="color: #059669; font-weight: bold; font-size: 18px;">₦${totalPrice.toFixed(2)}</span>
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
+                    <span style="font-weight: 600; color: #666; font-family: 'Patrick Hand', cursive;">Total Price:</span>
+                    <span style="color: #059669; font-weight: bold; font-size: 16px; font-family: 'Patrick Hand', cursive;">₦${totalPrice.toFixed(2)}</span>
                   </div>
                 </div>
                 
-                <!-- Services list -->
-                <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 10px;">
-                  <h4 style="margin: 0 0 15px 0; color: #9333ea; font-size: 16px; font-weight: 600;">Services Included:</h4>
-                  <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                <!-- Simple Services list -->
+                <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 8px;">
+                  <h4 style="margin: 0 0 10px 0; color: #9333ea; font-size: 14px; font-weight: 600; font-family: 'Patrick Hand', cursive;">Services:</h4>
+                  <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                     ${services.map(service => `
-                      <span style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(147, 51, 234, 0.2);">
+                      <span style="background: #9333ea; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-family: 'Patrick Hand', cursive;">
                         ${service.name}
                       </span>
                     `).join('')}
@@ -230,29 +210,28 @@ export const createBooking = async (bookingData, skipNotification = false) => {
                 </div>
               </div>
               
-              <!-- Next steps -->
-              <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
-                <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">🌟 What happens next?</h4>
-                <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.5;">
-                  We'll send you a confirmation email once your booking is approved by our team. 
-                  Please arrive 10 minutes early for your appointment.
+              <!-- Simple Next steps -->
+              <div style="background: #f5f3ff; border: 1px solid #d0c2f4; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <h4 style="margin: 0 0 8px 0; color: #9333ea; font-size: 14px; font-weight: 600; font-family: 'Patrick Hand', cursive;">🌟 What happens next?</h4>
+                <p style="margin: 0; color: #65548b; font-size: 13px; line-height: 1.4; font-family: 'Patrick Hand', cursive;">
+                  We'll confirm your booking once approved. Please arrive 10 minutes early.
                 </p>
               </div>
               
-              <!-- Contact info -->
-              <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
-                <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to make changes or have questions?</p>
-                <p style="margin: 0; color: #9333ea; font-weight: 600;">
-                  Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
+              <!-- Simple Contact info -->
+              <div style="text-align: center; margin: 20px 0; padding: 15px; background: #faf8ff; border-radius: 8px;">
+                <p style="margin: 0 0 5px 0; color: #65548b; font-size: 13px; font-family: 'Patrick Hand', cursive;">Questions? Contact us at</p>
+                <p style="margin: 0; color: #9333ea; font-weight: 600; font-family: 'Patrick Hand', cursive;">
+                  <a href="mailto:support@vonneex2x.store" style="color: #9333ea; text-decoration: none;">support@vonneex2x.store</a>
                 </p>
               </div>
             </div>
             
-            <!-- Footer -->
-            <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
-              <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
-              <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
-              <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for choosing us for your beauty needs!</p>
+            <!-- Simple Footer -->
+            <div style="background: #9333ea; padding: 20px; text-align: center; color: white;">
+              <p style="margin: 0; font-size: 16px; font-family: 'Patrick Hand', cursive; margin-bottom: 5px;">Vonne X2X</p>
+              <p style="margin: 0; font-size: 12px; opacity: 0.9; font-family: 'Patrick Hand', cursive;">Professional Service Management System</p>
+              <p style="margin: 5px 0 0 0; font-size: 11px; opacity: 0.8; font-family: 'Patrick Hand', cursive;">Thank you for choosing us!</p>
             </div>
           </div>
         `;
