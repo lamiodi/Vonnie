@@ -24,6 +24,7 @@ const PublicBooking = () => {
   });
   const [validationErrors, setValidationErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [bookingCreating, setBookingCreating] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState(null);
@@ -31,6 +32,7 @@ const PublicBooking = () => {
   const [totalDuration, setTotalDuration] = useState(0);
   const [bookingResponse, setBookingResponse] = useState(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
+  const [paymentProcessing, setPaymentProcessing] = useState(false);
   const hasNavigatedRef = useRef(false);
   const slotsControllerRef = useRef(null);
 
@@ -43,67 +45,126 @@ const PublicBooking = () => {
   const buildBookingInfo = (override = {}) => {
     const baseServiceName = selectedServices.map(s => s.name).join(', ');
     
-    // Format date and time for display
+    // Enhanced date/time formatting with error handling
     const formatDateForDisplay = (date) => {
       if (!date) return null;
-      return date.toLocaleDateString('en-US', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      });
+      try {
+        const dateObj = new Date(date);
+        if (isNaN(dateObj.getTime())) {
+          console.warn('Invalid date provided to formatDateForDisplay:', date);
+          return typeof date === 'string' ? date : 'Invalid date';
+        }
+        return dateObj.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      } catch (error) {
+        console.error('Error formatting date:', error);
+        return 'Date formatting error';
+      }
     };
     
     const formatTimeForDisplay = (time) => {
       if (!time) return null;
-      if (typeof time === 'string') {
-        // If it's already a formatted time string, return as is
-        if (time.includes(':')) return time;
-        // If it's a time string without formatting, try to format it
-        const [hours, minutes] = time.split(':');
-        if (hours && minutes) {
-          const hourNum = parseInt(hours);
-          const period = hourNum >= 12 ? 'PM' : 'AM';
-          const displayHour = hourNum % 12 || 12;
-          return `${displayHour}:${minutes} ${period}`;
+      try {
+        if (typeof time === 'string') {
+          // Handle ISO timestamps
+          if (time.includes('T')) {
+            const date = new Date(time);
+            if (isNaN(date.getTime())) {
+              console.warn('Invalid ISO timestamp:', time);
+              return 'Invalid time';
+            }
+            return date.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
+          }
+          
+          // Handle HH:mm format
+          if (/^\d{2}:\d{2}/.test(time)) {
+            const [hours, minutes] = time.split(':');
+            const hour = parseInt(hours);
+            if (isNaN(hour) || hour < 0 || hour > 23) {
+              console.warn('Invalid hour in time string:', time);
+              return 'Invalid time';
+            }
+            const period = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${minutes} ${period}`;
+          }
         }
+        return time;
+      } catch (error) {
+        console.error('Error formatting time:', error);
+        return 'Time formatting error';
       }
-      return time;
     };
     
+    // Enhanced base data with better validation
     const base = {
-      booking_number: 'Generating...',
-      customer_name: formData.customer_name || 'Unknown Customer',
-      customer_email: formData.customer_email || '',
-      customer_phone: formData.customer_phone || '',
-      service_name: baseServiceName || 'Unknown Service',
+      booking_number: 'Pending...',
+      customer_name: formData.customer_name?.trim() || 'Customer',
+      customer_email: formData.customer_email?.trim() || '',
+      customer_phone: formData.customer_phone?.trim() || '',
+      service_name: baseServiceName || 'Service to be confirmed',
       booking_date: formatDateForDisplay(formData.booking_date),
       booking_time: formatTimeForDisplay(formData.booking_time),
       duration: totalDuration || null,
       total_amount: totalPrice || 0,
       status: 'scheduled',
       payment_status: 'pending',
-      notes: formData.notes || ''
+      notes: formData.notes?.trim() || '',
+      worker_id: null, // Explicitly set for consistency
+      worker_name: null // Explicitly set for consistency
     };
 
     let info = { ...base };
 
     if (bookingResponse) {
+      // Enhanced server response handling with better validation
       const scheduled = bookingResponse.scheduled_time || bookingResponse.booking_date || null;
       const timeVal = bookingResponse.booking_time || scheduled || base.booking_time;
-      const srvName = bookingResponse.service_name || (Array.isArray(bookingResponse.services) ? bookingResponse.services.map(s => s.name).join(', ') : base.service_name);
-      const amt = typeof bookingResponse.total_amount === 'string' ? parseFloat(bookingResponse.total_amount) : bookingResponse.total_amount;
-      const dur = typeof bookingResponse.duration === 'string' ? parseInt(bookingResponse.duration) : bookingResponse.duration;
+      const srvName = bookingResponse.service_name || 
+        (Array.isArray(bookingResponse.services) ? 
+          bookingResponse.services.map(s => s.name || s.service_name || 'Unknown Service').join(', ') : 
+          base.service_name);
+      
+      // Safe numeric conversions
+      const amt = (() => {
+        const val = bookingResponse.total_amount;
+        if (typeof val === 'string') {
+          const parsed = parseFloat(val);
+          return isNaN(parsed) ? base.total_amount : parsed;
+        }
+        return typeof val === 'number' && !isNaN(val) ? val : base.total_amount;
+      })();
+      
+      const dur = (() => {
+        const val = bookingResponse.duration;
+        if (typeof val === 'string') {
+          const parsed = parseInt(val);
+          return isNaN(parsed) ? base.duration : parsed;
+        }
+        return typeof val === 'number' && !isNaN(val) ? val : base.duration;
+      })();
+      
       info = {
         ...info,
         ...bookingResponse,
         booking_number: bookingResponse.booking_number || info.booking_number,
         service_name: srvName || info.service_name,
-        booking_date: scheduled || info.booking_date,
-        booking_time: timeVal || info.booking_time,
-        total_amount: !isNaN(amt) && amt !== undefined ? amt : info.total_amount,
-        duration: !isNaN(dur) && dur !== undefined ? dur : info.duration,
-        status: bookingResponse.status || info.status
+        booking_date: scheduled ? formatDateForDisplay(scheduled) : info.booking_date,
+        booking_time: timeVal ? formatTimeForDisplay(timeVal) : info.booking_time,
+        total_amount: amt,
+        duration: dur,
+        status: bookingResponse.status || info.status,
+        customer_name: bookingResponse.customer_name?.trim() || info.customer_name,
+        customer_email: bookingResponse.customer_email?.trim() || info.customer_email,
+        customer_phone: bookingResponse.customer_phone?.trim() || info.customer_phone
       };
     }
 
@@ -111,11 +172,22 @@ const PublicBooking = () => {
       info = { ...info, ...override };
     }
 
-    if (!info.service_name) info.service_name = base.service_name;
-    if (!info.total_amount || isNaN(Number(info.total_amount))) info.total_amount = base.total_amount;
-    if (!info.duration || isNaN(Number(info.duration))) info.duration = base.duration;
-    if (!info.status || info.status === 'NaN') info.status = 'scheduled';
-    if (override && override.payment_status === 'completed') info.payment_status = 'completed';
+    // Final validation and cleanup
+    if (!info.service_name || info.service_name === 'Unknown Service') {
+      info.service_name = base.service_name;
+    }
+    if (!info.total_amount || isNaN(Number(info.total_amount))) {
+      info.total_amount = base.total_amount;
+    }
+    if (!info.duration || isNaN(Number(info.duration))) {
+      info.duration = base.duration;
+    }
+    if (!info.status || info.status === 'NaN') {
+      info.status = 'scheduled';
+    }
+    if (override && override.payment_status === 'completed') {
+      info.payment_status = 'completed';
+    }
 
     return info;
   };
@@ -160,16 +232,27 @@ const PublicBooking = () => {
       console.log('Message received:', raw);
       console.log('Event origin:', origin);
       console.log('Message type:', raw?.type);
+      console.log('Payment processing state:', paymentProcessing);
+
+      // Prevent duplicate processing
+      if (hasNavigatedRef.current || paymentProcessing) {
+        console.log('Payment already processing or navigation completed, ignoring message');
+        return;
+      }
 
       if (raw?.type === 'PAYMENT_SUCCESS' && event.source === window) {
-        if (hasNavigatedRef.current) {
-          return;
-        }
+        setPaymentProcessing(true);
         hasNavigatedRef.current = true;
         const composed = buildBookingInfo({ ...(raw.bookingData || {}), payment_status: 'completed' });
         try {
+          const bookingInfo = { bookingData: composed, paymentCompleted: true, timestamp: new Date().toISOString() };
+          localStorage.setItem('lastBooking', JSON.stringify(bookingInfo));
           navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
-        } catch (error) {}
+        } catch (error) {
+          console.error('Error processing payment success message:', error);
+          setPaymentProcessing(false);
+          hasNavigatedRef.current = false;
+        }
         return;
       }
 
@@ -193,14 +276,18 @@ const PublicBooking = () => {
         );
 
         if (isSuccess) {
-          if (hasNavigatedRef.current) {
-            return;
-          }
+          setPaymentProcessing(true);
           hasNavigatedRef.current = true;
           const composed = buildBookingInfo({ payment_status: 'completed' });
           try {
+            const bookingInfo = { bookingData: composed, paymentCompleted: true, timestamp: new Date().toISOString() };
+            localStorage.setItem('lastBooking', JSON.stringify(bookingInfo));
             navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
-          } catch (error) {}
+          } catch (error) {
+            console.error('Error processing Paystack success message:', error);
+            setPaymentProcessing(false);
+            hasNavigatedRef.current = false;
+          }
         }
       }
     };
@@ -412,7 +499,7 @@ const PublicBooking = () => {
       return;
     }
     
-    setLoading(true);
+    setBookingCreating(true);
 
     try {
       const serviceIds = selectedServices.map(s => s.id);
@@ -446,7 +533,6 @@ const PublicBooking = () => {
 
       const response = await axios.post(endpoints.createBooking, bookingData);
         const serverBookingData = response.data;
-        setBookingResponse(serverBookingData);
         console.log('Booking created successfully:', serverBookingData);
         console.log('Server booking data structure:', {
           booking_number: serverBookingData.booking_number,
@@ -457,30 +543,35 @@ const PublicBooking = () => {
           scheduled_time: serverBookingData.scheduled_time,
           status: serverBookingData.status,
           payment_status: serverBookingData.payment_status,
-          services: serverBookingData.services
+          services: serverBookingData.services,
+          worker_id: serverBookingData.worker_id,
+          worker_name: serverBookingData.worker_name
         });
 
-      // Use the server response data which includes booking_number and proper structure
-        const bookingInfo = {
-          booking_number: serverBookingData.booking_number,
-          customer_name: serverBookingData.customer_name,
-          customer_email: serverBookingData.customer_email,
-          customer_phone: serverBookingData.customer_phone,
-          service_name: serverBookingData.services ? 
-            serverBookingData.services.map(s => s.name).join(', ') : 
-            selectedServices.map(s => s.name).join(', '),
-          booking_date: serverBookingData.scheduled_time,
-          booking_time: serverBookingData.scheduled_time,
-          duration: totalDuration,
-          total_amount: serverBookingData.total_amount,
-          status: serverBookingData.status,
-          payment_status: serverBookingData.payment_status,
-          notes: serverBookingData.notes
-        };
+      // Enhanced booking info with worker assignment state
+      const bookingInfo = {
+        ...serverBookingData, // Preserve all server data including worker_id, worker_name
+        service_name: serverBookingData.services ? 
+          serverBookingData.services.map(s => s.name).join(', ') : 
+          selectedServices.map(s => s.name).join(', '),
+        duration: totalDuration,
+        // Explicitly set worker assignment state for clarity
+        has_worker_assigned: !!serverBookingData.worker_id,
+        worker_assignment_status: serverBookingData.worker_id ? 'assigned' : 'pending_assignment'
+      };
+
+      // Validate booking number from server
+      if (!bookingInfo.booking_number || bookingInfo.booking_number === 'Generating...') {
+        console.error('Invalid booking number received from server:', bookingInfo.booking_number);
+        // Generate a fallback booking number for client-side use
+        const timestamp = new Date().getTime();
+        const fallbackNumber = `TEMP-${timestamp}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+        bookingInfo.booking_number = fallbackNumber;
+        console.warn('Using fallback booking number:', fallbackNumber);
+      }
       
-      // Use state instead of localStorage - server handles booking number generation
       setBookingResponse(bookingInfo);
-      console.log('Saved booking data to state:', bookingInfo);
+      console.log('Enhanced booking data saved to state:', bookingInfo);
 
       setCurrentStep(5);
     } catch (error) {
@@ -504,32 +595,56 @@ const PublicBooking = () => {
       
       handleError(error, errorMessage);
     } finally {
-      setLoading(false);
+      setBookingCreating(false);
     }
   };
 
   const handlePaymentSuccess = async (result) => {
-    const txRef = typeof result === 'string' ? result : (result && result.reference);
-    setPaymentCompleted(true);
-    const override = result && typeof result === 'object' ? (result.bookingData || {}) : {};
-    const bookingInfo = buildBookingInfo({ ...override, payment_status: 'completed' });
-    try {
-      await axios.post('/api/public/payment/verify', { reference: txRef });
-    } catch (verifyError) {}
-    if (hasNavigatedRef.current) {
+    // Prevent duplicate payment processing
+    if (hasNavigatedRef.current || paymentProcessing) {
+      console.log('Payment already processing, ignoring duplicate success call');
       return;
     }
+    
+    setPaymentProcessing(true);
+    setPaymentCompleted(true);
+    
+    const txRef = typeof result === 'string' ? result : (result && result.reference);
+    const override = result && typeof result === 'object' ? (result.bookingData || {}) : {};
+    const bookingInfo = buildBookingInfo({ ...override, payment_status: 'completed' });
+    
+    try {
+      // Verify payment with server
+      await axios.post('/api/public/payment/verify', { reference: txRef });
+      console.log('Payment verification successful');
+    } catch (verifyError) {
+      console.error('Payment verification failed:', verifyError);
+      // Continue with navigation even if verification fails - payment might still be valid
+    }
+    
     hasNavigatedRef.current = true;
+    
+    try {
+      const persisted = { bookingData: bookingInfo, paymentCompleted: true, timestamp: new Date().toISOString() };
+      localStorage.setItem('lastBooking', JSON.stringify(persisted));
+      console.log('Payment success data saved to localStorage');
+    } catch (e) {
+      console.error('Failed to save payment data to localStorage:', e);
+    }
+    
     navigate('/booking-confirmation', {
       state: { bookingData: bookingInfo, paymentCompleted: true }
     });
   };
 
 const handlePaymentClose = () => {
-    handleError(null, 'Payment was cancelled. Your booking is pending payment.');
-    if (hasNavigatedRef.current) {
+    // Prevent navigation if payment is already processing or completed
+    if (hasNavigatedRef.current || paymentProcessing) {
+      console.log('Payment already processed, ignoring close event');
       return;
     }
+    
+    handleError(null, 'Payment was cancelled. Your booking is pending payment.');
     hasNavigatedRef.current = true;
     const bookingInfo = buildBookingInfo({ payment_status: 'pending' });
     navigate('/booking-confirmation', { state: { bookingData: bookingInfo } });
@@ -1208,18 +1323,39 @@ const handlePaymentClose = () => {
                 </div>
               </div>
 
-              {bookingResponse && (
+              {bookingCreating ? (
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-3 px-8 py-4 bg-gray-100 text-gray-600 rounded-xl font-medium">
+                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    Creating your booking...
+                  </div>
+                  <p className="text-sm text-gray-500 mt-2">Please wait while we prepare your booking details</p>
+                </div>
+              ) : bookingResponse && bookingResponse.booking_number && bookingResponse.booking_number !== 'Pending...' ? (
                 <div className="text-center">
                   <PaystackPayment
                     amount={totalPrice}
                     email={formData.customer_email}
-                    bookingNumber={bookingResponse?.booking_number}
-                    bookingData={buildBookingInfo()}
+                    bookingNumber={bookingResponse.booking_number}
+                    bookingData={bookingResponse}
                     onSuccess={handlePaymentSuccess}
                     onClose={handlePaymentClose}
                     buttonText={`Pay ₦${totalPrice.toLocaleString()} Now`}
                     buttonClass="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl text-lg"
                   />
+                </div>
+              ) : (
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-3 px-8 py-4 bg-yellow-50 text-yellow-700 rounded-xl font-medium">
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                    Booking details not ready
+                  </div>
+                  <p className="text-sm text-yellow-600 mt-2">Please complete the previous steps first</p>
                 </div>
               )}
 

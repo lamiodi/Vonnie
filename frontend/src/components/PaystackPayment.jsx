@@ -20,15 +20,22 @@ const PaystackPayment = ({
   const [retryCount, setRetryCount] = React.useState(0);
   const [isVerifying, setIsVerifying] = React.useState(false);
   
+  // Validate booking number before using it
+  const validatedBookingNumber = bookingNumber && bookingNumber !== 'Pending...' && bookingNumber !== 'Generating...' ? bookingNumber : null;
+  
+  if (!validatedBookingNumber) {
+    console.error('Invalid booking number provided to PaystackPayment:', bookingNumber);
+  }
+
   const config = {
-    reference: reference || `${bookingNumber}_${new Date().getTime()}`,
+    reference: reference || `${validatedBookingNumber || 'TEMP'}_${new Date().getTime()}`,
     email: email,
     amount: amount * 100, // Convert to kobo
     publicKey: publicKey || import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
     currency: currency,
     metadata: {
       ...metadata,
-      booking_number: bookingNumber,
+      booking_number: validatedBookingNumber || 'TEMP_BOOKING',
       retry_count: retryCount,
       verification_method: 'enhanced',
       custom_fields: [
@@ -40,7 +47,7 @@ const PaystackPayment = ({
         {
           display_name: "Booking Number",
           variable_name: "booking_number",
-          value: bookingNumber
+          value: validatedBookingNumber || 'TEMP_BOOKING'
         }
       ]
     }
@@ -137,24 +144,27 @@ const PaystackPayment = ({
       } else {
         console.error('Payment verification failed after all retries');
         
-        // Handle verification failure
         if (onRetry && retryCount < maxRetries - 1) {
           setRetryCount(retryCount + 1);
           console.log(`Retrying payment verification (attempt ${retryCount + 2})`);
-          
-          // Allow parent component to handle retry
           onRetry({ reference, attempt: retryCount + 1 });
         } else {
           console.error('Maximum verification retries exceeded');
-          
-          // Still consider payment successful from Paystack perspective
-          // but log the verification issue
           const bookingData = {
+            ...(fullBookingData || {}),
             booking_number: config.metadata.booking_number,
             payment_status: 'completed',
             verification_warning: 'verification_failed_after_retries'
           };
-          
+          try {
+            const payload = {
+              type: 'PAYMENT_SUCCESS',
+              reference,
+              bookingData: bookingData,
+              verificationResult: null
+            };
+            window.postMessage(payload, '*');
+          } catch (e) {}
           if (onSuccess) {
             onSuccess({ reference, bookingData });
           }

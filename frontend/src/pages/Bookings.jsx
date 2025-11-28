@@ -963,7 +963,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       if (isNaN(bookingStart.getTime()) || isNaN(bookingEnd.getTime())) {
         console.error('Invalid booking time detected');
         setWorkerConflicts([{
-          workerId: 'invalid_time',
+          worker_id: 'invalid_time',
           message: 'Invalid booking time detected',
           type: 'validation_error'
         }]);
@@ -975,7 +975,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       if (bookingEnd < now) {
         console.error('Cannot assign workers to past booking');
         setWorkerConflicts([{
-          workerId: 'past_booking',
+          worker_id: 'past_booking',
           message: 'Cannot assign workers to bookings in the past',
           type: 'validation_error'
         }]);
@@ -1014,7 +1014,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       
       if (unavailableWorkers.length > 0) {
         conflicts.push(...unavailableWorkers.map(workerId => ({
-          workerId: workerId,
+          worker_id: workerId,
           message: 'Worker is currently unavailable',
           type: 'availability'
         })));
@@ -1029,7 +1029,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
         
         if (unqualifiedWorkers.length > 0) {
           conflicts.push(...unqualifiedWorkers.map(workerId => ({
-            workerId: workerId,
+            worker_id: workerId,
             message: 'Worker does not have required specialty for this service',
             type: 'qualification'
           })));
@@ -1041,7 +1041,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
     } catch (error) {
       console.error('Error checking worker conflicts:', error);
       setWorkerConflicts([{
-        workerId: 'system_error',
+        worker_id: 'system_error',
         message: 'Unable to check worker availability. Please try again.',
         type: 'system_error'
       }]);
@@ -1159,7 +1159,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       // **CONFLICT DETECTION**: Prevent assignment if conflicts exist
       if (workerConflicts.length > 0) {
         const conflictedWorkerNames = workerConflicts
-          .map(conflict => workers.find(w => w.id === conflict.workerId)?.name || `Worker ${conflict.workerId}`)
+          .map(conflict => workers.find(w => w.id === conflict.worker_id)?.name || `Worker ${conflict.worker_id}`)
           .filter(name => name)
           .join(', ');
         
@@ -1212,13 +1212,13 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       console.log('Pre-validation passed. Proceeding with worker assignment...');
       
       // Create consistent worker assignment payload
-      const workers = selectedWorkers.map(workerId => {
-        const worker = workers.find(w => w.id === workerId);
+      const assignmentWorkers = selectedWorkers.map(workerId => {
+        const found = workers.find(w => w.id === workerId);
         return {
           worker_id: workerId,
           role: 'primary',
           assigned_at: new Date().toISOString(),
-          worker_name: worker?.name || `Worker ${workerId}`
+          worker_name: found?.name || `Worker ${workerId}`
         };
       });
       
@@ -1228,7 +1228,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
           try {
             console.log(`Assignment attempt ${attempt} of ${maxRetries}`);
             const result = await apiPost(API_ENDPOINTS.BOOKING_ASSIGN_WORKERS(booking.id), {
-              workers
+              workers: assignmentWorkers
             });
             console.log('Assignment successful:', result);
             return result;
