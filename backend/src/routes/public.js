@@ -156,8 +156,9 @@ router.get('/bookings/available-slots', async (req, res) => {
     const endHour = 18;
     const slotInterval = 30; // minutes
     
-    // Get current time for filtering past slots
+    // Get current time for filtering past slots (Nigeria/WAT timezone - UTC+1)
     const now = new Date();
+    const nigeriaTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // Add 1 hour for WAT
     
     // Create date objects for comparison (without time portion)
     const today = new Date();
@@ -177,8 +178,8 @@ router.get('/bookings/available-slots', async (req, res) => {
       for (let minute = 0; minute < 60; minute += slotInterval) {
         const slotTime = new Date(`${date}T${pad(hour)}:${pad(minute)}:00`);
         
-        // Skip past times for current day - only show future times
-        if (isToday && slotTime < now) {
+        // Skip past times for current day - only show future times (using Nigeria time)
+        if (isToday && slotTime < nigeriaTime) {
           continue;
         }
         

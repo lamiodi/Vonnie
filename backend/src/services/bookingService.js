@@ -260,7 +260,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
         await sendEmail(
           customer_email,
           '✨ Booking Confirmed - Vonne X2X',
-          `Dear ${customer_name}, Your booking ${bookingNumber} has been received. Date: ${new Date(scheduled_time).toLocaleString()}. Total: ₦${totalPrice.toFixed(2)}. We'll send confirmation once approved.`,
+          `Dear ${customer_name}, Your booking ${bookingNumber} has been received. Date: ${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}. Total: ₦${totalPrice.toFixed(2)}. We'll send confirmation once approved.`,
           bookingConfirmationHtml
         );
 
