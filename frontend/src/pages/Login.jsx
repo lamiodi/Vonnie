@@ -28,7 +28,7 @@ const Login = () => {
       id: 'admin-demo',
       name: 'System Administrator',
       email: 'admin@vonnex2x.com',
-      password: 'admin123',
+      password: 'password',
       role: 'admin',
       icon: '👑',
       color: 'from-red-500 to-pink-500',
