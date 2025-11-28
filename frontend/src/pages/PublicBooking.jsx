@@ -557,9 +557,12 @@ const handlePaymentClose = () => {
 
   const formatTimeSlot = (timeString) => {
     try {
-      // If it's already just a time (HH:mm format), return it as is
-      if (timeString && timeString.length === 5 && timeString.includes(':')) {
-        return timeString;
+      if (typeof timeString === 'string' && /^\d{2}:\d{2}$/.test(timeString)) {
+        const [hours, minutes] = timeString.split(':');
+        const h = parseInt(hours, 10);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayHour = h % 12 || 12;
+        return `${displayHour}:${minutes} ${period}`;
       }
       
       // If it's a full ISO timestamp, format it nicely
