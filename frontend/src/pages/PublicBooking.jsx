@@ -6,6 +6,8 @@ import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 import { convertToNigeriaISOString } from '../utils/formatters';
 import PaystackPayment from '../components/PaystackPayment';
+import '@fontsource/patrick-hand';
+import '@fontsource/unifrakturcook';
 
 const PublicBooking = () => {
   const navigate = useNavigate();
@@ -118,8 +120,6 @@ const PublicBooking = () => {
     return info;
   };
 
-
-
   // Service images mapping
   const serviceImages = {
     'Hair Styling': (
@@ -161,7 +161,7 @@ const PublicBooking = () => {
       console.log('Event origin:', origin);
       console.log('Message type:', raw?.type);
 
-      if (raw?.type === 'PAYMENT_SUCCESS') {
+      if (raw?.type === 'PAYMENT_SUCCESS' && event.source === window) {
         if (hasNavigatedRef.current) {
           return;
         }
@@ -578,11 +578,11 @@ const handlePaymentClose = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen" style={{ backgroundColor: '#f0f1f2', fontFamily: '"Patrick Hand", cursive' }}>
+      <div className="max-w-6xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4" style={{ fontFamily: '"Patrick Hand", cursive' }}>
             Book Your Beauty Experience
           </h1>
           <p className="text-lg text-gray-600 mb-2">
@@ -648,7 +648,7 @@ const handlePaymentClose = () => {
           {currentStep === 1 && (
             <div>
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Select Your Services
                 </h2>
                 <p className="text-gray-600">Choose the beauty services you'd like to book</p>
@@ -716,7 +716,7 @@ const handlePaymentClose = () => {
               
               {selectedServices.length > 0 && (
                 <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                     <span>🛒</span>
                     Your Selected Services ({selectedServices.length})
                   </h3>
@@ -765,7 +765,7 @@ const handlePaymentClose = () => {
           {currentStep === 2 && (
             <div>
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Choose Your Date
                 </h2>
                 <p className="text-gray-600 mb-2">Select your preferred appointment date</p>
@@ -827,7 +827,7 @@ const handlePaymentClose = () => {
           {currentStep === 3 && (
             <div>
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Select Your Time Slot
                 </h2>
                 <p className="text-gray-600 mb-2">
@@ -960,7 +960,7 @@ const handlePaymentClose = () => {
           {currentStep === 4 && (
             <div>
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Your Details
                 </h2>
                 <p className="text-gray-600">Please provide your contact information</p>
@@ -1057,7 +1057,7 @@ const handlePaymentClose = () => {
                 </div>
 
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 mt-8 border-2 border-purple-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                     <span>📋</span>
                     Booking Summary
                   </h3>
@@ -1137,14 +1137,14 @@ const handlePaymentClose = () => {
           {currentStep === 5 && (
             <div>
               <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Secure Payment
                 </h2>
                 <p className="text-gray-600">Complete your booking with Paystack</p>
               </div>
 
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 mb-8 border-2 border-purple-100">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   <span>📋</span>
                   Booking Summary
                 </h3>
@@ -1189,7 +1189,7 @@ const handlePaymentClose = () => {
               </div>
 
               <div className="bg-white border-2 border-gray-200 rounded-2xl p-6 mb-6">
-                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   <span>💳</span>
                   Payment Method
                 </h3>
@@ -1219,8 +1219,6 @@ const handlePaymentClose = () => {
                     buttonText={`Pay ₦${totalPrice.toLocaleString()} Now`}
                     buttonClass="px-8 py-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 transition-all duration-300 shadow-lg hover:shadow-xl text-lg"
                   />
-                  
-
                 </div>
               )}
 
