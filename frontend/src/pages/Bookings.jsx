@@ -1420,6 +1420,11 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
                         isBusy || hasConflict ? 'text-gray-500' : 'text-gray-900'
                       }`}>{worker.name}</div>
                       <div className="text-sm text-gray-600">{worker.role}</div>
+                      {worker.specialty && (
+                        <div className="text-xs text-purple-600 font-medium mt-1">
+                          ⭐ {worker.specialty}
+                        </div>
+                      )}
                       {hasConflict && conflictDetails && (
                         <div className="text-xs text-red-600 mt-1">
                           Conflict: Booking {conflictDetails.booking_number} ({new Date(conflictDetails.scheduled_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})})

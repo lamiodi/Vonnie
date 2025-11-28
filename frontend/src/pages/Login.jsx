@@ -26,9 +26,9 @@ const Login = () => {
   const demoAccounts = [
     {
       id: 'admin-demo',
-      name: 'Admin Demo Account',
+      name: 'System Administrator',
       email: 'admin@vonnex2x.com',
-      password: 'admin123',
+      password: 'password',
       role: 'admin',
       icon: '👑',
       color: 'from-red-500 to-pink-500',
@@ -36,7 +36,7 @@ const Login = () => {
     },
     {
       id: 'manager-demo',
-      name: 'Manager Demo Account',
+      name: 'General Manager',
       email: 'manager@vonnex2x.com',
       password: 'password',
       role: 'manager',
@@ -46,13 +46,33 @@ const Login = () => {
     },
     {
       id: 'staff-demo',
-      name: 'Staff Demo Account',
+      name: 'Grace Hairstylist',
       email: 'grace@vonnex2x.com',
       password: 'password',
       role: 'staff',
       icon: '⭐',
       color: 'from-green-500 to-emerald-500',
-      description: 'Staff access with customer service and booking management'
+      description: 'Hairstylist with customer service and booking management'
+    },
+    {
+      id: 'staff-demo-2',
+      name: 'Sarah Beautician',
+      email: 'sarah@vonnex2x.com',
+      password: 'password',
+      role: 'staff',
+      icon: '💄',
+      color: 'from-purple-500 to-pink-500',
+      description: 'Beautician with customer service and booking management'
+    },
+    {
+      id: 'staff-demo-3',
+      name: 'Joy Nail Tech',
+      email: 'joy@vonnex2x.com',
+      password: 'password',
+      role: 'staff',
+      icon: '💅',
+      color: 'from-teal-500 to-cyan-500',
+      description: 'Nail technician with customer service and booking management'
     }
   ];
 

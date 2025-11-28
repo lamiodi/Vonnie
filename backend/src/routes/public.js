@@ -215,7 +215,7 @@ router.get('/bookings/available-slots', async (req, res) => {
 // Create public booking (no authentication required)
 router.post('/bookings', async (req, res) => {
   try {
-    const booking = await createBooking(req.body, true);
+    const booking = await createBooking(req.body, false);
     res.status(201).json(successResponse(booking, 'Booking created successfully', 201));
   } catch (error) {
     console.error('Public booking creation error:', error);
