@@ -77,7 +77,7 @@ const BookingConfirmation = () => {
 
   if (Object.keys(bookingData).length === 0) {
     return (
-      <div style={{ fontFamily: '"Patrick Hand", cursive' }} className="min-h-screen flex items-center justify-center p-6" 
+      <div className="min-h-screen flex items-center justify-center p-6" 
            style={{ backgroundColor: '#f0f1f2', fontFamily: '"Patrick Hand", cursive' }}>
         <style>
           {`

@@ -11,6 +11,7 @@ const PaystackPayment = ({
   reference,
   currency = 'NGN',
   bookingNumber,
+  bookingData: fullBookingData,
   buttonText,
   buttonClass,
   onRetry,
@@ -104,6 +105,7 @@ const PaystackPayment = ({
         
         // Use booking number from props instead of localStorage
         const bookingData = {
+          ...(fullBookingData || {}),
           booking_number: config.metadata.booking_number,
           payment_status: 'completed',
           verification_method: verificationResult.method || 'enhanced',

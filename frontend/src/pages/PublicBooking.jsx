@@ -578,7 +578,7 @@ const handlePaymentClose = () => {
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f0f1f2', fontFamily: '"Patrick Hand", cursive' }}>
+    <div className="min-h-screen" style={{ backgroundColor: '#f0f1f2' }}>
       <div className="max-w-6xl mx-auto py-8 px-4">
         {/* Header */}
         <div className="text-center mb-8">
@@ -1214,6 +1214,7 @@ const handlePaymentClose = () => {
                     amount={totalPrice}
                     email={formData.customer_email}
                     bookingNumber={bookingResponse?.booking_number}
+                    bookingData={buildBookingInfo()}
                     onSuccess={handlePaymentSuccess}
                     onClose={handlePaymentClose}
                     buttonText={`Pay ₦${totalPrice.toLocaleString()} Now`}
