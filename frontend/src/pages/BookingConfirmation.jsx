@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLocation, Link } from 'react-router-dom';
 
 const BookingConfirmation = () => {
@@ -180,6 +180,18 @@ const BookingConfirmation = () => {
     return formatted.replace(/\.00$/, '');
   };
 
+  const formatDuration = (minutes) => {
+    if (minutes === null || minutes === undefined || isNaN(Number(minutes))) {
+      return 'Duration to be confirmed';
+    }
+    const m = typeof minutes === 'string' ? parseInt(minutes, 10) : minutes;
+    const hours = Math.floor(m / 60);
+    const mins = m % 60;
+    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
+    if (hours > 0) return `${hours}h`;
+    return `${mins}m`;
+  };
+
   // Determine the confirmation message based on payment status
   const getConfirmationTitle = () => {
     if (paymentCompleted || validatedBookingData.payment_status === 'completed') {
@@ -299,7 +311,7 @@ const BookingConfirmation = () => {
             <div className="flex justify-between items-center py-3 border-b border-gray-200">
               <span className="text-gray-600 font-medium">Duration:</span>
               <span className="text-gray-800 font-semibold">
-                {validatedBookingData.duration ? `${validatedBookingData.duration} minutes` : 'Duration to be confirmed'}
+                {formatDuration(validatedBookingData.duration)}
               </span>
             </div>
             

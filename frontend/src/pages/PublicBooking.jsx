@@ -77,7 +77,7 @@ const PublicBooking = () => {
       service_name: baseServiceName || 'Unknown Service',
       booking_date: formatDateForDisplay(formData.booking_date),
       booking_time: formatTimeForDisplay(formData.booking_time),
-      duration: totalDuration ? `${totalDuration} minutes` : 'Duration to be confirmed',
+      duration: totalDuration || null,
       total_amount: totalPrice || 0,
       status: 'scheduled',
       payment_status: 'pending',
