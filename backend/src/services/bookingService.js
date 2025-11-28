@@ -156,25 +156,112 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     // Send notifications unless skipped
     if (!skipNotification) {
       try {
-        // Send email confirmation
+        // Send email confirmation with professional design matching PublicBooking.jsx
+        const bookingConfirmationHtml = `
+          <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+            <!-- Header with gradient matching PublicBooking.jsx -->
+            <div style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); padding: 40px 30px; text-align: center; color: white;">
+              <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; background: linear-gradient(45deg, #ffffff, #f0f0f0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                ✨ Booking Confirmed!
+              </h1>
+              <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your beauty experience awaits</p>
+            </div>
+            
+            <!-- Progress steps indicator -->
+            <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
+              <div style="display: flex; justify-content: space-between; align-items: center; max-width: 400px; margin: 0 auto;">
+                <div style="text-align: center;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">✓</div>
+                  <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">Booked</p>
+                </div>
+                <div style="flex: 1; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899); margin: 0 10px;"></div>
+                <div style="text-align: center;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">2</div>
+                  <p style="margin: 0; font-size: 12px; color: #64748b;">Confirmed</p>
+                </div>
+                <div style="flex: 1; height: 2px; background: #e2e8f0; margin: 0 10px;"></div>
+                <div style="text-align: center;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">3</div>
+                  <p style="margin: 0; font-size: 12px; color: #64748b;">Complete</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Main content -->
+            <div style="padding: 30px;">
+              <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${customer_name}</strong>,</p>
+              <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+                Thank you for booking with Vonne X2X! Your appointment has been received and is being prepared for you.
+              </p>
+              
+              <!-- Service cards matching PublicBooking.jsx styling -->
+              <div style="background: linear-gradient(135deg, #faf5ff 0%, #fdf2f8 100%); border: 2px solid #e879f9; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.1);">
+                <h3 style="color: #9333ea; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #9333ea, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                  📋 Your Booking Details
+                </h3>
+                
+                <div style="display: grid; gap: 15px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
+                    <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
+                    <span style="color: #9333ea; font-weight: bold; font-size: 18px; font-family: monospace;">${bookingNumber}</span>
+                  </div>
+                  
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ec4899;">
+                    <span style="font-weight: 600; color: #6b7280;">Date & Time:</span>
+                    <span style="color: #1f2937; font-weight: 600;">${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
+                    <span style="font-weight: 600; color: #6b7280;">Total Price:</span>
+                    <span style="color: #059669; font-weight: bold; font-size: 18px;">₦${totalPrice.toFixed(2)}</span>
+                  </div>
+                </div>
+                
+                <!-- Services list -->
+                <div style="margin-top: 20px; padding: 15px; background: white; border-radius: 10px;">
+                  <h4 style="margin: 0 0 15px 0; color: #9333ea; font-size: 16px; font-weight: 600;">Services Included:</h4>
+                  <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    ${services.map(service => `
+                      <span style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; padding: 6px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; box-shadow: 0 2px 8px rgba(147, 51, 234, 0.2);">
+                        ${service.name}
+                      </span>
+                    `).join('')}
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Next steps -->
+              <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">🌟 What happens next?</h4>
+                <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.5;">
+                  We'll send you a confirmation email once your booking is approved by our team. 
+                  Please arrive 10 minutes early for your appointment.
+                </p>
+              </div>
+              
+              <!-- Contact info -->
+              <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
+                <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to make changes or have questions?</p>
+                <p style="margin: 0; color: #9333ea; font-weight: 600;">
+                  Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
+                </p>
+              </div>
+            </div>
+            
+            <!-- Footer -->
+            <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
+              <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
+              <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
+              <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for choosing us for your beauty needs!</p>
+            </div>
+          </div>
+        `;
+        
         await sendEmail(
           customer_email,
-          'Booking Confirmation - Vonne X2X',
-          `Dear ${customer_name},
-
-Thank you for booking with Vonne X2X! Your booking has been received and is pending confirmation.
-
-Booking Details:
-- Booking Number: ${bookingNumber}
-- Date & Time: ${new Date(scheduled_time).toLocaleString()}
-- Total Price: ₦${totalPrice.toFixed(2)}
-- Services: ${services.map(s => s.name).join(', ')}
-
-We will send you a confirmation email once your booking is approved by our team.
-
-If you have any questions, please don't hesitate to contact us.
-
-Thank you for choosing Vonne X2X!`
+          '✨ Booking Confirmed - Vonne X2X',
+          `Dear ${customer_name}, Your booking ${bookingNumber} has been received. Date: ${new Date(scheduled_time).toLocaleString()}. Total: ₦${totalPrice.toFixed(2)}. We'll send confirmation once approved.`,
+          bookingConfirmationHtml
         );
 
         // WhatsApp notifications removed - using email only
@@ -301,19 +388,132 @@ export const updateBookingStatus = async (bookingId, status, user) => {
   // Send notifications for important status changes
   if (status === 'scheduled' || status === 'cancelled') {
     try {
+      // Professional status update email matching PublicBooking.jsx design
+      const statusIcon = status === 'scheduled' ? '✅' : '❌';
+      const statusColor = status === 'scheduled' ? '#10b981' : '#ef4444';
+      const statusGradient = status === 'scheduled' 
+        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+        : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
+      const statusText = status === 'scheduled' ? 'Confirmed' : 'Cancelled';
+      
+      const statusUpdateHtml = `
+        <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+          <!-- Header with status-specific gradient -->
+          <div style="background: ${statusGradient}; padding: 40px 30px; text-align: center; color: white;">
+            <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold;">
+              ${statusIcon} Booking ${statusText}
+            </h1>
+            <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">
+              ${status === 'scheduled' ? 'Your appointment is confirmed!' : 'Appointment cancelled'}
+            </p>
+          </div>
+          
+          <!-- Status progress indicator -->
+          <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
+            <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
+              <div style="text-align: center;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">✓</div>
+                <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">Booked</p>
+              </div>
+              <div style="flex: 0 0 30px; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899);"></div>
+              <div style="text-align: center;">
+                <div style="width: 40px; height: 40px; border-radius: 50%; background: ${statusColor}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(${status === 'scheduled' ? '16, 185, 129' : '239, 68, 68'}, 0.3);">${statusIcon}</div>
+                <p style="margin: 0; font-size: 12px; color: ${statusColor}; font-weight: 600;">${statusText}</p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Main content -->
+          <div style="padding: 30px;">
+            <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${booking.customer_name}</strong>,</p>
+            
+            ${status === 'scheduled' ? `
+              <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+                Great news! Your booking <strong style="color: #10b981;">${booking.booking_number}</strong> has been confirmed and we're excited to serve you.
+              </p>
+              
+              <!-- Confirmed booking details -->
+              <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #10b981; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);">
+                <h3 style="color: #10b981; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                  📅 Appointment Confirmed
+                </h3>
+                
+                <div style="display: grid; gap: 15px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #10b981;">
+                    <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
+                    <span style="color: #10b981; font-weight: bold; font-size: 18px; font-family: monospace;">${booking.booking_number}</span>
+                  </div>
+                  
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #059669;">
+                    <span style="font-weight: 600; color: #6b7280;">Scheduled Date:</span>
+                    <span style="color: #1f2937; font-weight: 600;">${new Date(booking.scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+                
+                <div style="background: #fef3c7; border: 1px solid #f59e0b; border-radius: 8px; padding: 15px; margin-top: 20px;">
+                  <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
+                    <strong>💡 Reminder:</strong> Please arrive 10 minutes early for your appointment to complete any necessary preparation.
+                  </p>
+                </div>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f0fdf4; border-radius: 12px;">
+                <p style="margin: 0 0 10px 0; color: #10b981; font-size: 16px; font-weight: 600;">We look forward to serving you!</p>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Need to reschedule? Contact us at <a href="mailto:support@vonneex2x.store" style="color: #059669;">support@vonneex2x.store</a></p>
+              </div>
+            ` : `
+              <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+                We regret to inform you that your booking <strong style="color: #ef4444;">${booking.booking_number}</strong> has been cancelled.
+              </p>
+              
+              <!-- Cancelled booking details -->
+              <div style="background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%); border: 2px solid #ef4444; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(239, 68, 68, 0.1);">
+                <h3 style="color: #ef4444; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #ef4444, #dc2626); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                  ❌ Appointment Cancelled
+                </h3>
+                
+                <div style="display: grid; gap: 15px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ef4444;">
+                    <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
+                    <span style="color: #ef4444; font-weight: bold; font-size: 18px; font-family: monospace;">${booking.booking_number}</span>
+                  </div>
+                  
+                  <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #dc2626;">
+                    <span style="font-weight: 600; color: #6b7280;">Was Scheduled For:</span>
+                    <span style="color: #1f2937; font-weight: 600;">${new Date(booking.scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="background: #f3e8ff; border: 1px solid #c084fc; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                <h4 style="margin: 0 0 10px 0; color: #7c3aed; font-size: 16px; font-weight: 600;">🔄 Ready to Reschedule?</h4>
+                <p style="margin: 0; color: #5b21b6; font-size: 14px; line-height: 1.5;">
+                  We sincerely apologize for any inconvenience. Please contact us to reschedule your appointment at a more convenient time.
+                </p>
+              </div>
+              
+              <div style="text-align: center; margin: 30px 0; padding: 20px; background: #fef2f2; border-radius: 12px;">
+                <p style="margin: 0 0 10px 0; color: #ef4444; font-size: 14px;">We regret the inconvenience.</p>
+                <p style="margin: 0; color: #64748b; font-size: 14px;">Contact us to reschedule: <a href="mailto:support@vonneex2x.store" style="color: #dc2626;">support@vonneex2x.store</a></p>
+              </div>
+            `}
+            
+          </div>
+          
+          <!-- Footer -->
+          <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
+            <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
+            <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
+            <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for choosing us for your beauty needs!</p>
+          </div>
+        </div>
+      `;
+      
       await sendEmail(
         booking.customer_email,
-        `Booking ${status === 'scheduled' ? 'Confirmed' : 'Cancelled'} - Vonne X2X`,
-        `Dear ${booking.customer_name},
-
-Your booking ${booking.booking_number} has been ${status}.
-
-${status === 'scheduled' ? 
-  `We look forward to serving you on ${new Date(booking.scheduled_time).toLocaleString()}.` :
-  'We regret the inconvenience. Please contact us if you would like to reschedule.'
-}
-
-Thank you for choosing Vonne X2X!`
+        `${statusIcon} Booking ${statusText} - Vonne X2X`,
+        `Dear ${booking.customer_name}, Your booking ${booking.booking_number} has been ${status}. ${status === 'scheduled' ? `We look forward to serving you on ${new Date(booking.scheduled_time).toLocaleString()}.` : 'We regret the inconvenience. Please contact us if you would like to reschedule.'}`,
+        statusUpdateHtml
       );
 
       await sendBookingStatusUpdate(
