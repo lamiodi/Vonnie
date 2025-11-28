@@ -1,5 +1,6 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import axios from 'axios';
 
 const BookingConfirmation = () => {
   const location = useLocation();
@@ -43,6 +44,8 @@ const BookingConfirmation = () => {
   console.log('Booking confirmation received data:', bookingData);
   console.log('Payment completed status:', paymentCompleted);
   
+  const [serverBooking, setServerBooking] = useState(null);
+
   const validatedBookingData = {
     booking_number: bookingData?.booking_number || 'Generating...',
     total_amount: bookingData?.total_amount || 0,
@@ -58,6 +61,34 @@ const BookingConfirmation = () => {
   };
   
   console.log('Validated booking data:', validatedBookingData);
+
+  useEffect(() => {
+    const bn = validatedBookingData.booking_number;
+    if (!bn || bn === 'Generating...' || bn === 'Pending...') return;
+    const fetchBooking = async () => {
+      try {
+        const response = await axios.get(`/api/public/bookings/by-number/${bn}`);
+        const apiData = response?.data?.data || response?.data || null;
+        if (apiData) {
+          const merged = {
+            ...validatedBookingData,
+            ...apiData,
+            service_name: Array.isArray(apiData.service_names) ? apiData.service_names.join(', ') : validatedBookingData.service_name,
+            booking_date: apiData.scheduled_time || validatedBookingData.booking_date,
+            total_amount: apiData.total_amount ?? validatedBookingData.total_amount,
+            status: apiData.status ?? validatedBookingData.status,
+            payment_status: apiData.payment_status ?? validatedBookingData.payment_status
+          };
+          setServerBooking(merged);
+        }
+      } catch (err) {
+        console.error('Failed to fetch booking by number:', err);
+      }
+    };
+    fetchBooking();
+  }, [validatedBookingData.booking_number]);
+
+  const displayData = serverBooking || validatedBookingData;
 
   console.log('BookingConfirmation received data:', validatedBookingData);
   console.log('BookingConfirmation received paymentCompleted:', paymentCompleted);
@@ -283,12 +314,12 @@ const BookingConfirmation = () => {
             <div className="text-center">
               <p className="text-lg text-gray-300 mb-3 uppercase tracking-wider">Your Booking Number</p>
               <div className="text-4xl font-bold mb-4 font-mono tracking-widest" style={{ fontFamily: '"Patrick Hand", cursive' }}>
-                {validatedBookingData.booking_number}
+                {displayData.booking_number}
               </div>
-              {validatedBookingData.booking_number && validatedBookingData.booking_number !== 'Generating...' && (
+              {displayData.booking_number && displayData.booking_number !== 'Generating...' && (
                 <button
                   onClick={() => {
-                    navigator.clipboard.writeText(validatedBookingData.booking_number);
+                    navigator.clipboard.writeText(displayData.booking_number);
                     alert('Booking number copied to clipboard!');
                   }}
                   className="px-6 py-3 bg-white text-gray-900 rounded-xl hover:bg-gray-200 transition-colors text-lg font-bold border-2 border-white"
@@ -304,81 +335,81 @@ const BookingConfirmation = () => {
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Service:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {validatedBookingData.service_name}
+                {displayData.service_name}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Date:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {formatDate(validatedBookingData.booking_date)}
+                {formatDate(displayData.booking_date)}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Time:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {formatTime(validatedBookingData.booking_time)}
+                {formatTime(displayData.booking_time)}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Duration:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {formatDuration(validatedBookingData.duration)}
+                {formatDuration(displayData.duration)}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Customer Name:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {validatedBookingData.customer_name}
+                {displayData.customer_name}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Email:</span>
               <span className="text-gray-900 font-bold text-lg text-right break-all">
-                {validatedBookingData.customer_email}
+                {displayData.customer_email}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Phone:</span>
               <span className="text-gray-900 font-bold text-lg text-right">
-                {validatedBookingData.customer_phone}
+                {displayData.customer_phone}
               </span>
             </div>
             
             <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
               <span className="text-gray-700 font-bold text-lg">Booking Status:</span>
               <span className={`px-4 py-2 rounded-xl text-base font-bold border-2 ${
-                validatedBookingData.status === 'scheduled' ? 'bg-green-100 text-green-900 border-green-600' :
-                validatedBookingData.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-900 border-yellow-600' :
-                validatedBookingData.status === 'in-progress' ? 'bg-blue-100 text-blue-900 border-blue-600' :
-                validatedBookingData.status === 'completed' ? 'bg-purple-100 text-purple-900 border-purple-600' :
-                validatedBookingData.status === 'cancelled' ? 'bg-red-100 text-red-900 border-red-600' :
+                displayData.status === 'scheduled' ? 'bg-green-100 text-green-900 border-green-600' :
+                displayData.status === 'pending_confirmation' ? 'bg-yellow-100 text-yellow-900 border-yellow-600' :
+                displayData.status === 'in-progress' ? 'bg-blue-100 text-blue-900 border-blue-600' :
+                displayData.status === 'completed' ? 'bg-purple-100 text-purple-900 border-purple-600' :
+                displayData.status === 'cancelled' ? 'bg-red-100 text-red-900 border-red-600' :
                 'bg-gray-100 text-gray-900 border-gray-600'
               }`}>
-                {validatedBookingData.status ? 
-                  validatedBookingData.status.charAt(0).toUpperCase() + validatedBookingData.status.slice(1).replace('_', ' ') : 
+                {displayData.status ? 
+                  displayData.status.charAt(0).toUpperCase() + displayData.status.slice(1).replace('_', ' ') : 
                   'Status pending'
                 }
               </span>
             </div>
             
-            {validatedBookingData.payment_status && (
+            {displayData.payment_status && (
               <div className="flex justify-between items-center py-4 border-b-2 border-gray-200">
                 <span className="text-gray-700 font-bold text-lg">Payment Status:</span>
                 <span className={`px-4 py-2 rounded-xl text-base font-bold border-2 ${
-                  validatedBookingData.payment_status === 'completed' ? 'bg-green-100 text-green-900 border-green-600' :
-                  validatedBookingData.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-600' :
-                  validatedBookingData.payment_status === 'failed' ? 'bg-red-100 text-red-900 border-red-600' :
-                  validatedBookingData.payment_status === 'refunded' ? 'bg-blue-100 text-blue-900 border-blue-600' :
+                  displayData.payment_status === 'completed' ? 'bg-green-100 text-green-900 border-green-600' :
+                  displayData.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-900 border-yellow-600' :
+                  displayData.payment_status === 'failed' ? 'bg-red-100 text-red-900 border-red-600' :
+                  displayData.payment_status === 'refunded' ? 'bg-blue-100 text-blue-900 border-blue-600' :
                   'bg-gray-100 text-gray-900 border-gray-600'
                 }`}>
-                  {validatedBookingData.payment_status ? 
-                    validatedBookingData.payment_status.charAt(0).toUpperCase() + validatedBookingData.payment_status.slice(1) : 
+                  {displayData.payment_status ? 
+                    displayData.payment_status.charAt(0).toUpperCase() + displayData.payment_status.slice(1) : 
                     'Payment status unknown'
                   }
                 </span>
@@ -395,7 +426,7 @@ const BookingConfirmation = () => {
             <div className="flex justify-between items-center py-5 mt-4 bg-gray-100 rounded-2xl px-6 border-2 border-gray-300">
               <span className="text-gray-700 font-bold text-xl">Total Amount:</span>
               <span className="text-4xl font-bold text-gray-900" style={{ fontFamily: '"Patrick Hand", cursive' }}>
-                {formatCurrency(validatedBookingData.total_amount)}
+                {formatCurrency(displayData.total_amount)}
               </span>
             </div>
           </div>

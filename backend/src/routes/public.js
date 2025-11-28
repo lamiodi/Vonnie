@@ -3,8 +3,8 @@ import { query } from '../config/db.js';
 import { sendEmail } from '../services/email.js';
 import axios from 'axios';
 import crypto from 'crypto';
-import { createBooking } from '../services/bookingService.js';
-import { successResponse, errorResponse } from '../utils/apiResponse.js';
+import { createBooking, getBookingByNumber } from '../services/bookingService.js';
+import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { verifyPaymentWithFallbacks, logPaymentVerification, storeWebhookData } from '../services/paymentService.js';
 
 const router = express.Router();
@@ -421,7 +421,7 @@ Great news! Your payment has been successfully processed and your booking is now
 
 Booking Number: ${booking.booking_number}
 Services: ${serviceNamesList}
-Payment Amount: ₦${(booking.total_amount).toFixed(2)}
+Payment Amount: ₦${Number(booking.total_amount || 0).toFixed(2)}
 Payment Method: Card
 Payment Reference: ${reference}
 
@@ -488,6 +488,24 @@ Vonne X2X Team`
       error: 'Payment verification failed',
       message: error.message 
     });
+  }
+});
+
+// Get booking by booking number (public)
+router.get('/bookings/by-number/:booking_number', async (req, res) => {
+  try {
+    const { booking_number } = req.params;
+    if (!booking_number) {
+      return res.status(400).json(errorResponse('Booking number is required', 'MISSING_BOOKING_NUMBER', 400));
+    }
+    const booking = await getBookingByNumber(booking_number);
+    if (!booking) {
+      return res.status(404).json(notFoundResponse('Booking', booking_number));
+    }
+    return res.status(200).json(successResponse(booking, 'Booking fetched successfully', 200));
+  } catch (error) {
+    console.error('Error fetching booking by number:', error);
+    return res.status(500).json(errorResponse('Failed to fetch booking', 'BOOKING_FETCH_ERROR', 500));
   }
 });
 

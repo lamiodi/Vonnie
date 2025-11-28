@@ -532,32 +532,32 @@ const PublicBooking = () => {
       console.log('Sending booking data to backend:', JSON.stringify(bookingData, null, 2));
 
       const response = await axios.post(endpoints.createBooking, bookingData);
-        const serverBookingData = response.data;
-        console.log('Booking created successfully:', serverBookingData);
+        const apiResponse = response.data;
+        const serverBookingData = apiResponse && typeof apiResponse === 'object' && 'data' in apiResponse ? apiResponse.data : apiResponse;
+        console.log('Booking created successfully (unwrapped):', serverBookingData);
         console.log('Server booking data structure:', {
-          booking_number: serverBookingData.booking_number,
-          total_amount: serverBookingData.total_amount,
-          customer_name: serverBookingData.customer_name,
-          customer_email: serverBookingData.customer_email,
-          customer_phone: serverBookingData.customer_phone,
-          scheduled_time: serverBookingData.scheduled_time,
-          status: serverBookingData.status,
-          payment_status: serverBookingData.payment_status,
-          services: serverBookingData.services,
-          worker_id: serverBookingData.worker_id,
-          worker_name: serverBookingData.worker_name
+          booking_number: serverBookingData?.booking_number,
+          total_amount: serverBookingData?.total_amount,
+          customer_name: serverBookingData?.customer_name,
+          customer_email: serverBookingData?.customer_email,
+          customer_phone: serverBookingData?.customer_phone,
+          scheduled_time: serverBookingData?.scheduled_time,
+          status: serverBookingData?.status,
+          payment_status: serverBookingData?.payment_status,
+          services: serverBookingData?.services,
+          worker_id: serverBookingData?.worker_id,
+          worker_name: serverBookingData?.worker_name
         });
 
       // Enhanced booking info with worker assignment state
       const bookingInfo = {
-        ...serverBookingData, // Preserve all server data including worker_id, worker_name
-        service_name: serverBookingData.services ? 
+        ...serverBookingData,
+        service_name: serverBookingData?.services ? 
           serverBookingData.services.map(s => s.name).join(', ') : 
           selectedServices.map(s => s.name).join(', '),
         duration: totalDuration,
-        // Explicitly set worker assignment state for clarity
-        has_worker_assigned: !!serverBookingData.worker_id,
-        worker_assignment_status: serverBookingData.worker_id ? 'assigned' : 'pending_assignment'
+        has_worker_assigned: !!serverBookingData?.worker_id,
+        worker_assignment_status: serverBookingData?.worker_id ? 'assigned' : 'pending_assignment'
       };
 
       // Validate booking number from server
