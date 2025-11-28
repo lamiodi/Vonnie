@@ -60,10 +60,9 @@ router.get('/queue', authenticate, async (req, res) => {
           '[]'
         ) as workers,
         CASE
-          WHEN b.customer_type = 'pre_booked' AND b.payment_status = 'completed' THEN 1
-          WHEN b.customer_type = 'walk_in' THEN 2
-          WHEN b.customer_type = 'pre_booked' AND b.payment_status != 'completed' THEN 3
-          ELSE 2
+          WHEN b.customer_type = 'walk_in' THEN 1
+          WHEN b.customer_type = 'pre_booked' THEN 2
+          ELSE 1
         END as calculated_priority
       FROM bookings b
       LEFT JOIN users u ON b.worker_id = u.id

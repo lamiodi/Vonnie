@@ -132,30 +132,27 @@ export const getQueueStatusColor = (status) => {
   return colors[status] || 'bg-gray-100 text-gray-800';
 };
 
-// Queue priority utilities
+// Queue priority utilities - simplified: walk-ins first, then pre-booked
 export const getQueuePriorityColor = (priority) => {
   const colors = {
-    1: 'bg-green-100 text-green-800',    // Paid pre-booked (highest)
-    2: 'bg-blue-100 text-blue-800',    // Walk-in customers
-    3: 'bg-yellow-100 text-yellow-800'  // Non-paid pre-booked (lowest)
+    1: 'bg-blue-100 text-blue-800',    // Walk-in (highest)
+    2: 'bg-yellow-100 text-yellow-800'  // Pre-booked (lower)
   };
   return colors[priority] || 'bg-gray-100 text-gray-800';
 };
 
 export const getQueuePriorityLabel = (priority) => {
   const labels = {
-    1: 'Paid Pre-booked',
-    2: 'Walk-in',
-    3: 'Pre-booked'
+    1: 'Walk-in',
+    2: 'Pre-booked'
   };
   return labels[priority] || 'Unknown';
 };
 
 export const getQueuePriorityTooltip = (priority) => {
   const tooltips = {
-    1: 'Highest priority - Paid pre-booked customer',
-    2: 'Medium priority - Walk-in customer',
-    3: 'Lowest priority - Non-paid pre-booked customer'
+    1: 'Walk-in customer - processed first',
+    2: 'Pre-booked customer - processed after walk-ins'
   };
   return tooltips[priority] || 'Unknown priority';
 };

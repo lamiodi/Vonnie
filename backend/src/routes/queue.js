@@ -32,16 +32,16 @@ router.get('/today', authenticate, authorize(['admin', 'manager', 'staff']), asy
         u.name as worker_name,
         u.email as worker_email,
         CASE 
-          WHEN b.status = 'scheduled' AND b.payment_status = 'completed' THEN 1
-          WHEN b.status = 'scheduled' AND b.payment_status = 'pending' THEN 2
+          WHEN b.customer_type = 'walk_in' THEN 1
+          WHEN b.customer_type = 'pre_booked' THEN 2
           WHEN b.status = 'in-progress' THEN 3
-          ELSE 5
+          ELSE 2
         END as queue_priority,
         CASE 
-          WHEN b.status = 'scheduled' AND b.payment_status = 'completed' THEN 'Ready for Service'
-          WHEN b.status = 'scheduled' AND b.payment_status = 'pending' THEN 'Payment Pending'
+          WHEN b.customer_type = 'walk_in' AND b.status = 'scheduled' THEN 'Walk-in Ready'
+          WHEN b.customer_type = 'pre_booked' AND b.status = 'scheduled' THEN 'Pre-booked Ready'
           WHEN b.status = 'in-progress' THEN 'Currently Being Served'
-          ELSE 'Other'
+          ELSE 'Ready for Service'
         END as queue_status
       FROM bookings b
       LEFT JOIN LATERAL (
@@ -76,10 +76,8 @@ router.get('/today', authenticate, authorize(['admin', 'manager', 'staff']), asy
                                 minutesUntilScheduled <= 14 && 
                                 minutesUntilScheduled >= -14;
       
-      // Determine if customer is ready for service considering buffer time
-      const isReadyForService = (booking.status === 'scheduled' && 
-                                booking.payment_status === 'completed' &&
-                                (booking.customer_type === 'walk_in' || isWithinBufferTime));
+      // Determine if customer is ready for service - all scheduled bookings are ready
+      const isReadyForService = booking.status === 'scheduled';
       
       return {
         ...booking,
@@ -93,30 +91,14 @@ router.get('/today', authenticate, authorize(['admin', 'manager', 'staff']), asy
       };
     });
     
-    // Sort queue with priority: ready walk-ins > ready pre-booked > others
+    // Simple sorting: walk-ins first, then pre-booked by scheduled time
     const sortedQueue = queueData.sort((a, b) => {
-      // Calculate wait time in minutes for dynamic priority adjustment
-      const now = new Date();
-      const aWaitTime = Math.floor((now - new Date(a.created_at)) / (1000 * 60));
-      const bWaitTime = Math.floor((now - new Date(b.created_at)) / (1000 * 60));
+      // Walk-ins have priority over pre-booked
+      if (a.customer_type === 'walk_in' && b.customer_type !== 'walk_in') return -1;
+      if (a.customer_type !== 'walk_in' && b.customer_type === 'walk_in') return 1;
       
-      // Dynamic priority: reduce priority number (higher priority) if waiting too long
-      const aDynamicPriority = a.queue_priority - (aWaitTime > 30 ? 1 : 0) - (aWaitTime > 60 ? 1 : 0);
-      const bDynamicPriority = b.queue_priority - (bWaitTime > 30 ? 1 : 0) - (bWaitTime > 60 ? 1 : 0);
-      
-      // Both ready for service - walk-ins have priority
-      if (a.is_ready_for_service && b.is_ready_for_service) {
-        if (a.customer_type === 'walk_in' && b.customer_type !== 'walk_in') return -1;
-        if (a.customer_type !== 'walk_in' && b.customer_type === 'walk_in') return 1;
-      }
-      
-      // One ready, one not - ready has priority
-      if (a.is_ready_for_service && !b.is_ready_for_service) return -1;
-      if (!a.is_ready_for_service && b.is_ready_for_service) return 1;
-      
-      // Both not ready - use dynamic priority
-      return aDynamicPriority - bDynamicPriority || 
-             new Date(a.scheduled_time) - new Date(b.scheduled_time) ||
+      // Same type - sort by scheduled time (earlier first)
+      return new Date(a.scheduled_time) - new Date(b.scheduled_time) ||
              new Date(a.created_at) - new Date(b.created_at);
     });
     
@@ -131,7 +113,6 @@ router.get('/today', authenticate, authorize(['admin', 'manager', 'staff']), asy
       queue: finalQueue,
       total_bookings: finalQueue.length,
       ready_for_service: finalQueue.filter(b => b.is_ready_for_service).length,
-      payment_pending: finalQueue.filter(b => b.queue_status === 'Payment Pending').length,
       in_progress: finalQueue.filter(b => b.status === 'in-progress').length,
       overdue: finalQueue.filter(b => b.is_overdue).length,
       next_customer: finalQueue.length > 0 ? finalQueue[0] : null

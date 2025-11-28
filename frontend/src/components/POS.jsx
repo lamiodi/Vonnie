@@ -123,13 +123,13 @@ const POS = () => {
               updated_at: new Date().toISOString()
             });
             setBookingData({ ...booking, status: 'in-progress' });
-            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_name}`);
+            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
           } catch (updateError) {
             console.error('Error updating booking status:', updateError);
-            handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_name}`);
+            handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
           }
         } else {
-          handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_name}`);
+          handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
         }
       }
     } catch (error) {
@@ -198,13 +198,13 @@ const POS = () => {
               updated_at: new Date().toISOString()
             });
             setBookingData({ ...booking, status: 'in-progress' });
-            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_name}`);
+            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
           } catch (updateError) {
             console.error('Error updating booking status:', updateError);
-            handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_name}`);
+            handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
           }
         } else {
-          handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_name}`);
+          handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
         }
       } else {
         handleError(null, 'Booking not found');
@@ -528,7 +528,7 @@ const POS = () => {
         
           if (responseData.booking_updated && bookingData) {
             successMessage += `\n\nBooking ${bookingData.booking_number} updated to COMPLETED.`;
-            successMessage += `\nService: ${bookingData.service_name}`;
+            successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
             successMessage += `\nTotal: ₦${formatPrice(getTotal())}`;
           }
         
@@ -619,7 +619,7 @@ const POS = () => {
       
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_name}`;
+          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
         }
       
@@ -701,7 +701,7 @@ const POS = () => {
       
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_name}`;
+          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
           successMessage += `\n\nPlease confirm transfer receipt before completing service.`;
         }
@@ -783,7 +783,7 @@ const POS = () => {
       
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_name}`;
+          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
         }
       
@@ -867,7 +867,7 @@ const POS = () => {
      
       if (responseData.booking_updated || response.booking_updated) {
         successMessage += `\n\nBooking ${bookingData.booking_number} has been marked as COMPLETED.`;
-        successMessage += `\nService: ${bookingData.service_name}`;
+        successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
         const totalAmount = responseData.total_amount || response.total_amount || getTotal();
         const formattedAmount = formatPrice(totalAmount);
         successMessage += `\nTotal Amount: ₦${formattedAmount}`;
@@ -990,6 +990,14 @@ const POS = () => {
                         {bookingData.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
+                    {bookingData.payment_status && (
+                      <div className="flex items-center">
+                        <span className="text-gray-600 font-medium">Payment:</span>
+                        <span className={`ml-2 px-2.5 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(bookingData.payment_status)}`}>
+                          {bookingData.payment_status.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

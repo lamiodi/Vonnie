@@ -32,8 +32,14 @@ const WalkInBooking = () => {
       const data = await apiGet(API_ENDPOINTS.SERVICES);
       setServices(Array.isArray(data) ? data : (data.data || []));
     } catch (error) {
-      console.error('Error fetching services:', error);
-      setServices([]);
+      try {
+        // Fallback to public endpoint if authenticated endpoint fails
+        const fallback = await apiGet(API_ENDPOINTS.PUBLIC_SERVICES);
+        setServices(Array.isArray(fallback) ? fallback : (fallback.data || []));
+      } catch (fallbackError) {
+        console.error('Error fetching services:', fallbackError);
+        setServices([]);
+      }
     }
   };
 

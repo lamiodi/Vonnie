@@ -293,18 +293,15 @@ const BookingsHeader = ({ todaysBookings = [], onNewBooking = () => {} }) => {
         <h3 className="text-sm font-medium text-gray-700 mb-3">Queue Priority Legend</h3>
         <div className="flex flex-wrap gap-4 text-xs">
           <div className="flex items-center">
-            <span className="inline-block w-3 h-3 bg-green-400 rounded-full mr-2"></span>
-            <span>Paid Pre-booked (Priority 1)</span>
-          </div>
-          <div className="flex items-center">
             <span className="inline-block w-3 h-3 bg-blue-400 rounded-full mr-2"></span>
-            <span>Walk-in (Priority 2)</span>
+            <span>Walk-in (Priority 1)</span>
           </div>
           <div className="flex items-center">
             <span className="inline-block w-3 h-3 bg-yellow-400 rounded-full mr-2"></span>
-            <span>Non-paid Pre-booked (Priority 3)</span>
+            <span>Pre-booked (Priority 2)</span>
           </div>
         </div>
+        <p className="text-xs text-gray-600 mt-2">All bookings processed through POS - products can be added during checkout</p>
       </div>
       {/* Manager Queue Dashboard */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -1222,7 +1219,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
         };
       });
       
-      // Retry mechanism for failed assignments
+      // Retry mechanism for failed assignments with non-retryable error handling
       const assignWithRetry = async (maxRetries = 3) => {
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
@@ -1234,8 +1231,36 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
             return result;
           } catch (error) {
             console.error(`Assignment attempt ${attempt} failed:`, error);
+            
+            // Check for non-retryable errors - these should not be retried
+            const statusCode = error.response?.status;
+            const errorCode = error.response?.data?.error?.code;
+            
+            // Non-retryable errors: 400 (validation), 403 (permission), 404 (not found), 409 (conflict)
+            const nonRetryableStatusCodes = [400, 403, 404, 409];
+            const isNonRetryable = nonRetryableStatusCodes.includes(statusCode);
+            
+            if (isNonRetryable) {
+              console.log(`Non-retryable error ${statusCode} detected, stopping retries`);
+              throw error; // Don't retry non-retryable errors
+            }
+            
+            // Check for specific non-retryable error codes
+            const nonRetryableErrorCodes = [
+              'MISSING_WORKERS',
+              'WORKER_ALREADY_ASSIGNED_ERROR',
+              'WORKER_AVAILABILITY_ERROR'
+            ];
+            
+            if (errorCode && nonRetryableErrorCodes.includes(errorCode)) {
+              console.log(`Non-retryable error code ${errorCode} detected, stopping retries`);
+              throw error; // Don't retry specific business logic errors
+            }
+            
+            // If this is the last attempt, throw the error
             if (attempt === maxRetries) throw error;
-            // Exponential backoff: 1s, 2s, 4s
+            
+            // Exponential backoff: 1s, 2s, 4s (only for retryable errors)
             await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
           }
         }
@@ -1718,9 +1743,14 @@ const Bookings = () => {
       const data = await apiGet(API_ENDPOINTS.SERVICES);
       setServices(data);
     } catch (error) {
-      console.error('Error fetching services:', error);
-      // Don't set services on error, leave as empty array
-      setServices([]);
+      try {
+        // Fallback to public endpoint if authenticated endpoint fails
+        const fallback = await apiGet(API_ENDPOINTS.PUBLIC_SERVICES);
+        setServices(Array.isArray(fallback) ? fallback : (fallback.data || []));
+      } catch (fallbackError) {
+        console.error('Error fetching services:', fallbackError);
+        setServices([]);
+      }
     }
   };
   

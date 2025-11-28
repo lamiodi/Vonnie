@@ -231,23 +231,13 @@ const BookingConfirmation = () => {
     return `${mins}m`;
   };
 
-  // Determine the confirmation message based on payment status
+  // Simplified confirmation message - no payment references
   const getConfirmationTitle = () => {
-    if (paymentCompleted || validatedBookingData.payment_status === 'completed') {
-      return 'Booking & Payment Confirmed!';
-    } else if (validatedBookingData.payment_status === 'pending') {
-      return 'Booking Confirmed - Payment Pending!';
-    }
     return 'Booking Confirmed!';
   };
 
   const getConfirmationMessage = () => {
-    if (paymentCompleted || validatedBookingData.payment_status === 'completed') {
-      return 'Your appointment has been successfully scheduled and payment confirmed.';
-    } else if (validatedBookingData.payment_status === 'pending') {
-      return 'Your appointment is scheduled. Please complete payment to confirm your booking.';
-    }
-    return 'Your appointment has been successfully scheduled';
+    return 'Your appointment has been successfully scheduled. Please arrive on time for your appointment.';
   };
 
   return (
@@ -275,15 +265,6 @@ const BookingConfirmation = () => {
           <p className="text-gray-700 text-2xl leading-relaxed">
             {getConfirmationMessage()}
           </p>
-          
-          {/* Payment Status Banner */}
-          {paymentCompleted && (
-            <div className="mt-6 p-5 bg-green-50 border-3 border-green-600 rounded-2xl">
-              <p className="text-green-800 font-bold text-xl">
-                ✅ Payment has been successfully processed!
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Important Notice */}
