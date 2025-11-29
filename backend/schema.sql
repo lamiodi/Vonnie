@@ -5,6 +5,7 @@ CREATE TABLE public.admin_settings (
   id integer NOT NULL DEFAULT nextval('admin_settings_id_seq'::regclass),
   enable_online_booking boolean DEFAULT true,
   enable_email_notifications boolean DEFAULT true,
+  enable_maintenance_mode boolean DEFAULT false,
   updated_by uuid,
   updated_at timestamp without time zone DEFAULT now(),
   CONSTRAINT admin_settings_pkey PRIMARY KEY (id),
