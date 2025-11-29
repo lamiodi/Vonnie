@@ -502,12 +502,7 @@ const POS = () => {
           })),
           customer_info: customerInfo,
           coupon_code: appliedCoupon?.code || null,
-          subtotal: getSubtotal(),
-          discount: getDiscount(),
           tax: getTaxAmount(),
-          total: getTotal(),
-          has_services: cart.some(item => item.type === 'service'),
-          has_products: cart.some(item => item.type === 'product'),
           payment_reference: response.reference,
           payment_method: 'paystack',
           payment_status: 'completed'
@@ -585,12 +580,7 @@ const POS = () => {
         })),
         customer_info: customerInfo,
         coupon_code: appliedCoupon?.code || null,
-        subtotal: getSubtotal(),
-        discount: getDiscount(),
         tax: getTaxAmount(),
-        total: getTotal(),
-        has_services: cart.some(item => item.type === 'service'),
-        has_products: cart.some(item => item.type === 'product'),
         payment_reference: generatePOSReference(),
         payment_method: 'bank_transfer_pos',
         payment_status: 'completed'
@@ -672,15 +662,10 @@ const POS = () => {
         })),
         customer_info: customerInfo,
         coupon_code: appliedCoupon?.code || null,
-        subtotal: getSubtotal(),
-        discount: getDiscount(),
         tax: getTaxAmount(),
-        total: getTotal(),
-        has_services: cart.some(item => item.type === 'service'),
-        has_products: cart.some(item => item.type === 'product'),
         payment_reference: generateBankTransferReference(),
-        payment_method: 'bank_transfer',
-        payment_status: 'pending' // Bank transfers are pending until confirmed
+        payment_method: 'bank_transfer_pos',
+        payment_status: 'completed'
       };
       // Process the complete transaction
       const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
@@ -754,14 +739,9 @@ const POS = () => {
         })),
         customer_info: customerInfo,
         coupon_code: appliedCoupon?.code || null,
-        subtotal: getSubtotal(),
-        discount: getDiscount(),
         tax: getTaxAmount(),
-        total: getTotal(),
-        has_services: cart.some(item => item.type === 'service'),
-        has_products: cart.some(item => item.type === 'product'),
         payment_reference: generatePOSReference(),
-        payment_method: 'bank_transfer',
+        payment_method: 'physical_pos',
         payment_status: 'completed'
       };
       // Process the complete transaction
@@ -850,12 +830,7 @@ const POS = () => {
         })),
         customer_info: customerInfo,
         coupon_code: appliedCoupon?.code || null,
-        subtotal: getSubtotal(),
-        discount: getDiscount(),
-        tax: getTaxAmount(),
-        total: getTotal(),
-        has_services: cart.some(item => item.type === 'service'),
-        has_products: cart.some(item => item.type === 'product')
+        tax: getTaxAmount()
       };
       const response = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
     
