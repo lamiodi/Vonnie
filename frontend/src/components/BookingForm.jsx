@@ -15,6 +15,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   } = endpoints;
   const [services, setServices] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
+  const [workersLoading, setWorkersLoading] = useState(true);
   const [formData, setFormData] = useState({
     service_ids: [],
     workers: [], // Add workers array for multi-worker support
@@ -68,24 +70,38 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   }, [formData.workers, formData.booking_date, formData.service_ids]);
   const fetchServices = async () => {
     try {
+      setServicesLoading(true);
       const response = await axios.get(servicesEndpoint);
-      setServices(response.data);
+      // Ensure response.data is an array, fallback to empty array if not
+      const servicesData = Array.isArray(response.data) ? response.data : 
+                          (response.data && Array.isArray(response.data.services) ? response.data.services : []);
+      setServices(servicesData);
     } catch (error) {
       handleError('Failed to load services', error);
+      setServices([]); // Ensure services is always an array on error
+    } finally {
+      setServicesLoading(false);
     }
   };
   const fetchWorkers = async () => {
     try {
+      setWorkersLoading(true);
       const response = await axios.get(workersEndpoint);
-      setWorkers(response.data);
+      // Ensure response.data is an array, fallback to empty array if not
+      const workersData = Array.isArray(response.data) ? response.data : 
+                         (response.data && Array.isArray(response.data.workers) ? response.data.workers : []);
+      setWorkers(workersData);
     } catch (error) {
       handleError('Failed to load workers', error);
+      setWorkers([]); // Ensure workers is always an array on error
+    } finally {
+      setWorkersLoading(false);
     }
   };
   const fetchAvailableSlots = async () => {
     try {
       const dateStr = formData.booking_date.toISOString().split('T')[0];
-      const workerIds = formData.workers.map(w => w.worker_id).join(',');
+      const workerIds = Array.isArray(formData.workers) ? formData.workers.map(w => w.worker_id).join(',') : '';
       const url = `${availableSlotsEndpoint}?worker_id=${workerIds}&date=${dateStr}&service_ids=${formData.service_ids.join(',')}`;
       const response = await axios.get(url);
       const data = Array.isArray(response.data)
@@ -510,8 +526,14 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Services *
             </label>
+            {servicesLoading ? (
+              <div className="text-center py-4 text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                Loading services...
+              </div>
+            ) : (
             <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-              {services.map(service => (
+              {Array.isArray(services) && services.map(service => (
                 <div
                   key={service.id}
                   onClick={() => handleServiceSelection(service.id)}
@@ -542,15 +564,26 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 {errors.service_ids}
               </p>
             )}
+            {!servicesLoading && Array.isArray(services) && services.length === 0 && (
+              <p className="mt-1 text-sm text-gray-500">No services available</p>
+            )}
+            </div>
+          )}
           </div>
           {/* Worker Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Select Workers *
             </label>
+            {workersLoading ? (
+              <div className="text-center py-4 text-gray-500">
+                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
+                Loading workers...
+              </div>
+            ) : (
             <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-              {workers.map(worker => {
-                const isSelected = formData.workers.some(w => w.worker_id === worker.id);
+              {Array.isArray(workers) && workers.map(worker => {
+                const isSelected = Array.isArray(formData.workers) && formData.workers.some(w => w.worker_id === worker.id);
                 const statusColor = {
                   'available': 'bg-green-100 text-green-800',
                   'busy': 'bg-red-100 text-red-800',
@@ -597,6 +630,11 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 {errors.workers}
               </p>
             )}
+            {!workersLoading && Array.isArray(workers) && workers.length === 0 && (
+              <p className="mt-1 text-sm text-gray-500">No workers available</p>
+            )}
+            </div>
+          )}
           </div>
         </div>
         {/* Date Selection - Hidden for Walk-ins */}

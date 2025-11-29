@@ -125,7 +125,9 @@ const WalkInBooking = () => {
       const response = await apiPost('/api/public/walk-in', bookingData);
       
       // Show success message with booking details
-      const bookingNumber = response.booking_number || response.data?.booking_number || response.id;
+      // The response.data contains the standardized API response, and response.data.data contains the actual booking
+      const bookingDataResponse = response.data?.data || response;
+      const bookingNumber = bookingDataResponse.booking_number || bookingDataResponse.id;
       handleSuccess(`Walk-in booking created successfully! Booking #${bookingNumber}`);
       
       // Delay navigation slightly to allow user to see the success message
