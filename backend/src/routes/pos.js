@@ -348,27 +348,27 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       products = [], // legacy support
       coupon_code,
       customer_info = {},
-      staff_id,
+      staff_id, // Optional: can be overridden by authenticated user
       payment_method = 'cash',
       payment_status, // e.g., 'completed' | 'pending'
       payment_reference,
       tax = 0
     } = req.body;
    
+    // Use authenticated user ID if staff_id not provided
+    const processed_by = staff_id || req.user.id;
+   
     // Validate required fields
-    if (staff_id) {
-      const staffValidation = validateRequiredFields({ staff_id }, ['staff_id']);
-      if (!staffValidation.isValid) {
-        await client.query('ROLLBACK');
-        return res.status(400).json(validationErrorResponse(staffValidation.missingFields, 'Missing required fields'));
-      }
+    if (!processed_by) {
+      await client.query('ROLLBACK');
+      return res.status(400).json(errorResponse('Staff ID is required', 'MISSING_STAFF_ID', 400));
     }
    
     // Validate payment method
-    const validPaymentMethods = ['cash', 'card', 'transfer', 'paystack', 'physical_pos'];
+    const validPaymentMethods = ['cash', 'card', 'transfer', 'paystack', 'physical_pos', 'bank_transfer_pos'];
     if (!validPaymentMethods.includes(payment_method)) {
       await client.query('ROLLBACK');
-      return res.status(400).json(errorResponse('Invalid payment method. Must be one of: cash, card, transfer, paystack, physical_pos', 'INVALID_PAYMENT_METHOD', 400));
+      return res.status(400).json(errorResponse('Invalid payment method. Must be one of: cash, card, transfer, paystack, physical_pos, bank_transfer_pos', 'INVALID_PAYMENT_METHOD', 400));
     }
    
     // Validate payment status if provided
@@ -578,7 +578,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         computed_total,
         payment_method,
         coupon_id,
-        staff_id,
+        processed_by,
         booking?.id || null,
         payment_reference || null
       ]
