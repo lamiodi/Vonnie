@@ -559,7 +559,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 </div>
               ))}
             </div>
-            {touched.service_ids && errors.service_ids && (
+          )}
+          {touched.service_ids && errors.service_ids && (
               <p id="service-error" className="mt-1 text-sm text-red-600" role="alert">
                 {errors.service_ids}
               </p>
@@ -567,8 +568,6 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             {!servicesLoading && Array.isArray(services) && services.length === 0 && (
               <p className="mt-1 text-sm text-gray-500">No services available</p>
             )}
-            </div>
-          )}
           </div>
           {/* Worker Selection */}
           <div>
@@ -625,7 +624,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 );
               })}
             </div>
-            {touched.workers && errors.workers && (
+          )}
+          {touched.workers && errors.workers && (
               <p id="worker-error" className="mt-1 text-sm text-red-600" role="alert">
                 {errors.workers}
               </p>
@@ -633,8 +633,6 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             {!workersLoading && Array.isArray(workers) && workers.length === 0 && (
               <p className="mt-1 text-sm text-gray-500">No workers available</p>
             )}
-            </div>
-          )}
           </div>
         </div>
         {/* Date Selection - Hidden for Walk-ins */}
