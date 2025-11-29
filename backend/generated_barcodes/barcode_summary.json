@@ -1,0 +1,175 @@
+{
+  "totalProducts": 28,
+  "generatedBarcodes": 28,
+  "timestamp": "2025-11-29T11:18:30.643Z",
+  "barcodes": [
+    {
+      "id": "e95dba2e-f963-4e48-85aa-59d2316153d9",
+      "name": "Mini X2x Fur Duffle Bag - Sunrise Yellow",
+      "sku": "MINI-X2X-SY",
+      "barcodePath": "generated_barcodes\\MINI-X2X-SY_Mini_X2x_Fur_Duffle_Bag___Sunrise_Yellow.png"
+    },
+    {
+      "id": "c5375ebd-c561-48c0-a308-0481d0b5895f",
+      "name": "Mini X2x Fur Duffle Bag - Jet Black",
+      "sku": "MINI-X2X-JB",
+      "barcodePath": "generated_barcodes\\MINI-X2X-JB_Mini_X2x_Fur_Duffle_Bag___Jet_Black.png"
+    },
+    {
+      "id": "c5338fc3-3f78-4eef-ab84-c7ba531d62f3",
+      "name": "Mini X2x Fur Duffle Bag - Purple Daisy",
+      "sku": "MINI-X2X-PD",
+      "barcodePath": "generated_barcodes\\MINI-X2X-PD_Mini_X2x_Fur_Duffle_Bag___Purple_Daisy.png"
+    },
+    {
+      "id": "c95a9d4f-0d0e-46e8-8c9e-2c6034540c31",
+      "name": "X2x Fur Duffle Bag - Ice",
+      "sku": "X2X-FUR-ICE",
+      "barcodePath": "generated_barcodes\\X2X-FUR-ICE_X2x_Fur_Duffle_Bag___Ice.png"
+    },
+    {
+      "id": "46f34357-b57b-4cb7-a9b6-a95b528bd0e0",
+      "name": "X2x Fur Duffle Bag - Capuchino",
+      "sku": "X2X-FUR-CAP",
+      "barcodePath": "generated_barcodes\\X2X-FUR-CAP_X2x_Fur_Duffle_Bag___Capuchino.png"
+    },
+    {
+      "id": "41a817bb-d0ac-4703-8d78-4e1585e99be3",
+      "name": "X2x Fur Duffle Bag - Money",
+      "sku": "X2X-FUR-MON",
+      "barcodePath": "generated_barcodes\\X2X-FUR-MON_X2x_Fur_Duffle_Bag___Money.png"
+    },
+    {
+      "id": "323e0726-b4a1-42d9-b6d1-d657258ab1fc",
+      "name": "Strip X Tank Top - Pink",
+      "sku": "STRIP-TANK-P",
+      "barcodePath": "generated_barcodes\\STRIP-TANK-P_Strip_X_Tank_Top___Pink.png"
+    },
+    {
+      "id": "3e0e5108-1e0a-46e3-bf4d-f9dec9989f06",
+      "name": "X Tank Top Plain - Black",
+      "sku": "X-TANK-B",
+      "barcodePath": "generated_barcodes\\X-TANK-B_X_Tank_Top_Plain___Black.png"
+    },
+    {
+      "id": "5a5f937c-ef7a-479b-a7a0-791c0fe33576",
+      "name": "Jumbo African Print Pants",
+      "sku": "JUMBO-PANTS",
+      "barcodePath": "generated_barcodes\\JUMBO-PANTS_Jumbo_African_Print_Pants.png"
+    },
+    {
+      "id": "7ec8fe73-3cf9-4df0-bcef-df00e2b3feef",
+      "name": "Olive Bubu",
+      "sku": "OLIVE-BUBU",
+      "barcodePath": "generated_barcodes\\OLIVE-BUBU_Olive_Bubu.png"
+    },
+    {
+      "id": "e86b3666-8347-436e-a661-ed000d235855",
+      "name": "Rich Energy Set - Milk",
+      "sku": "RICH-ENERGY-M",
+      "barcodePath": "generated_barcodes\\RICH-ENERGY-M_Rich_Energy_Set___Milk.png"
+    },
+    {
+      "id": "ba2d7317-e7fe-49a3-b7f6-1d3bc3a2b26a",
+      "name": "Rich Energy Set - Sapphire",
+      "sku": "RICH-ENERGY-S",
+      "barcodePath": "generated_barcodes\\RICH-ENERGY-S_Rich_Energy_Set___Sapphire.png"
+    },
+    {
+      "id": "bb7b711b-11ed-4f6d-b84d-55e5653efb53",
+      "name": "Money Dress",
+      "sku": "MONEY-DRESS",
+      "barcodePath": "generated_barcodes\\MONEY-DRESS_Money_Dress.png"
+    },
+    {
+      "id": "ca2176e5-5a28-413e-91c4-e82b840cc5ed",
+      "name": "Moment Dress",
+      "sku": "MOMENT-DRESS",
+      "barcodePath": "generated_barcodes\\MOMENT-DRESS_Moment_Dress.png"
+    },
+    {
+      "id": "7b53c328-649b-497d-8ebb-4d4b826dbc6c",
+      "name": "Blue Ocean Skirt Set",
+      "sku": "BLUE-OCEAN-SET",
+      "barcodePath": "generated_barcodes\\BLUE-OCEAN-SET_Blue_Ocean_Skirt_Set.png"
+    },
+    {
+      "id": "e03fda61-8770-4c47-afc0-b426a2343950",
+      "name": "Vonne String Panties - Pink",
+      "sku": "VONNE-PANTIES-P",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-P_Vonne_String_Panties___Pink.png"
+    },
+    {
+      "id": "b40354c4-b13c-4e80-ad7f-8e11134c75ff",
+      "name": "Vonne String Panties - Green",
+      "sku": "VONNE-PANTIES-GR",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-GR_Vonne_String_Panties___Green.png"
+    },
+    {
+      "id": "3eb97f41-15ba-49ce-865c-2945857af081",
+      "name": "Vonne String Panties - Blue",
+      "sku": "VONNE-PANTIES-BL",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-BL_Vonne_String_Panties___Blue.png"
+    },
+    {
+      "id": "0170b9d8-b163-4436-9837-51c09662af69",
+      "name": "Magnolia Dress",
+      "sku": "MAGNOLIA-DRESS",
+      "barcodePath": "generated_barcodes\\MAGNOLIA-DRESS_Magnolia_Dress.png"
+    },
+    {
+      "id": "02dabd84-afbc-466b-aae6-96a510280f0f",
+      "name": "Strip X Tank Top - Black",
+      "sku": "STRIP-TANK-B",
+      "barcodePath": "generated_barcodes\\STRIP-TANK-B_Strip_X_Tank_Top___Black.png"
+    },
+    {
+      "id": "0785c657-4920-48f6-b944-f8fefc923a2b",
+      "name": "Vonne String Panties - Red",
+      "sku": "VONNE-PANTIES-R",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-R_Vonne_String_Panties___Red.png"
+    },
+    {
+      "id": "1b419041-4084-4ceb-850c-5159eabadffc",
+      "name": "Vonne String Panties - White",
+      "sku": "VONNE-PANTIES-W",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-W_Vonne_String_Panties___White.png"
+    },
+    {
+      "id": "f39b7e3c-b360-42c8-b2d7-4e0427e03567",
+      "name": "Vonne String Panties - Brown",
+      "sku": "VONNE-PANTIES-BR",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-BR_Vonne_String_Panties___Brown.png"
+    },
+    {
+      "id": "bd685e38-7ab8-4f47-96bc-b10fdb498323",
+      "name": "Vonne String Panties - Grey",
+      "sku": "VONNE-PANTIES-G",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-G_Vonne_String_Panties___Grey.png"
+    },
+    {
+      "id": "11c42583-b1a3-4e33-a15b-f0a33da5ae0b",
+      "name": "Strip X Tank Top - White",
+      "sku": "STRIP-TANK-W",
+      "barcodePath": "generated_barcodes\\STRIP-TANK-W_Strip_X_Tank_Top___White.png"
+    },
+    {
+      "id": "2e050366-9314-4a37-b643-1aadab791b30",
+      "name": "Mini X2x Fur Duffle Bag - Burgundy",
+      "sku": "MINI-X2X-BU",
+      "barcodePath": "generated_barcodes\\MINI-X2X-BU_Mini_X2x_Fur_Duffle_Bag___Burgundy.png"
+    },
+    {
+      "id": "52181245-fbc6-45cb-ab1d-38d975f12682",
+      "name": "Vonne String Panties - Black",
+      "sku": "VONNE-PANTIES-BK",
+      "barcodePath": "generated_barcodes\\VONNE-PANTIES-BK_Vonne_String_Panties___Black.png"
+    },
+    {
+      "id": "521cfe85-7b7a-43d0-b7d8-7a21e50c2a0c",
+      "name": "Mini X2x Fur Duffle Bag - Bubble Gum",
+      "sku": "MINI-X2X-BG",
+      "barcodePath": "generated_barcodes\\MINI-X2X-BG_Mini_X2x_Fur_Duffle_Bag___Bubble_Gum.png"
+    }
+  ]
+}

@@ -11,10 +11,7 @@ const WalkInBooking = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState([]);
-  const [workers, setWorkers] = useState([]);
-  const [busyWorkers, setBusyWorkers] = useState([]);
   const [selectedServices, setSelectedServices] = useState([]);
-  const [selectedWorkers, setSelectedWorkers] = useState([]);
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
@@ -22,11 +19,9 @@ const WalkInBooking = () => {
     notes: ''
   });
 
-  // Fetch services and workers on component mount
+  // Fetch services on component mount
   useEffect(() => {
     fetchServices();
-    fetchWorkers();
-    fetchBusyWorkers();
   }, []);
 
   const fetchServices = async () => {
@@ -45,46 +40,13 @@ const WalkInBooking = () => {
     }
   };
 
-  const fetchWorkers = async () => {
-    try {
-      const data = await apiGet(API_ENDPOINTS.WORKERS);
-      setWorkers(Array.isArray(data) ? data : (data.data || []));
-    } catch (error) {
-      try {
-        const fallback = await apiGet(API_ENDPOINTS.PUBLIC_WORKERS);
-        setWorkers(Array.isArray(fallback) ? fallback : (fallback.data || []));
-      } catch (fallbackError) {
-        console.error('Error fetching workers:', fallbackError);
-        setWorkers([]);
-      }
-    }
-  };
 
-  const fetchBusyWorkers = async () => {
-    try {
-      // Fetch workers who are currently busy with other bookings
-      const today = new Date().toISOString().split('T')[0];
-      const data = await apiGet(`/api/public/workers/busy-today?date=${today}`);
-      setBusyWorkers(Array.isArray(data) ? data : (data.data || []));
-    } catch (error) {
-      console.error('Error fetching busy workers:', error);
-      setBusyWorkers([]);
-    }
-  };
 
   const handleServiceToggle = (serviceId) => {
     setSelectedServices(prev => 
       prev.includes(serviceId) 
         ? prev.filter(id => id !== serviceId)
         : [...prev, serviceId]
-    );
-  };
-
-  const handleWorkerToggle = (workerId) => {
-    setSelectedWorkers(prev => 
-      prev.includes(workerId) 
-        ? prev.filter(id => id !== workerId)
-        : [...prev, workerId]
     );
   };
 
@@ -143,23 +105,6 @@ const WalkInBooking = () => {
     setLoading(true);
 
     try {
-      // Validate worker availability before creating booking
-      if (selectedWorkers.length > 0) {
-        const unavailableWorkers = selectedWorkers.filter(workerId => 
-          busyWorkers.some(busyWorker => busyWorker.worker_id === workerId)
-        );
-        
-        if (unavailableWorkers.length > 0) {
-          const unavailableNames = unavailableWorkers.map(workerId => {
-            const worker = workers.find(w => w.id === workerId);
-            return worker ? worker.name : 'Unknown Worker';
-          }).join(', ');
-          
-          handleError(null, `The following workers are currently busy: ${unavailableNames}. Please select available workers.`);
-          setLoading(false);
-          return;
-        }
-      }
       // Prepare booking data
       const bookingData = {
         customer_name: formData.customer_name.trim(),
@@ -174,11 +119,6 @@ const WalkInBooking = () => {
       // Add services if selected
       if (selectedServices.length > 0) {
         bookingData.service_ids = selectedServices;
-      }
-
-      // Add worker_ids to booking data for direct assignment
-      if (selectedWorkers.length > 0) {
-        bookingData.worker_ids = selectedWorkers;
       }
       
       // Create the booking with worker assignment
@@ -314,7 +254,7 @@ const WalkInBooking = () => {
               {/* Customer Email */}
               <div className="md:col-span-2">
                 <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address (Optional)
+                  Email Address (for receipts)
                 </label>
                 <input
                   type="email"
@@ -323,7 +263,7 @@ const WalkInBooking = () => {
                   value={formData.customer_email}
                   onChange={handleInputChange}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                  placeholder="customer@example.com"
+                  placeholder="Email for sending receipts (optional)"
                 />
               </div>
             </div>
@@ -441,87 +381,7 @@ const WalkInBooking = () => {
               )}
             </div>
 
-            {/* Worker Selection */}
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Assign Workers
-                </h2>
-                <p className="text-gray-600">Choose staff members for the walk-in customer (optional)</p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {workers.map(worker => {
-                  const isSelected = selectedWorkers.includes(worker.id);
-                  const isBusy = busyWorkers.some(bw => bw.worker_id === worker.id);
-                  
-                  return (
-                    <div
-                      key={worker.id}
-                      className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-                        isSelected
-                          ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-lg'
-                          : isBusy
-                          ? 'border-gray-200 bg-gray-50 opacity-60'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                      onClick={() => !isBusy && handleWorkerToggle(worker.id)}
-                    >
-                      <div className="p-6">
-                        <div className="mb-4 flex justify-center">
-                          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-2xl font-bold shadow-lg">
-                            {worker.name.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </div>
-                        </div>
-                        
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2 text-center">
-                          {worker.name}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-3 text-center">
-                          {worker.role}
-                        </p>
-                        
-                        {isBusy && (
-                          <div className="text-center mb-2">
-                            <span className="text-xs text-orange-600 font-medium bg-orange-100 px-3 py-1 rounded-full">
-                              Busy today
-                            </span>
-                          </div>
-                        )}
-                        
-                        {isSelected && (
-                          <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {workers.length === 0 && (
-                <div className="text-center py-8">
-                  <div className="text-gray-500 text-lg">No workers available</div>
-                  <p className="text-gray-400 text-sm mt-2">Workers can be assigned later by the manager</p>
-                </div>
-              )}
-              
-              <div className="mt-6 bg-blue-50 border-2 border-blue-200 rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-blue-600 text-xl">ℹ️</span>
-                  <div>
-                    <h4 className="font-semibold text-blue-800 mb-1">Worker Assignment:</h4>
-                    <p className="text-blue-700 text-sm">
-                      Select one or more workers to assign to this booking, or leave empty for manager to assign later.
-                      Workers marked as "Busy today" are currently assigned to other bookings.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+
 
             {/* Notes */}
             <div>
@@ -564,8 +424,8 @@ const WalkInBooking = () => {
                 <div>
                   <h4 className="font-semibold text-purple-800 mb-1" style={{ fontFamily: '"UnifrakturCook", cursive' }}>How it works:</h4>
                   <p className="text-purple-700 text-sm">
-                    This creates a walk-in booking. You can optionally select services and assign one or more workers now, 
-                    or the manager will assign them later in the booking management page.
+                    This creates a walk-in booking. You can optionally select services now, 
+                    or the manager will assign services and workers later in the booking management page.
                   </p>
                 </div>
               </div>
