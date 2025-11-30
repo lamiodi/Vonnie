@@ -1165,21 +1165,9 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
         return;
       }
       
-      // **AVAILABILITY CHECK**: Verify selected workers are not busy
-      const busySelectedWorkers = selectedWorkers.filter(workerId => 
-        busyWorkers.some(busy => busy.worker_id === workerId || busy.id === workerId)
-      );
-      
-      if (busySelectedWorkers.length > 0) {
-        const busyWorkerNames = busySelectedWorkers
-          .map(workerId => workers.find(w => w.id === workerId)?.name || `Worker ${workerId}`)
-          .filter(name => name)
-          .join(', ');
-        
-        setError(`The following workers are marked as busy: ${busyWorkerNames}. Please select available workers.`);
-        setLoading(false);
-        return;
-      }
+      // **AVAILABILITY CHECK**: Removed strict blocking based on "busy today" status.
+      // We rely on checkWorkerConflicts above to detect actual time overlaps.
+      // The "busy today" status is only for visual indication.
       
       // **DUPLICATE CHECK**: Prevent assigning the same worker multiple times
       const uniqueWorkers = [...new Set(selectedWorkers)];
@@ -1600,7 +1588,7 @@ const Bookings = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [customerTypeFilter, setCustomerTypeFilter] = useState('all');
-  const [dateFilter, setDateFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('today');
   const [showForm, setShowForm] = useState(false);
   const [editingBooking, setEditingBooking] = useState(null);
   const [showWorkerModal, setShowWorkerModal] = useState(false);

@@ -5,9 +5,9 @@ CREATE TABLE public.admin_settings (
   id integer NOT NULL DEFAULT nextval('admin_settings_id_seq'::regclass),
   enable_online_booking boolean DEFAULT true,
   enable_email_notifications boolean DEFAULT true,
-  enable_maintenance_mode boolean DEFAULT false,
   updated_by uuid,
   updated_at timestamp without time zone DEFAULT now(),
+  enable_maintenance_mode boolean DEFAULT false,
   CONSTRAINT admin_settings_pkey PRIMARY KEY (id),
   CONSTRAINT admin_settings_updated_by_fkey FOREIGN KEY (updated_by) REFERENCES public.users(id)
 );
@@ -211,12 +211,17 @@ CREATE TABLE public.pos_transactions (
   discount_amount numeric DEFAULT 0,
   coupon_id uuid,
   total_amount numeric NOT NULL,
-  payment_method character varying NOT NULL CHECK (payment_method::text = ANY (ARRAY['cash'::character varying, 'paystack'::character varying, 'bank_transfer'::character varying]::text[])),
+  payment_method character varying NOT NULL CHECK (payment_method::text = ANY (ARRAY['cash'::character varying, 'card'::character varying, 'transfer'::character varying, 'paystack'::character varying, 'physical_pos'::character varying, 'bank_transfer_pos'::character varying, 'bank_transfer'::character varying]::text[])),
   notes text,
   created_by uuid,
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  payment_status character varying DEFAULT 'pending'::character varying CHECK (payment_status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text])),
+  status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'cancelled'::text])),
+  booking_id uuid,
+  payment_reference character varying,
   CONSTRAINT pos_transactions_pkey PRIMARY KEY (id),
+  CONSTRAINT pos_transactions_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
   CONSTRAINT pos_transactions_coupon_id_fkey FOREIGN KEY (coupon_id) REFERENCES public.coupons(id),
   CONSTRAINT pos_transactions_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
 );
@@ -321,25 +326,3 @@ CREATE TABLE public.webhook_endpoints (
   updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT webhook_endpoints_pkey PRIMARY KEY (id)
 );
-
--- Add missing columns to pos_transactions table for POS API functionality
-ALTER TABLE public.pos_transactions 
-ADD COLUMN IF NOT EXISTS payment_status character varying DEFAULT 'pending'::character varying 
-CHECK (payment_status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text]));
-
-ALTER TABLE public.pos_transactions 
-ADD COLUMN IF NOT EXISTS status character varying DEFAULT 'pending'::character varying 
-CHECK (status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'cancelled'::text]));
-
-ALTER TABLE public.pos_transactions 
-ADD COLUMN IF NOT EXISTS booking_id uuid 
-CONSTRAINT pos_transactions_booking_id_fkey REFERENCES public.bookings(id);
-
-ALTER TABLE public.pos_transactions 
-ADD COLUMN IF NOT EXISTS payment_reference character varying;
-
--- Create indexes for better performance
-CREATE INDEX IF NOT EXISTS idx_pos_transactions_payment_status ON public.pos_transactions(payment_status);
-CREATE INDEX IF NOT EXISTS idx_pos_transactions_status ON public.pos_transactions(status);
-CREATE INDEX IF NOT EXISTS idx_pos_transactions_booking_id ON public.pos_transactions(booking_id);
-CREATE INDEX IF NOT EXISTS idx_pos_transactions_payment_reference ON public.pos_transactions(payment_reference);

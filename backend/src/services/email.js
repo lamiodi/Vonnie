@@ -9,15 +9,28 @@ const getResendClient = () => {
   return resendClient;
 };
 
+// Common styles and font imports
+const FONT_IMPORTS = `
+  <link href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&display=swap" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&display=swap');
+  </style>
+`;
+
 export const sendEmail = async (to, subject, text, html = null) => {
   try {
     const resend = getResendClient();
+    // Inject font imports if HTML is provided
+    const finalHtml = html ? `${FONT_IMPORTS}${html}` : html;
+    
     const { data, error } = await resend.emails.send({
       from: 'Vonne X2X <notifications@vonneex2x.store>',
       to,
       subject,
       text,
-      html: html || text
+      html: finalHtml || text
     });
 
     if (error) {
@@ -34,24 +47,81 @@ export const sendEmail = async (to, subject, text, html = null) => {
 };
 
 export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
-  const subject = 'Booking Confirmation - Vonne X2X';
+  const subject = '✨ Booking Confirmed - Vonne X2X';
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-      <h2 style="color: #333;">Booking Confirmation</h2>
-      <p>Dear ${bookingDetails.customerName},</p>
-      <p>Your booking has been confirmed! Here are the details:</p>
-      
-      <div style="background-color: #f5f5f5; padding: 20px; border-radius: 5px; margin: 20px 0;">
-        <h3 style="margin-top: 0;">Booking Details</h3>
-        <p><strong>Booking Number:</strong> ${bookingDetails.bookingNumber}</p>
-        <p><strong>Service:</strong> ${bookingDetails.serviceName}</p>
-        <p><strong>Date:</strong> ${new Date(bookingDetails.bookingDate).toLocaleDateString()}</p>
-        <p><strong>Time:</strong> ${bookingDetails.bookingTime}</p>
-        <p><strong>Price:</strong> ₦${bookingDetails.price}</p>
+    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid #9333ea;">
+      <!-- Header with gradient -->
+      <div style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); padding: 40px 30px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
+          ✨ Booking Confirmed!
+        </h1>
+        <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your appointment has been successfully booked</p>
       </div>
       
-      <p>We look forward to serving you!</p>
-      <p>Best regards,<br>Vonne X2X Team</p>
+      <!-- Main content -->
+      <div style="padding: 30px;">
+        <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${bookingDetails.customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+          Thank you for choosing Vonne X2X! We're excited to confirm your appointment.
+        </p>
+        
+        <!-- Booking Details Card -->
+        <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); border: 2px solid #9333ea; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.1);">
+          <h3 style="color: #7c2d12; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #9333ea, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+            📋 Booking Details
+          </h3>
+          
+          <div style="display: grid; gap: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
+              <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
+              <span style="color: #9333ea; font-weight: bold; font-size: 16px; font-family: monospace;">${bookingDetails.bookingNumber}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ec4899;">
+              <span style="font-weight: 600; color: #6b7280;">Service:</span>
+              <span style="color: #1f2937; font-weight: 600;">${bookingDetails.serviceName}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
+              <span style="font-weight: 600; color: #6b7280;">Date:</span>
+              <span style="color: #1f2937; font-weight: 600;">${new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ec4899;">
+              <span style="font-weight: 600; color: #6b7280;">Time:</span>
+              <span style="color: #1f2937; font-weight: bold; font-size: 18px;">${bookingDetails.bookingTime}</span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
+              <span style="font-weight: 600; color: #6b7280;">Price:</span>
+              <span style="color: #059669; font-weight: bold; font-size: 18px;">₦${bookingDetails.price}</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Next steps -->
+        <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
+          <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">✨ Next Steps</h4>
+          <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.5;">
+            Please arrive 10 minutes early. We can't wait to see you!
+          </p>
+        </div>
+        
+        <!-- Contact info -->
+        <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
+          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to reschedule?</p>
+          <p style="margin: 0; color: #9333ea; font-weight: 600;">
+            Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
+          </p>
+        </div>
+      </div>
+      
+      <!-- Footer -->
+      <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
+        <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
+        <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
+        <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for choosing us!</p>
+      </div>
     </div>
   `;
   
@@ -61,33 +131,13 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
 export const sendBookingReminder = async (userEmail, bookingDetails) => {
   const subject = '⏰ Appointment Reminder - Vonne X2X';
   const html = `
-    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-      <!-- Header with gradient matching PublicBooking.jsx -->
+    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid #f59e0b;">
+      <!-- Header with gradient -->
       <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 40px 30px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold;">
+        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
           ⏰ Appointment Reminder
         </h1>
         <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your beauty appointment is coming up!</p>
-      </div>
-      
-      <!-- Progress indicator -->
-      <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">✓</div>
-            <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">Booked</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899);"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.3);">⏰</div>
-            <p style="margin: 0; font-size: 12px; color: #f59e0b; font-weight: 600;">Reminder</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: #e2e8f0;"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">3</div>
-            <p style="margin: 0; font-size: 12px; color: #64748b;">Complete</p>
-          </div>
-        </div>
       </div>
       
       <!-- Main content -->
@@ -97,7 +147,7 @@ export const sendBookingReminder = async (userEmail, bookingDetails) => {
           This is a friendly reminder for your upcoming beauty appointment. We're excited to see you soon!
         </p>
         
-        <!-- Appointment details card matching PublicBooking.jsx styling -->
+        <!-- Appointment details card -->
         <div style="background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 2px solid #f59e0b; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.1);">
           <h3 style="color: #d97706; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #f59e0b, #d97706); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
             📅 Appointment Details
@@ -132,13 +182,12 @@ export const sendBookingReminder = async (userEmail, bookingDetails) => {
           <ul style="margin: 0; padding-left: 20px; color: #0c4a6e; font-size: 14px; line-height: 1.6;">
             <li>Please arrive 10 minutes early for your appointment</li>
             <li>Bring any relevant documents or preferences</li>
-            <li>Contact us if you need to reschedule</li>
           </ul>
         </div>
         
         <!-- Contact info -->
         <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
-          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to reschedule or have questions?</p>
+          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to reschedule?</p>
           <p style="margin: 0; color: #9333ea; font-weight: 600;">
             Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
           </p>
@@ -149,7 +198,6 @@ export const sendBookingReminder = async (userEmail, bookingDetails) => {
       <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
         <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
         <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
-        <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">We can't wait to make you look and feel amazing!</p>
       </div>
     </div>
   `;
@@ -172,33 +220,13 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
     : '💳 Payment Confirmed - Your Booking is Confirmed!';
     
   const html = `
-    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-      <!-- Header with gradient matching PublicBooking.jsx -->
+    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid #10b981;">
+      <!-- Header with gradient -->
       <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold;">
+        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
           💳 Payment Confirmed
         </h1>
         <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your payment has been successfully processed!</p>
-      </div>
-      
-      <!-- Progress indicator -->
-      <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">✓</div>
-            <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">Booked</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899);"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);">💳</div>
-            <p style="margin: 0; font-size: 12px; color: #10b981; font-weight: 600;">Paid</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: #e2e8f0;"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">3</div>
-            <p style="margin: 0; font-size: 12px; color: #64748b;">Complete</p>
-          </div>
-        </div>
       </div>
       
       <!-- Main content -->
@@ -208,7 +236,7 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
           Your payment has been successfully processed and your booking is now confirmed!
         </p>
         
-        <!-- Payment details card matching PublicBooking.jsx styling -->
+        <!-- Payment details card -->
         <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #10b981; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);">
           <h3 style="color: #059669; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
             💰 Payment Details
@@ -245,14 +273,13 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
         <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
           <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">✨ Next Steps</h4>
           <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.5;">
-            Your booking is now confirmed! You'll receive a reminder before your appointment. 
-            Please arrive 10 minutes early for your appointment.
+            Your booking is now confirmed! You'll receive a reminder before your appointment.
           </p>
         </div>
         
         <!-- Contact info -->
         <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
-          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Questions about your payment or booking?</p>
+          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Questions?</p>
           <p style="margin: 0; color: #9333ea; font-weight: 600;">
             Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
           </p>
@@ -263,7 +290,6 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
       <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
         <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
         <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
-        <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for your payment and trust in our services!</p>
       </div>
     </div>
   `;
@@ -271,7 +297,7 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
   return await sendEmail(email, subject, '', html);
 };
 
-// Unified inventory alert system
+// Unified inventory alert system (updated with Patrick Hand)
 export const sendInventoryAlert = async (alertData) => {
   const {
     alertType = 'low_stock', // 'low_stock', 'out_of_stock', 'reorder_needed'
@@ -279,42 +305,45 @@ export const sendInventoryAlert = async (alertData) => {
     recipientEmail = 'admin@vonneex2x.store'
   } = alertData;
 
-  let subject, headerText, contextMessage;
+  let subject, headerText, contextMessage, headerGradient;
   
   if (alertType === 'out_of_stock') {
     subject = '🚨 Out of Stock Alert - Vonne X2X';
     headerText = '🚨 Out of Stock Alert';
     contextMessage = 'The following products are completely out of stock:';
+    headerGradient = 'linear-gradient(135deg, #f44336 0%, #d32f2f 100%)';
   } else if (alertType === 'reorder_needed') {
     subject = '📦 Reorder Alert - Vonne X2X';
     headerText = '📦 Reorder Alert';
     contextMessage = 'The following products need to be reordered:';
+    headerGradient = 'linear-gradient(135deg, #ff9800 0%, #f57c00 100%)';
   } else {
     subject = '⚠️ Low Stock Alert - Vonne X2X';
     headerText = '⚠️ Low Stock Alert';
     contextMessage = 'The following products are running low on stock:';
+    headerGradient = 'linear-gradient(135deg, #ff9800 0%, #ef6c00 100%)';
   }
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
-      <div style="background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%); padding: 30px; text-align: center; color: white;">
-        <h2 style="margin: 0; font-size: 28px;">${headerText}</h2>
+    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
+      <div style="background: ${headerGradient}; padding: 30px; text-align: center; color: white;">
+        <h2 style="margin: 0; font-size: 28px; font-family: 'UnifrakturCook', cursive, serif;">${headerText}</h2>
       </div>
       
       <div style="padding: 30px;">
         <p style="font-size: 16px; color: #333;">Dear <strong>Inventory Manager</strong>,</p>
         <p style="font-size: 16px; color: #555;">${contextMessage}</p>
         
-        <div style="background: #ffebee; border: 1px solid #ffcdd2; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <h3 style="color: #f44336; margin-top: 0; font-size: 20px;">Affected Products</h3>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
-            <tr style="background-color: #ffcdd2;">
+        <div style="background: #fff; border: 1px solid #eee; padding: 0; border-radius: 8px; margin: 20px 0; overflow: hidden;">
+          <h3 style="background: #f5f5f5; margin: 0; padding: 15px; color: #333; font-size: 18px; border-bottom: 1px solid #eee;">Affected Products</h3>
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr style="background-color: #fafafa;">
               <th style="padding: 10px; text-align: left; font-weight: 600;">Product</th>
               <th style="padding: 10px; text-align: center; font-weight: 600;">SKU</th>
               <th style="padding: 10px; text-align: right; font-weight: 600;">Current Stock</th>
             </tr>
             ${products.map(product => `
-              <tr style="border-bottom: 1px solid #ffcdd2;">
+              <tr style="border-bottom: 1px solid #eee;">
                 <td style="padding: 10px;">${product.name}</td>
                 <td style="padding: 10px; text-align: center;">${product.sku}</td>
                 <td style="padding: 10px; text-align: right; font-weight: 600; color: ${product.stock_level === 0 ? '#f44336' : '#ff9800'};">
@@ -330,16 +359,10 @@ export const sendInventoryAlert = async (alertData) => {
             <strong>📋 Action Required:</strong> Please review these stock levels and place orders with suppliers as needed.
           </p>
         </div>
-        
-        <div style="text-align: center; margin-top: 30px;">
-          <p style="color: #666; font-size: 14px;">Need to update stock levels or have questions?</p>
-          <p style="color: #666; font-size: 14px;">Contact the system administrator.</p>
-        </div>
       </div>
       
       <div style="background: #f5f5f5; padding: 20px; text-align: center; border-top: 1px solid #e0e0e0;">
         <p style="margin: 0; color: #666; font-size: 14px;">Best regards,<br><strong>Vonne X2X Team</strong></p>
-        <p style="margin: 10px 0 0 0; color: #999; font-size: 12px;">Professional Service Management System</p>
       </div>
     </div>
   `;
@@ -363,67 +386,38 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
 
   const { isReschedule = false, isUpdate = false } = context;
 
-  let subject, headerText, contextMessage, headerGradient, stepIcon, stepColor;
+  let subject, headerText, contextMessage, headerGradient;
   
   if (isReschedule) {
     subject = '🔄 Booking Rescheduled - Vonne X2X';
     headerText = '🔄 Booking Rescheduled';
     contextMessage = 'Your appointment has been successfully rescheduled. Here are your updated details:';
     headerGradient = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-    stepIcon = '🔄';
-    stepColor = '#8b5cf6';
   } else if (isUpdate) {
     subject = '📝 Booking Updated - Vonne X2X';
     headerText = '📝 Booking Updated';
     contextMessage = 'Your appointment details have been updated:';
     headerGradient = 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)';
-    stepIcon = '📝';
-    stepColor = '#06b6d4';
   } else {
     subject = '✅ Booking Confirmation - Vonne X2X';
     headerText = '✅ Booking Confirmed';
     contextMessage = 'Your booking has been confirmed! Here are the details:';
     headerGradient = 'linear-gradient(135deg, #9333ea 0%, #ec4899 100%)';
-    stepIcon = '✅';
-    stepColor = '#9333ea';
   }
 
   const html = `
     <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-      <!-- Header with gradient matching PublicBooking.jsx -->
+      <!-- Header with gradient -->
       <div style="background: ${headerGradient}; padding: 40px 30px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; background: linear-gradient(45deg, #ffffff, #f0f0f0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
           ${headerText}
         </h1>
         <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">${contextMessage}</p>
       </div>
       
-      <!-- Progress indicator -->
-      <div style="background: #f8fafc; padding: 20px; border-bottom: 1px solid #e2e8f0;">
-        <div style="display: flex; justify-content: center; align-items: center; gap: 15px;">
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: ${headerGradient}; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px; box-shadow: 0 4px 15px rgba(147, 51, 234, 0.3);">${stepIcon}</div>
-            <p style="margin: 0; font-size: 12px; color: #9333ea; font-weight: 600;">${isReschedule ? 'Rescheduled' : isUpdate ? 'Updated' : 'Confirmed'}</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: linear-gradient(90deg, #9333ea, #ec4899);"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">2</div>
-            <p style="margin: 0; font-size: 12px; color: #64748b;">Upcoming</p>
-          </div>
-          <div style="flex: 0 0 30px; height: 2px; background: #e2e8f0;"></div>
-          <div style="text-align: center;">
-            <div style="width: 40px; height: 40px; border-radius: 50%; background: #e2e8f0; color: #64748b; display: flex; align-items: center; justify-content: center; font-weight: bold; margin: 0 auto 5px;">3</div>
-            <p style="margin: 0; font-size: 12px; color: #64748b;">Complete</p>
-          </div>
-        </div>
-      </div>
-      
       <!-- Main content -->
       <div style="padding: 30px;">
         <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${customerName}</strong>,</p>
-        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
-          ${contextMessage}
-        </p>
         
         ${(isReschedule || isUpdate) && previousDate && previousTime ? `
           <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 16px; padding: 20px; margin: 25px 0; box-shadow: 0 4px 20px rgba(245, 158, 11, 0.1);">
@@ -433,12 +427,7 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
             <div style="display: grid; gap: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: white; border-radius: 10px; border-left: 4px solid #f59e0b;">
                 <span style="font-weight: 600; color: #6b7280;">Date:</span>
-                <span style="color: #1f2937; font-weight: 600;">${new Date(previousDate).toLocaleDateString('en-US', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}</span>
+                <span style="color: #1f2937; font-weight: 600;">${new Date(previousDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; background: white; border-radius: 10px; border-left: 4px solid #d97706;">
                 <span style="font-weight: 600; color: #6b7280;">Time:</span>
@@ -448,7 +437,7 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
           </div>
         ` : ''}
         
-        <!-- Appointment details card matching PublicBooking.jsx styling -->
+        <!-- Appointment details card -->
         <div style="background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%); border: 2px solid #9333ea; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.1);">
           <h3 style="color: #7c2d12; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #9333ea, #ec4899); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
             📋 Appointment Details
@@ -467,12 +456,7 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #9333ea;">
               <span style="font-weight: 600; color: #6b7280;">Date:</span>
-              <span style="color: #1f2937; font-weight: 600;">${new Date(bookingDate).toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}</span>
+              <span style="color: #1f2937; font-weight: 600;">${new Date(bookingDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #ec4899;">
@@ -487,19 +471,9 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
           </div>
         </div>
         
-        <!-- Important info -->
-        <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
-          <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">💡 Important Reminder</h4>
-          <ul style="margin: 0; padding-left: 20px; color: #0c4a6e; font-size: 14px; line-height: 1.6;">
-            <li>Please arrive 10 minutes early for your appointment</li>
-            <li>Bring any relevant documents or preferences</li>
-            <li>Contact us if you need to reschedule</li>
-          </ul>
-        </div>
-        
         <!-- Contact info -->
         <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
-          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Need to reschedule or have questions?</p>
+          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Questions?</p>
           <p style="margin: 0; color: #9333ea; font-weight: 600;">
             Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
           </p>
@@ -510,7 +484,6 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
       <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
         <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
         <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
-        <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">We look forward to serving you!</p>
       </div>
     </div>
   `;
@@ -534,10 +507,10 @@ export const sendPOSTransactionEmail = async (email, transactionData) => {
     : '🧾 Transaction Receipt - Vonne X2X';
 
   const html = `
-    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
-      <!-- Header with gradient matching PublicBooking.jsx -->
+    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid #3b82f6;">
+      <!-- Header with gradient -->
       <div style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); padding: 40px 30px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; background: linear-gradient(45deg, #ffffff, #f0f0f0); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
           ${bookingNumber ? '💳 Payment Confirmed' : '🧾 Transaction Receipt'}
         </h1>
         <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Thank you for your transaction at Vonne X2X</p>
@@ -596,21 +569,11 @@ export const sendPOSTransactionEmail = async (email, transactionData) => {
           </div>
         ` : ''}
         
-        <!-- Next steps -->
-        <div style="background: #f0f9ff; border: 1px solid #0ea5e9; border-radius: 12px; padding: 20px; margin: 25px 0;">
-          <h4 style="margin: 0 0 10px 0; color: #0369a1; font-size: 16px; font-weight: 600;">✨ What's Next?</h4>
-          <p style="margin: 0; color: #0c4a6e; font-size: 14px; line-height: 1.5;">
-            ${bookingNumber 
-              ? 'Your booking is confirmed! You\'ll receive a reminder before your appointment. Please arrive 10 minutes early.' 
-              : 'Thank you for your transaction! Keep this receipt for your records. If you have any questions, please contact us.'}
-          </p>
-        </div>
-        
         <!-- Contact info -->
         <div style="text-align: center; margin: 30px 0; padding: 20px; background: #f8fafc; border-radius: 12px;">
-          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Questions about your transaction?</p>
-          <p style="margin: 0; color: #3b82f6; font-weight: 600;">
-            Contact us at <a href="mailto:support@vonneex2x.store" style="color: #1d4ed8; text-decoration: none;">support@vonneex2x.store</a>
+          <p style="margin: 0 0 10px 0; color: #64748b; font-size: 14px;">Questions?</p>
+          <p style="margin: 0; color: #9333ea; font-weight: 600;">
+            Contact us at <a href="mailto:support@vonneex2x.store" style="color: #ec4899; text-decoration: none;">support@vonneex2x.store</a>
           </p>
         </div>
       </div>
@@ -619,7 +582,6 @@ export const sendPOSTransactionEmail = async (email, transactionData) => {
       <div style="background: linear-gradient(135deg, #1f2937 0%, #374151 100%); padding: 30px; text-align: center; color: white;">
         <p style="margin: 0; font-size: 18px; font-family: 'UnifrakturCook', cursive, serif; margin-bottom: 10px;">Vonne X2X</p>
         <p style="margin: 0; font-size: 14px; opacity: 0.8;">Professional Service Management System</p>
-        <p style="margin: 10px 0 0 0; font-size: 12px; opacity: 0.6;">Thank you for choosing Vonne X2X!</p>
       </div>
     </div>
   `;

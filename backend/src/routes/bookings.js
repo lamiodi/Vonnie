@@ -246,19 +246,23 @@ router.get('/conflicts', async (req, res) => {
     console.log('Date range:', startDateTime, 'to', endDateTime);
     
     // Check for overlapping bookings with these workers
+    // We use dynamic duration calculation: (COALESCE(b.duration, 60) * interval '1 minute')
+    const existingEndExpr = "b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute')";
+
     let conflictQuery = `
       SELECT 
         b.id,
         b.booking_number,
         b.scheduled_time,
+        b.duration,
         b.status,
         u.name as worker_name,
         u.id as worker_id,
         CASE 
-          WHEN b.scheduled_time <= $1 AND b.scheduled_time + interval '1 hour' > $1 THEN 'starts_during'
-          WHEN b.scheduled_time < $2 AND b.scheduled_time + interval '1 hour' >= $2 THEN 'ends_during'
-          WHEN b.scheduled_time >= $1 AND b.scheduled_time + interval '1 hour' <= $2 THEN 'completely_overlaps'
-          ELSE 'adjacent'
+          WHEN b.scheduled_time <= $1 AND ${existingEndExpr} > $1 THEN 'starts_during'
+          WHEN b.scheduled_time < $2 AND ${existingEndExpr} >= $2 THEN 'ends_during'
+          WHEN b.scheduled_time >= $1 AND ${existingEndExpr} <= $2 THEN 'completely_overlaps'
+          ELSE 'overlap'
         END as conflict_type
       FROM bookings b
       JOIN booking_workers bw ON b.id = bw.booking_id AND bw.status = 'active'
@@ -266,9 +270,8 @@ router.get('/conflicts', async (req, res) => {
       WHERE b.status IN ('scheduled', 'in-progress', 'confirmed')
         AND bw.worker_id = ANY($3)
         AND (
-          (b.scheduled_time <= $1 AND b.scheduled_time + interval '1 hour' > $1) OR
-          (b.scheduled_time < $2 AND b.scheduled_time + interval '1 hour' >= $2) OR
-          (b.scheduled_time >= $1 AND b.scheduled_time + interval '1 hour' <= $2)
+          b.scheduled_time < $2 AND 
+          ${existingEndExpr} > $1
         )
     `;
     
