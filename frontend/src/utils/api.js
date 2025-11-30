@@ -298,6 +298,7 @@ export const API_ENDPOINTS = {
   REPORTS_ATTENDANCE: '/reports/attendance',
   REPORTS_BOOKINGS: '/reports/bookings',
   REPORTS_COUPONS: '/reports/coupons',
+  REPORTS_CUSTOMERS: '/reports/customers',
   
   // Analytics
   ANALYTICS_DASHBOARD: '/analytics/dashboard',

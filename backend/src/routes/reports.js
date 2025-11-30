@@ -299,245 +299,91 @@ router.get('/worker-performance', authenticate, authorize(['admin', 'manager']),
       sql += ` AND b.scheduled_time >= $${paramCount}`;
       params.push(start_date);
     }
-    
+
     if (end_date) {
       paramCount++;
       sql += ` AND b.scheduled_time <= $${paramCount}`;
       params.push(end_date);
     }
     
-    sql += ` GROUP BY u.id, u.name, u.email, s.name ORDER BY total_services_performed DESC`;
+    sql += ` GROUP BY u.id, u.name, u.email, s.name ORDER BY total_service_revenue DESC`;
     
     const result = await query(sql, params);
     
-    // Get detailed service breakdown per worker
-    let serviceBreakdownSql = `
-      SELECT 
-        u.id as worker_id,
-        u.name as worker_name,
-        s.name as service_name,
-        s.price as service_price,
-        COUNT(bs.id) as service_count,
-        SUM(bs.total_price) as service_revenue
-      FROM users u
-      LEFT JOIN bookings b ON u.id = b.worker_id
-      LEFT JOIN booking_services bs ON bs.booking_id = b.id
-      LEFT JOIN services s ON bs.service_id = s.id
-      WHERE u.role IN ('staff', 'manager') AND u.is_active = true
-      AND b.status = 'completed'
-    `;
-    
-    const serviceBreakdownParams = [];
-    let serviceParamCount = 0;
-    
-    if (worker_id) {
-      serviceParamCount++;
-      serviceBreakdownSql += ` AND u.id = $${serviceParamCount}`;
-      serviceBreakdownParams.push(worker_id);
-    }
-    
-    if (start_date) {
-      serviceParamCount++;
-      serviceBreakdownSql += ` AND b.scheduled_time >= $${serviceParamCount}`;
-      serviceBreakdownParams.push(start_date);
-    }
-    
-    if (end_date) {
-      serviceParamCount++;
-      serviceBreakdownSql += ` AND b.scheduled_time <= $${serviceParamCount}`;
-      serviceBreakdownParams.push(end_date);
-    }
-    
-    serviceBreakdownSql += ` GROUP BY u.id, u.name, s.name, s.price ORDER BY u.name, service_count DESC`;
-    
-    const serviceBreakdownResult = await query(serviceBreakdownSql, serviceBreakdownParams);
-    
-    res.json(successResponse({
-      worker_performance: result.rows,
-      service_breakdown: serviceBreakdownResult.rows,
-      summary: {
-        total_workers: result.rows.length,
-        total_services_performed: result.rows.reduce((sum, row) => sum + parseInt(row.total_services_performed || 0), 0),
-        total_service_revenue: result.rows.reduce((sum, row) => sum + parseFloat(row.total_service_revenue || 0), 0),
-        average_services_per_worker: result.rows.length > 0 ? result.rows.reduce((sum, row) => sum + parseInt(row.total_services_performed || 0), 0) / result.rows.length : 0
-      }
-    }, 'Worker performance report generated successfully'));
-    
+    res.json(successResponse(result.rows, 'Worker performance report generated successfully'));
   } catch (error) {
     console.error('Worker performance report error:', error);
     res.status(400).json(errorResponse(error.message, 'WORKER_PERFORMANCE_REPORT_ERROR', 400));
   }
 });
 
-// Worker sales performance (POS transactions)
-router.get('/worker-sales', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+// Customer report (NEW)
+router.get('/customers', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
-    const { start_date, end_date, worker_id } = req.query;
+    const { start_date, end_date } = req.query;
     
+    // Aggregate customer data from bookings and pos_transactions
     let sql = `
-      SELECT 
-        u.id as worker_id,
-        u.name as worker_name,
-        COUNT(t.id) as total_transactions,
-        SUM(t.total_amount) as total_sales_revenue,
-        AVG(t.total_amount) as average_transaction_value,
-        SUM(ti.quantity) as total_items_sold
-      FROM users u
-      LEFT JOIN pos_transactions t ON u.id = t.created_by
-      LEFT JOIN pos_transaction_items ti ON t.id = ti.transaction_id
-      WHERE u.role IN ('staff', 'manager') AND u.is_active = true
+      WITH customer_stats AS (
+        SELECT 
+          COALESCE(customer_email, customer_phone, customer_name) as customer_id,
+          MAX(customer_name) as customer_name,
+          MAX(customer_email) as customer_email,
+          MAX(customer_phone) as customer_phone,
+          COUNT(DISTINCT id) as total_transactions,
+          SUM(total_amount) as total_spent,
+          MIN(created_at) as first_seen,
+          MAX(created_at) as last_seen
+        FROM (
+          SELECT id, customer_name, customer_email, customer_phone, total_amount, created_at FROM bookings WHERE status = 'completed'
+          UNION ALL
+          SELECT id, customer_name, customer_email, customer_phone, total_amount, created_at FROM pos_transactions WHERE status = 'completed'
+        ) all_tx
+        WHERE 1=1
     `;
     
     const params = [];
     let paramCount = 0;
     
-    if (worker_id) {
-      paramCount++;
-      sql += ` AND u.id = $${paramCount}`;
-      params.push(worker_id);
-    }
-    
     if (start_date) {
       paramCount++;
-      sql += ` AND t.created_at >= $${paramCount}`;
+      sql += ` AND created_at >= $${paramCount}`;
       params.push(start_date);
     }
     
     if (end_date) {
       paramCount++;
-      sql += ` AND t.created_at <= $${paramCount}`;
+      sql += ` AND created_at <= $${paramCount}`;
       params.push(end_date);
     }
     
-    sql += ` GROUP BY u.id, u.name ORDER BY total_sales_revenue DESC`;
-    
-    console.log('Worker sales SQL query:', sql);
-    console.log('Worker sales params:', params);
+    sql += `
+        GROUP BY COALESCE(customer_email, customer_phone, customer_name)
+      )
+      SELECT * FROM customer_stats ORDER BY total_spent DESC
+    `;
     
     const result = await query(sql, params);
+    const customers = result.rows;
     
-    res.json(successResponse({
-      worker_sales: result.rows,
-      summary: {
-        total_workers_with_sales: result.rows.length,
-        total_sales_revenue: result.rows.reduce((sum, row) => sum + parseFloat(row.total_sales_revenue || 0), 0),
-        total_transactions: result.rows.reduce((sum, row) => sum + parseInt(row.total_transactions || 0), 0),
-        average_sales_per_worker: result.rows.length > 0 ? result.rows.reduce((sum, row) => sum + parseFloat(row.total_sales_revenue || 0), 0) / result.rows.length : 0
-      }
-    }, 'Worker sales report generated successfully'));
+    const report = {
+      total_unique_customers: customers.length,
+      new_customers: customers.filter(c => {
+        const firstSeen = new Date(c.first_seen);
+        const start = start_date ? new Date(start_date) : new Date(0);
+        return firstSeen >= start;
+      }).length,
+      returning_customers: customers.filter(c => parseInt(c.total_transactions) > 1).length,
+      average_spend_per_customer: customers.length > 0 
+        ? (customers.reduce((sum, c) => sum + parseFloat(c.total_spent), 0) / customers.length) 
+        : 0,
+      top_customers: customers.slice(0, 10)
+    };
     
+    res.json(successResponse(report, 'Customer report generated successfully'));
   } catch (error) {
-    console.error('Worker sales report error:', error);
-    res.status(400).json(errorResponse(error.message, 'WORKER_SALES_REPORT_ERROR', 400));
-  }
-});
-
-// Combined worker performance (services + sales)
-router.get('/worker-analytics', authenticate, authorize(['admin', 'manager']), async (req, res) => {
-  try {
-    const { start_date, end_date } = req.query;
-    
-    // Get service performance
-    const serviceSql = `
-      SELECT 
-        u.id as worker_id,
-        u.name as worker_name,
-        COUNT(b.id) as services_performed,
-        SUM(b.total_amount) as service_revenue
-      FROM users u
-      LEFT JOIN bookings b ON u.id = b.worker_id
-      WHERE u.role IN ('staff', 'manager') AND u.is_active = true
-      AND b.status = 'completed'
-    `;
-    
-    const salesSql = `
-      SELECT 
-        u.id as worker_id,
-        u.name as worker_name,
-        COUNT(t.id) as sales_transactions,
-        SUM(t.total_amount) as sales_revenue
-      FROM users u
-      LEFT JOIN pos_transactions t ON u.id = t.created_by
-      WHERE u.role IN ('staff', 'manager') AND u.is_active = true
-    `;
-    
-    // Build service query parameters
-    const serviceParams = [];
-    let serviceParamCount = 0;
-    
-    let dateFilters = '';
-    if (start_date) {
-      serviceParamCount++;
-      dateFilters += ` AND b.scheduled_time >= $${serviceParamCount}`;
-      serviceParams.push(start_date);
-    }
-    if (end_date) {
-      serviceParamCount++;
-      dateFilters += ` AND b.scheduled_time <= $${serviceParamCount}`;
-      serviceParams.push(end_date);
-    }
-    
-    // Build sales query parameters
-    const salesParams = [];
-    let salesParamCount = 0;
-    
-    let salesDateFilters = '';
-    if (start_date) {
-      salesParamCount++;
-      salesDateFilters += ` AND t.created_at >= $${salesParamCount}`;
-      salesParams.push(start_date);
-    }
-    if (end_date) {
-      salesParamCount++;
-      salesDateFilters += ` AND t.created_at <= $${salesParamCount}`;
-      salesParams.push(end_date);
-    }
-    
-    // Add date filters to both queries
-    const serviceQuery = serviceSql + dateFilters + ` GROUP BY u.id, u.name`;
-    const salesQuery = salesSql + salesDateFilters + ` GROUP BY u.id, u.name`;
-    
-    console.log('Service query:', serviceQuery);
-    console.log('Service params:', serviceParams);
-    console.log('Sales query:', salesQuery);
-    console.log('Sales params:', salesParams);
-    
-    const [serviceResult, salesResult] = await Promise.all([
-      query(serviceQuery, serviceParams),
-      query(salesQuery, salesParams)
-    ]);
-    
-    // Combine the results
-    const combinedAnalytics = serviceResult.rows.map(serviceRow => {
-      const salesRow = salesResult.rows.find(s => s.worker_id === serviceRow.worker_id) || { sales_transactions: 0, sales_revenue: 0 };
-      
-      return {
-        worker_id: serviceRow.worker_id,
-        worker_name: serviceRow.worker_name,
-        services_performed: parseInt(serviceRow.services_performed || 0),
-        service_revenue: parseFloat(serviceRow.service_revenue || 0),
-        sales_transactions: parseInt(salesRow.sales_transactions || 0),
-        sales_revenue: parseFloat(salesRow.sales_revenue || 0),
-        total_revenue: parseFloat(serviceRow.service_revenue || 0) + parseFloat(salesRow.sales_revenue || 0),
-        total_transactions: parseInt(serviceRow.services_performed || 0) + parseInt(salesRow.sales_transactions || 0)
-      };
-    });
-    
-    res.json(successResponse({
-      worker_analytics: combinedAnalytics,
-      summary: {
-        total_workers: combinedAnalytics.length,
-        total_service_revenue: combinedAnalytics.reduce((sum, row) => sum + row.service_revenue, 0),
-        total_sales_revenue: combinedAnalytics.reduce((sum, row) => sum + row.sales_revenue, 0),
-        total_revenue: combinedAnalytics.reduce((sum, row) => sum + row.total_revenue, 0),
-        total_services_performed: combinedAnalytics.reduce((sum, row) => sum + row.services_performed, 0),
-        total_sales_transactions: combinedAnalytics.reduce((sum, row) => sum + row.sales_transactions, 0)
-      }
-    }, 'Worker analytics report generated successfully'));
-    
-  } catch (error) {
-    console.error('Worker analytics error:', error);
-    res.status(400).json(errorResponse(error.message, 'WORKER_ANALYTICS_ERROR', 400));
+    console.error('Customer report error:', error);
+    res.status(400).json(errorResponse(error.message, 'CUSTOMER_REPORT_ERROR', 400));
   }
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
-import axios from 'axios';
+import { apiGet, API_ENDPOINTS } from '../utils/api';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 
 const Analytics = () => {
@@ -42,16 +42,19 @@ const Analytics = () => {
     try {
       const requests = [];
       const requestTypes = [];
+
+      const params = { period: dateRange };
+      if (selectedPeriod) params.date = selectedPeriod;
       
       // Always fetch bookings (available to all authenticated users)
-      requests.push(axios.get(`/api/reports/bookings?period=${dateRange}${selectedPeriod ? `&date=${selectedPeriod}` : ''}`));
+      requests.push(apiGet(API_ENDPOINTS.REPORTS_BOOKINGS || '/reports/bookings', params));
       requestTypes.push('bookings');
       
       // Only fetch admin-only data if user is admin or manager
       if (user?.role === 'admin' || user?.role === 'manager') {
-        requests.push(axios.get(`/api/reports/sales?period=${dateRange}${selectedPeriod ? `&date=${selectedPeriod}` : ''}`));
-        requests.push(axios.get('/api/reports/inventory'));
-        requests.push(axios.get('/api/reports/coupons'));
+        requests.push(apiGet(API_ENDPOINTS.REPORTS_SALES || '/reports/sales', params));
+        requests.push(apiGet(API_ENDPOINTS.REPORTS_INVENTORY || '/reports/inventory'));
+        requests.push(apiGet(API_ENDPOINTS.REPORTS_COUPONS || '/reports/coupons'));
         requestTypes.push('sales', 'inventory', 'coupons');
       }
       
@@ -63,16 +66,16 @@ const Analytics = () => {
         if (response.status === 'fulfilled') {
           switch (requestType) {
             case 'sales':
-              setSalesData(response.value.data);
+              setSalesData(response.value);
               break;
             case 'inventory':
-              setInventoryData(response.value.data);
+              setInventoryData(response.value);
               break;
             case 'bookings':
-              setBookingData(response.value.data);
+              setBookingData(response.value);
               break;
             case 'coupons':
-              setCouponData(response.value.data);
+              setCouponData(response.value);
               break;
           }
         } else {

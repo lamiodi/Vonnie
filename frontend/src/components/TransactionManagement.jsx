@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { handleError, handleSuccess } from '../utils/errorHandler';
 
 const TransactionManagement = () => {
   const [transactions, setTransactions] = useState([]);
@@ -105,7 +106,7 @@ const TransactionManagement = () => {
 
   const handleVerifyPayment = async () => {
     if (!verificationData.payment_reference.trim()) {
-      alert('Please enter payment reference');
+      handleError('Please enter payment reference');
       return;
     }
 
@@ -116,7 +117,7 @@ const TransactionManagement = () => {
         verificationData
       );
 
-      alert('Payment verified successfully!');
+      handleSuccess('Payment verified successfully!');
       setShowVerifyModal(false);
       
       // Refresh the data
@@ -127,7 +128,7 @@ const TransactionManagement = () => {
       }
     } catch (error) {
       console.error('Error verifying payment:', error);
-      alert(error.response?.data?.error || 'Failed to verify payment');
+      handleError(error.response?.data?.error || 'Failed to verify payment');
     } finally {
       setVerificationLoading(false);
     }
