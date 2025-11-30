@@ -15,7 +15,16 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
   try {
     await client.query('BEGIN');
    
-    const { booking_number, products = [], items = [], coupon_code, staff_id } = req.body;
+    const { 
+      booking_number, 
+      products = [], 
+      items = [], 
+      coupon_code, 
+      staff_id,
+      payment_method = 'cash',
+      payment_status = 'completed',
+      payment_reference
+    } = req.body;
    
     // Validate required fields
     if (staff_id) {
@@ -217,10 +226,24 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
     const transactionNumber = `TXN-${Date.now()}`;
     const transactionResult = await client.query(
       `INSERT INTO pos_transactions
-       (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, coupon_id, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, payment_status, payment_reference, coupon_id, created_by, booking_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
-      [transactionNumber, booking?.customer_name, booking?.customer_email, booking?.customer_phone, total_amount, discount_amount, total_amount, 'cash', coupon_id, staff_id]
+      [
+        transactionNumber, 
+        booking?.customer_name, 
+        booking?.customer_email, 
+        booking?.customer_phone, 
+        total_amount, 
+        discount_amount, 
+        total_amount, 
+        payment_method, 
+        payment_status,
+        payment_reference || null,
+        coupon_id, 
+        staff_id,
+        booking?.id || null
+      ]
     );
    
     const transaction = transactionResult.rows[0];
@@ -286,9 +309,9 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
    
     // Update booking status to completed if this was a booking transaction
     if (booking) {
-      await query(
-        'UPDATE bookings SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-        ['completed', booking.id]
+      await client.query(
+        'UPDATE bookings SET status = $1, payment_status = $2, total_amount = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
+        ['completed', 'completed', total_amount, booking.id]
       );
      
       // Send completion notification using unified payment confirmation

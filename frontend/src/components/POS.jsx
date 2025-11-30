@@ -289,17 +289,12 @@ const POS = () => {
     }
   }, [appliedCoupon, getSubtotal]);
   const getTaxAmount = useCallback(() => {
-    const subtotal = getSubtotal();
-    const discount = getDiscountAmount();
-    const taxableAmount = subtotal - discount;
-    return taxableAmount * 0.075; // 7.5% tax
-  }, [getSubtotal, getDiscountAmount]);
+    return 0; // VAT temporarily disabled
+  }, []);
   const getTotal = useCallback(() => {
     const subtotal = getSubtotal();
     const discount = getDiscount();
-    const taxableAmount = subtotal - discount;
-    const tax = taxableAmount * 0.075; // 7.5% tax
-    return subtotal - discount + tax;
+    return subtotal - discount; // Tax removed
   }, [getSubtotal, getDiscount]);
   const addToCart = useCallback((item, type = 'product') => {
     // Reset payment confirmation when adding new items
