@@ -4,6 +4,8 @@ import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { validateEmail, validatePhone, validateStringLength } from '../utils/inputValidation.js';
+import { generateSecurePassword } from '../utils/passwordUtils.js';
+import { sendEmail } from '../services/email.js';
 
 const router = express.Router();
 
@@ -107,13 +109,45 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
       ));
     }
     
-    const defaultPassword = await bcrypt.hash('ChangeMe123!', 10);
+    // Generate secure random password
+    const generatedPassword = generateSecurePassword();
+    const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+    
     const result = await query(
       'INSERT INTO users (name, email, phone, role, password_hash, current_status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, name, email, phone, role, is_active, current_status, created_at',
-      [name, email, phone || null, normalizedRole, defaultPassword, 'available']
+      [name, email, phone || null, normalizedRole, hashedPassword, 'available']
     );
     
-    res.status(201).json(successResponse(result.rows[0], 'Worker created successfully', 201));
+    // Send welcome email with password
+    const welcomeSubject = 'Welcome to Vonne X2X - Your Account Details';
+    const welcomeHtml = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #9333ea;">Welcome to Vonne X2X!</h2>
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>Your staff account has been created successfully. Here are your login details:</p>
+        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
+          <p><strong>Email:</strong> ${email}</p>
+          <p><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${generatedPassword}</code></p>
+        </div>
+        <p>Please log in and change your password immediately.</p>
+        <p>Best regards,<br>Vonne X2X Team</p>
+      </div>
+    `;
+    
+    // Try to send email, but don't fail if it errors (admin will see password in response)
+    try {
+      await sendEmail(email, welcomeSubject, `Welcome! Your password is: ${generatedPassword}`, welcomeHtml);
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+    }
+    
+    // Return user data AND the generated password so admin can share it manually if needed
+    const responseData = {
+      ...result.rows[0],
+      generatedPassword // Only returned on creation
+    };
+    
+    res.status(201).json(successResponse(responseData, 'Worker created successfully', 201));
   } catch (error) {
     console.error('Create worker error:', error);
     res.status(400).json(errorResponse(error.message, 'WORKER_CREATION_ERROR', 400));

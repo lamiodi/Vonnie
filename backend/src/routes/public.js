@@ -567,4 +567,29 @@ router.get('/health', async (req, res) => {
   }
 });
 
+// Check signup status (public)
+router.get('/signup-status', async (req, res) => {
+  try {
+    const statusResult = await query('SELECT * FROM signup_status ORDER BY id DESC LIMIT 1');
+    
+    if (statusResult.rows.length === 0) {
+      return res.json({ 
+        is_enabled: true, 
+        message: 'Signups are currently enabled.'
+      });
+    }
+    
+    // Return only necessary public info
+    const { is_enabled, message } = statusResult.rows[0];
+    res.json({ is_enabled, message });
+  } catch (error) {
+    // If table doesn't exist or other error, fail open (allow signups)
+    console.log('Error checking signup status (public), defaulting to enabled:', error.message);
+    res.json({ 
+      is_enabled: true, 
+      message: 'Signups are currently enabled.'
+    });
+  }
+});
+
 export default router;

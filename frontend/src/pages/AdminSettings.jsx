@@ -10,11 +10,16 @@ const AdminSettings = () => {
     enable_email_notifications: true,
     enable_maintenance_mode: false
   });
+  const [signupStatus, setSignupStatus] = useState({
+    is_enabled: true,
+    message: 'Signups are currently enabled.'
+  });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     fetchSettings();
+    fetchSignupStatus();
   }, []);
 
   const fetchSettings = async () => {
@@ -30,11 +35,29 @@ const AdminSettings = () => {
     }
   };
 
+  const fetchSignupStatus = async () => {
+    try {
+      const response = await fetch('/api/public/signup-status');
+      if (response.ok) {
+        const status = await response.json();
+        setSignupStatus(status);
+      }
+    } catch (error) {
+      console.error('Error fetching signup status:', error);
+    }
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     try {
       setSaving(true);
+      
+      // Save general settings
       await updateAdminSettings(settings);
+      
+      // Save signup status (separate API call)
+      await updateSignupStatus();
+      
       toast.success('Settings saved successfully');
     } catch (error) {
       console.error('Error saving admin settings:', error);
@@ -44,11 +67,40 @@ const AdminSettings = () => {
     }
   };
 
+  const updateSignupStatus = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await fetch('/api/admin/signup-status', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          is_enabled: signupStatus.is_enabled,
+          message: signupStatus.is_enabled 
+            ? 'Signups are currently enabled.' 
+            : 'Signups are currently disabled. Please contact your administrator.'
+        })
+      });
+    } catch (error) {
+      console.error('Error updating signup status:', error);
+      throw error;
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;
     setSettings(prev => ({
       ...prev,
       [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  const handleSignupStatusChange = (e) => {
+    setSignupStatus(prev => ({
+      ...prev,
+      is_enabled: e.target.checked
     }));
   };
 
@@ -92,6 +144,20 @@ const AdminSettings = () => {
             <h2 className="text-lg font-medium text-gray-900 mb-4">System Settings</h2>
             
             <div className="space-y-4">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="enable_signup"
+                  name="enable_signup"
+                  checked={signupStatus.is_enabled}
+                  onChange={handleSignupStatusChange}
+                  className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                />
+                <label htmlFor="enable_signup" className="ml-3 block text-sm font-medium text-gray-700">
+                  Enable Worker Registration (Signup)
+                </label>
+              </div>
+
               <div className="flex items-center">
                 <input
                   type="checkbox"

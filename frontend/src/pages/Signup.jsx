@@ -30,12 +30,15 @@ const Signup = () => {
 
   const checkSignupStatus = async () => {
     try {
-      const response = await fetch('/api/admin/signup-status');
+      // Use public endpoint instead of protected admin endpoint
+      // Using relative path to leverage Vite proxy or same-origin in production
+      const response = await fetch('/api/public/signup-status');
       if (response.ok) {
         const status = await response.json();
         setSignupStatus(status);
       } else {
-        // If admin endpoint fails, assume signups are enabled
+        // If endpoint fails, assume signups are enabled
+        console.warn('Signup status check failed, defaulting to enabled');
         setSignupStatus({ is_enabled: true, message: 'Signups are currently enabled.' });
       }
     } catch (error) {
