@@ -6,13 +6,30 @@ import { successResponse, errorResponse } from '../utils/apiResponse.js';
 const router = express.Router();
 
 const verifyPaystackSignature = (req, secret) => {
+  // When using express.raw({ type: 'application/json' }), req.body should be a Buffer.
+  // However, if other middleware (like express.json()) runs before this, req.body might already be an object.
+  // We need to handle both cases or ensure correct middleware order.
+  
+  let body = req.body;
+  
+  if (typeof body !== 'string' && !Buffer.isBuffer(body)) {
+    // If body is already parsed (object), we cannot reliably verify the signature
+    // because the order of keys might have changed.
+    // In a properly configured Express app for webhooks, this route should handle the raw body.
+    // If we are here, it means some middleware parsed it. 
+    // We'll attempt to stringify it, but this is prone to failure if keys were reordered.
+    console.warn('Warning: req.body is not a Buffer/string. Signature verification might fail.');
+    body = JSON.stringify(body);
+  }
+
   const hash = crypto
     .createHmac('sha512', secret)
-    .update(req.body) // req.body is Buffer when using express.raw
+    .update(body)
     .digest('hex');
   return hash === req.headers['x-paystack-signature'];
 };
 
+// Use a specific middleware stack for this route to avoid global body parsers interfering
 router.post('/paystack-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   try {
     const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -60,6 +77,12 @@ async function handleSuccessfulCharge(data) {
   const { reference, amount, customer, metadata } = data;
   
   try {
+    // Check if booking_id exists in metadata
+    if (!metadata || !metadata.booking_id) {
+      console.warn('Missing booking_id in webhook metadata. Skipping booking update.');
+      return;
+    }
+
     // Update booking payment status
     const result = await query(
       `UPDATE bookings 
@@ -70,7 +93,7 @@ async function handleSuccessfulCharge(data) {
            updated_at = NOW()
        WHERE id = $2 AND payment_status != 'completed'
        RETURNING id, status, customer_type, scheduled_time`,
-      [reference, metadata?.booking_id]
+      [reference, metadata.booking_id]
     );
 
     if (result.rows.length > 0) {
@@ -106,15 +129,28 @@ async function handleFailedCharge(data) {
   const { reference, metadata } = data;
   
   try {
-    await query(
-      `UPDATE bookings 
-       SET payment_status = 'failed',
-           payment_updated_at = NOW()
-       WHERE payment_reference = $1`,
-      [reference]
-    );
-    
-    console.log('Payment failed for reference:', reference);
+    // Check if booking_id exists in metadata, if so use it to find the booking
+    if (metadata && metadata.booking_id) {
+        await query(
+            `UPDATE bookings 
+             SET payment_status = 'failed',
+                 payment_updated_at = NOW()
+             WHERE id = $1`,
+            [metadata.booking_id]
+        );
+        console.log('Payment failed recorded for booking:', metadata.booking_id);
+    } else {
+        // Fallback to updating by payment_reference if booking_id is missing (less reliable if reference wasn't saved yet)
+        await query(
+        `UPDATE bookings 
+        SET payment_status = 'failed',
+            payment_updated_at = NOW()
+        WHERE payment_reference = $1`,
+        [reference]
+        );
+        console.log('Payment failed recorded by reference:', reference);
+    }
+
   } catch (error) {
     console.error('Error processing failed charge:', error);
   }
