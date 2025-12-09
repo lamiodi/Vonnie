@@ -1,11 +1,11 @@
 // Fixed backend bookings.js (standardized customer_type to 'walk-in' and 'pre-booked', fixed status transitions, added arrival_status handling)
 import express from 'express';
-import { query } from '../config/db.js';
+import { query, getClient } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { sendEmail, sendUnifiedBookingConfirmation, sendPaymentConfirmation } from '../services/email.js';
 import { createBooking } from '../services/bookingService.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
-import { validateBookingData, validateBookingTimeConflict, validateWorkerAvailability } from '../services/validationService.js';
+import { validateBookingData, validateBookingTimeConflict, validateWorkerAvailability, validateWorkerAvailabilityWithLocking } from '../services/validationService.js';
 const router = express.Router();
 
 // Create booking (authenticated)
@@ -695,8 +695,10 @@ router.delete('/:bookingId/workers/:workerId', authenticate, authorize(['admin',
   }
 });
 
-// Enhanced worker assignment endpoint
+// Enhanced worker assignment endpoint with database transactions
 router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  const client = await getClient();
+  
   try {
     const { id } = req.params;
     const { workers } = req.body; // Array of {worker_id, role} objects
@@ -706,9 +708,13 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
       return res.status(400).json(errorResponse('Workers array is required', 'MISSING_WORKERS', 400));
     }
     
-    // Check if booking exists
-    const bookingResult = await query('SELECT scheduled_time, duration, status FROM bookings WHERE id = $1', [id]);
+    // Start database transaction
+    await client.query('BEGIN');
+    
+    // Check if booking exists with row lock
+    const bookingResult = await client.query('SELECT scheduled_time, duration, status, customer_type FROM bookings WHERE id = $1 FOR UPDATE', [id]);
     if (bookingResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json(notFoundResponse('Booking not found'));
     }
     
@@ -718,7 +724,7 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
     // Check if any workers are already assigned to this booking
     // RELAXED CONSTRAINT: If workers are already assigned, we will overwrite/update their role instead of failing
     // This allows for re-assigning the same worker (e.g., updating role) or recovering from partial states
-    const existingAssignments = await query(
+    const existingAssignments = await client.query(
       `SELECT bw.worker_id, u.name as worker_name 
        FROM booking_workers bw
        JOIN users u ON bw.worker_id = u.id
@@ -733,45 +739,66 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
       console.warn(`Workers already assigned to booking ${id}. Overwriting assignments for: ${existingAssignments.rows.map(w => w.worker_name).join(', ')}`);
     }
     
-    // Validate worker availability using enhanced validation service
-    const workerAvailabilityValidation = await validateWorkerAvailability(
+    // Validate worker availability using enhanced validation service with row-level locking
+    const workerAvailabilityValidation = await validateWorkerAvailabilityWithLocking(
       workerIds,
       booking.scheduled_time,
       booking.duration || 60,
-      id // Exclude current booking from conflict check
+      id, // Exclude current booking from conflict check
+      client // Pass transaction client for row locking
     );
     
     if (!workerAvailabilityValidation.isValid) {
-      return res.status(409).json(errorResponse(
+      await client.query('ROLLBACK');
+      
+      // Handle different types of validation failures
+      const errorCode = workerAvailabilityValidation.lockedWorkers ? 'WORKER_LOCKED_ERROR' : 'WORKER_AVAILABILITY_ERROR';
+      const statusCode = workerAvailabilityValidation.lockedWorkers ? 423 : 409; // 423 = Locked
+      
+      return res.status(statusCode).json(errorResponse(
         workerAvailabilityValidation.message,
-        'WORKER_AVAILABILITY_ERROR',
-        409,
-        workerAvailabilityValidation.unavailableWorkers || []
+        errorCode,
+        statusCode,
+        workerAvailabilityValidation.unavailableWorkers || workerAvailabilityValidation.lockedWorkers || []
       ));
     }
     
-    // Deactivate existing worker assignments
-    await query(
+    // Deactivate existing worker assignments within transaction
+    await client.query(
       'UPDATE booking_workers SET status = $1 WHERE booking_id = $2',
       ['cancelled', id]
     );
     
-    // Insert new worker assignments
+    // Insert new worker assignments with unique constraint handling
     const assignedWorkers = [];
-    for (const worker of workers) {
-      const result = await query(
-        `INSERT INTO booking_workers (booking_id, worker_id, assigned_by, role, status)
-         VALUES ($1, $2, $3, $4, $5)
-         RETURNING *,
-         (SELECT name FROM users WHERE id = $2) as worker_name`,
-        [id, worker.worker_id, assignedBy, worker.role || 'primary', 'active']
-      );
-      assignedWorkers.push(result.rows[0]);
+    try {
+      for (const worker of workers) {
+        const result = await client.query(
+          `INSERT INTO booking_workers (booking_id, worker_id, assigned_by, role, status)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *,
+           (SELECT name FROM users WHERE id = $2) as worker_name`,
+          [id, worker.worker_id, assignedBy, worker.role || 'primary', 'active']
+        );
+        assignedWorkers.push(result.rows[0]);
+      }
+    } catch (error) {
+      // Handle unique constraint violation (double-booking attempt)
+      if (error.code === '23505' && error.constraint === 'unique_active_worker_assignment') {
+        await client.query('ROLLBACK');
+        return res.status(409).json(errorResponse(
+          'Worker double-booking prevented: One or more workers were assigned to another booking during this operation',
+          'WORKER_DOUBLE_BOOKING_PREVENTED',
+          409
+        ));
+      }
+      // Re-throw other errors
+      throw error;
     }
     
     // Update the main booking with primary worker (first in array)
     if (workers.length > 0) {
-      await query(
+      await client.query(
         'UPDATE bookings SET worker_id = $1 WHERE id = $2',
         [workers[0].worker_id, id]
       );
@@ -779,7 +806,7 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
     
     // Update worker status to busy for all newly assigned workers
     for (const worker of workers) {
-      await query(
+      await client.query(
         `UPDATE users 
          SET current_status = 'busy' 
          WHERE id = $1 
@@ -790,31 +817,37 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
     }
     
     // Automatically change booking status to 'scheduled' if it's currently 'pending_confirmation'
-    // Enhanced logic for Nigeria salon workflow
     if (booking.status === 'pending_confirmation') {
       let newStatus = 'scheduled';
       
-      // For walk-in customers with immediate service needs, consider auto-starting
       if (booking.customer_type === 'walk_in' && new Date(booking.scheduled_time) <= new Date()) {
-        // If scheduled time is now or in the past, and it's a walk-in, start immediately
         newStatus = 'in-progress';
         console.log(`Auto-starting walk-in booking ${id} - scheduled time is current/immediate`);
       }
       
-      await query(
+      await client.query(
         'UPDATE bookings SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
         [newStatus, id]
       );
       console.log(`Auto-updated booking ${id} from pending_confirmation to ${newStatus} after worker assignment`);
     }
     
+    // Commit the transaction
+    await client.query('COMMIT');
+    
     res.json(successResponse({
       message: 'Workers assigned successfully',
       assigned_workers: assignedWorkers
     }, 'Workers assigned successfully'));
+    
   } catch (error) {
-    console.error('Assign workers error:', error);
+    // Rollback transaction on any error
+    await client.query('ROLLBACK');
+    console.error('Assign workers error (transaction rolled back):', error);
     res.status(400).json(errorResponse(error.message, 'WORKER_ASSIGNMENT_ERROR', 400));
+  } finally {
+    // Always release the client back to the pool
+    client.release();
   }
 });
 
@@ -1089,8 +1122,10 @@ router.post('/:id/check-wait-time', authenticate, async (req, res) => {
   }
 });
 
-// Simplify to single worker assignment endpoint
+// Simplify to single worker assignment endpoint with database transactions
 router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  const client = await getClient();
+  
   try {
     const { id } = req.params;
     const { worker_id } = req.body;
@@ -1099,25 +1134,30 @@ router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager'])
       return res.status(400).json(errorResponse('Worker ID is required', 'MISSING_WORKER_ID', 400));
     }
     
+    // Start database transaction
+    await client.query('BEGIN');
+    
     // Check if worker exists and is active
-    const workerResult = await query(
+    const workerResult = await client.query(
       'SELECT id, name, email FROM users WHERE id = $1 AND role IN ($2, $3, $4) AND is_active = true',
       [worker_id, 'staff', 'manager', 'admin']
     );
     
     if (workerResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json(notFoundResponse('Worker not found or not available'));
     }
     
     const worker = workerResult.rows[0];
     
-    // Get booking details for validation
-    const bookingResult = await query(
-      'SELECT scheduled_time, duration FROM bookings WHERE id = $1',
+    // Get booking details for validation with row lock
+    const bookingResult = await client.query(
+      'SELECT scheduled_time, duration, customer_email, customer_name, booking_number FROM bookings WHERE id = $1 FOR UPDATE',
       [id]
     );
     
     if (bookingResult.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json(notFoundResponse('Booking not found'));
     }
     
@@ -1132,6 +1172,7 @@ router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager'])
     );
     
     if (!workerAvailabilityValidation.isValid) {
+      await client.query('ROLLBACK');
       return res.status(409).json(errorResponse(
         workerAvailabilityValidation.message,
         'WORKER_AVAILABILITY_ERROR',
@@ -1141,7 +1182,7 @@ router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager'])
     }
     
     // Update booking with worker
-    const result = await query(
+    const result = await client.query(
       `WITH updated AS (
          UPDATE bookings
          SET worker_id = $1
@@ -1165,33 +1206,34 @@ router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager'])
     );
     
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json(notFoundResponse('Booking not found'));
     }
     
     const updatedBooking = result.rows[0];
     
     // Also add to booking_workers table
-    const existingAssignment = await query(
+    const existingAssignment = await client.query(
       'SELECT id FROM booking_workers WHERE booking_id = $1 AND worker_id = $2',
       [id, worker_id]
     );
     
     if (existingAssignment.rows.length > 0) {
       // Update existing assignment
-      await query(
+      await client.query(
         'UPDATE booking_workers SET status = $1, assigned_at = CURRENT_TIMESTAMP WHERE booking_id = $2 AND worker_id = $3',
         ['active', id, worker_id]
       );
     } else {
       // Create new assignment
-      await query(
+      await client.query(
         'INSERT INTO booking_workers (booking_id, worker_id, assigned_by, role, status) VALUES ($1, $2, $3, $4, $5)',
         [id, worker_id, req.user.id, 'primary', 'active']
       );
     }
     
     // Update worker status to 'busy'
-    await query(
+    await client.query(
       `UPDATE users
        SET current_status = 'busy'
        WHERE id = $1
@@ -1200,7 +1242,10 @@ router.patch('/:id/assign-worker', authenticate, authorize(['admin', 'manager'])
       [worker_id]
     );
     
-    // Send notification to customer
+    // Commit the transaction
+    await client.query('COMMIT');
+    
+    // Send notification to customer (outside transaction)
     await sendEmail(
       updatedBooking.customer_email,
       'Worker Assigned to Your Booking',
@@ -1222,8 +1267,13 @@ Thank you for choosing our service!`
     }, 'Worker assigned successfully'));
     
   } catch (error) {
-    console.error('Assign worker error:', error);
+    // Rollback transaction on any error
+    await client.query('ROLLBACK');
+    console.error('Assign worker error (transaction rolled back):', error);
     res.status(400).json(errorResponse(error.message, 'WORKER_ASSIGNMENT_ERROR', 400));
+  } finally {
+    // Always release the client back to the pool
+    client.release();
   }
 });
 

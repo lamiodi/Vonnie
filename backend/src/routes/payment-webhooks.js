@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import { query } from '../config/db.js';
 import { successResponse, errorResponse } from '../utils/apiResponse.js';
+import { sendWebhookAlert } from '../services/email.js';
 
 const router = express.Router();
 
@@ -37,6 +38,12 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
     // Verify the webhook signature
     if (!verifyPaystackSignature(req, PAYSTACK_SECRET_KEY)) {
       console.error('Invalid Paystack signature');
+      // Add webhook alert for signature failure
+      await sendWebhookAlert('Webhook Signature Verification Failed', {
+        error: 'Invalid Paystack signature',
+        headers: req.headers,
+        body: req.body
+      });
       return res.status(401).json(errorResponse('Invalid signature', 'INVALID_SIGNATURE', 401));
     }
 
@@ -85,6 +92,12 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
     res.json(successResponse({ received: true }, 'Webhook processed successfully'));
   } catch (error) {
     console.error('Paystack webhook error:', error);
+    // Add webhook alert here
+    await sendWebhookAlert('Webhook Processing Failure', {
+      error: error.message,
+      stack: error.stack,
+      route: '/api/webhooks/paystack-webhook'
+    }, event);
     res.status(500).json(errorResponse('Webhook processing failed', 'WEBHOOK_ERROR', 500));
   }
 });
@@ -100,6 +113,13 @@ async function handleSuccessfulCharge(data) {
     if (!metadata || !metadata.booking_id) {
       console.warn('Missing booking_id in webhook metadata. Skipping booking update.');
       console.log('Available metadata keys:', metadata ? Object.keys(metadata) : 'No metadata');
+      // Add webhook alert for missing booking_id
+      await sendWebhookAlert('Missing Booking ID in Webhook', {
+        error: 'booking_id missing in webhook metadata',
+        reference: reference,
+        available_metadata: metadata ? Object.keys(metadata) : 'No metadata',
+        metadata: metadata
+      });
       return;
     }
     
@@ -148,9 +168,23 @@ async function handleSuccessfulCharge(data) {
       console.log('- Booking ID not found:', metadata.booking_id);
       console.log('- Booking payment status is already completed');
       console.log('- Booking does not exist');
+      // Add webhook alert for no booking update
+      await sendWebhookAlert('No Booking Updated After Payment', {
+        error: 'No booking was updated after successful payment',
+        booking_id: metadata.booking_id,
+        reference: reference,
+        possible_reasons: ['Booking ID not found', 'Payment status already completed', 'Booking does not exist']
+      });
     }
   } catch (error) {
     console.error('Error processing successful charge:', error);
+    // Add webhook alert for successful charge processing failure
+    await sendWebhookAlert('Successful Charge Processing Failure', {
+      error: error.message,
+      stack: error.stack,
+      reference: reference,
+      booking_id: metadata?.booking_id
+    });
   }
 }
 
@@ -183,6 +217,12 @@ async function handleFailedCharge(data) {
 
   } catch (error) {
     console.error('Error processing failed charge:', error);
+    // Add webhook alert for failed charge processing failure
+    await sendWebhookAlert('Failed Charge Processing Failure', {
+      error: error.message,
+      stack: error.stack,
+      reference: reference
+    });
   }
 }
 

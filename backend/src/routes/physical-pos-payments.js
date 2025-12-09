@@ -107,7 +107,17 @@ router.post('/confirm-physical-pos/:bookingId', authenticate, authorize(['admin'
 
   } catch (error) {
     console.error('Confirm physical POS payment error:', error);
-    res.status(400).json(errorResponse(error.message, 'CONFIRM_PHYSICAL_POS_ERROR', 400));
+    res.status(400).json({
+      success: false,
+      error: 'Physical POS payment confirmation failed',
+      message: error.message,
+      details: {
+        booking_id: bookingId,
+        payment_reference: payment_reference,
+        error_type: error.name,
+        stack_trace: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
+    });
   }
 });
 

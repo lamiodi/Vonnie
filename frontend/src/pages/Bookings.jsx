@@ -946,7 +946,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
   }, [booking, currentWorkers]);
 
   const checkWorkerConflicts = async (workerIds) => {
-    if (!booking || workerIds.length === 0) return;
+    if (!booking || workerIds.length === 0) return [];
     
     try {
       const bookingStart = new Date(booking.scheduled_time);
@@ -959,24 +959,26 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       // **VALIDATION**: Check if booking time is valid
       if (isNaN(bookingStart.getTime()) || isNaN(bookingEnd.getTime())) {
         console.error('Invalid booking time detected');
-        setWorkerConflicts([{
+        const conflicts = [{
           worker_id: 'invalid_time',
           message: 'Invalid booking time detected',
           type: 'validation_error'
-        }]);
-        return;
+        }];
+        setWorkerConflicts(conflicts);
+        return conflicts;
       }
       
       // **VALIDATION**: Check if booking is in the past
       const now = new Date();
       if (bookingEnd < now) {
         console.error('Cannot assign workers to past booking');
-        setWorkerConflicts([{
+        const conflicts = [{
           worker_id: 'past_booking',
           message: 'Cannot assign workers to bookings in the past',
           type: 'validation_error'
-        }]);
-        return;
+        }];
+        setWorkerConflicts(conflicts);
+        return conflicts;
       }
       
       // Check for conflicts with selected workers
@@ -1035,13 +1037,16 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       
       console.log('Processed conflicts:', conflicts);
       setWorkerConflicts(conflicts);
+      return conflicts;
     } catch (error) {
       console.error('Error checking worker conflicts:', error);
-      setWorkerConflicts([{
+      const conflicts = [{
         worker_id: 'system_error',
         message: 'Unable to check worker availability. Please try again.',
         type: 'system_error'
-      }]);
+      }];
+      setWorkerConflicts(conflicts);
+      return conflicts;
     }
   };
 
@@ -1147,15 +1152,12 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       // **PRE-VALIDATION STEP**: Check for conflicts before attempting assignment
       console.log('Starting pre-validation for worker assignment...');
       
-      // Check conflicts for selected workers
-      await checkWorkerConflicts(selectedWorkers);
-      
-      // Wait a moment for state to update, then check if there are conflicts
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Check conflicts for selected workers and get conflicts directly
+      const conflicts = await checkWorkerConflicts(selectedWorkers);
       
       // **CONFLICT DETECTION**: Prevent assignment if conflicts exist
-      if (workerConflicts.length > 0) {
-        const conflictedWorkerNames = workerConflicts
+      if (conflicts.length > 0) {
+        const conflictedWorkerNames = conflicts
           .map(conflict => workers.find(w => w.id === conflict.worker_id)?.name || `Worker ${conflict.worker_id}`)
           .filter(name => name)
           .join(', ');
@@ -1358,7 +1360,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
                 <span key={worker.id} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
                   {worker.worker_name}
                   <button
-                    onClick={() => handleWorkerChange(worker.worker_id)}
+                    onClick={() => handleWorkerChange(worker.id)}
                     className="ml-2 text-blue-600 hover:text-blue-800"
                   >
                     ×

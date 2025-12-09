@@ -478,6 +478,12 @@ Vonne X2X Team`
       res.status(400).json({ 
         success: false, 
         error: 'Payment verification failed',
+        message: 'All verification methods failed',
+        details: {
+          reference: reference,
+          attempts: verificationResult.attempts || [],
+          failed_methods: verificationResult.attempts?.map(attempt => attempt.method) || []
+        },
         data: verificationResult.data 
       });
     }
@@ -487,7 +493,12 @@ Vonne X2X Team`
     res.status(500).json({ 
       success: false,
       error: 'Payment verification failed',
-      message: error.message 
+      message: error.message,
+      details: {
+        reference: reference,
+        error_type: error.name,
+        stack_trace: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
     });
   }
 });

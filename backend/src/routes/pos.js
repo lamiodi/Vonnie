@@ -715,7 +715,17 @@ router.post('/payment/initialize', authenticate, async (req, res) => {
    
     res.json(response.data);
   } catch (error) {
-    res.status(400).json({ error: error.message });
+    console.error('POS payment verification error:', error);
+    res.status(400).json({ 
+      success: false,
+      error: 'Payment verification failed',
+      message: error.message,
+      details: {
+        reference: reference,
+        error_type: error.name,
+        stack_trace: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
+    });
   }
 });
 // Verify Paystack payment
@@ -1066,7 +1076,16 @@ router.post('/transactions/:id/verify-payment', authenticate, authorize(['manage
     });
   } catch (error) {
     console.error('Manual payment verification error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      success: false,
+      error: 'Manual payment verification failed',
+      message: error.message,
+      details: {
+        transaction_id: id,
+        error_type: error.name,
+        stack_trace: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      }
+    });
   }
 });
 // (Route moved above the dynamic :id route to prevent shadowing)

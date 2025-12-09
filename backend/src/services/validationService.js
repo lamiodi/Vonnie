@@ -417,3 +417,208 @@ function getAvailabilityReason(status) {
   
   return reasons[status] || 'Worker is not available';
 }
+
+/**
+ * Enhanced worker availability validation with row-level locking
+ * Prevents race conditions by locking worker rows during validation
+ * @param {Array} workerIds - Array of worker IDs to validate
+ * @param {Date} scheduledTime - Proposed booking time
+ * @param {number} estimatedDuration - Estimated duration in minutes
+ * @param {string} excludeBookingId - Optional booking ID to exclude
+ * @param {Object} client - Database client for transaction context
+ * @returns {Promise<Object>} Availability result with locking
+ */
+export async function validateWorkerAvailabilityWithLocking(workerIds, scheduledTime, estimatedDuration = 60, excludeBookingId = null, client = null) {
+  try {
+    if (!workerIds || workerIds.length === 0) {
+      return {
+        isValid: false,
+        message: 'At least one worker must be assigned'
+      };
+    }
+    
+    const startTime = new Date(scheduledTime);
+    const endTime = new Date(startTime.getTime() + estimatedDuration * 60 * 1000);
+    
+    // Use provided client or default query function
+    const queryFunction = client || query;
+    
+    // 🔒 CRITICAL: Lock worker rows to prevent concurrent assignments
+    const availabilityQuery = `
+      SELECT 
+        u.id as worker_id,
+        u.name as worker_name,
+        u.current_status as worker_status,
+        u.is_active,
+        COUNT(bw.id) as active_bookings,
+        CASE 
+          WHEN u.is_active = false THEN 'inactive'
+          WHEN u.current_status = 'unavailable' THEN 'unavailable'
+          WHEN u.current_status = 'on_break' THEN 'on_break'
+          WHEN COUNT(bw.id) > 0 THEN 'busy'
+          ELSE 'available'
+        END as availability_status
+      FROM users u
+      LEFT JOIN booking_workers bw ON u.id = bw.worker_id AND bw.status = 'active'
+      LEFT JOIN bookings b ON bw.booking_id = b.id AND b.status IN ('scheduled', 'in-progress')
+      WHERE u.id = ANY($1) AND u.role = 'staff'
+      -- 🔒 LOCK WORKER ROWS TO PREVENT CONCURRENT ASSIGNMENTS
+      FOR UPDATE OF u SKIP LOCKED
+      GROUP BY u.id, u.name, u.current_status, u.is_active
+    `;
+    
+    const availabilityResult = await queryFunction(availabilityQuery, [workerIds]);
+    
+    // Check if any workers were skipped due to locking
+    if (availabilityResult.rows.length !== workerIds.length) {
+      const lockedWorkerIds = workerIds.filter(id => 
+        !availabilityResult.rows.some(row => row.worker_id === id)
+      );
+      
+      return {
+        isValid: false,
+        message: `Some workers are currently being assigned by another user: ${lockedWorkerIds.join(', ')}`,
+        lockedWorkers: lockedWorkerIds
+      };
+    }
+    
+    const unavailableWorkers = availabilityResult.rows.filter(worker => 
+      worker.availability_status !== 'available'
+    );
+    
+    if (unavailableWorkers.length > 0) {
+      return {
+        isValid: false,
+        unavailableWorkers: unavailableWorkers.map(worker => ({
+          id: worker.worker_id,
+          name: worker.worker_name,
+          status: worker.availability_status,
+          reason: getAvailabilityReason(worker.availability_status)
+        })),
+        message: `${unavailableWorkers.length} worker(s) are not available`
+      };
+    }
+    
+    // Check for time conflicts with row locking
+    const timeConflictResult = await validateBookingTimeConflictWithLocking(
+      scheduledTime, 
+      estimatedDuration, 
+      workerIds,
+      excludeBookingId,
+      queryFunction
+    );
+    
+    if (!timeConflictResult.isValid) {
+      return {
+        isValid: false,
+        message: 'Workers have scheduling conflicts',
+        conflicts: timeConflictResult.conflicts
+      };
+    }
+    
+    return {
+      isValid: true,
+      message: 'All workers are available',
+      availableWorkers: availabilityResult.rows
+    };
+    
+  } catch (error) {
+    console.error('Error validating worker availability with locking:', error);
+    return {
+      isValid: false,
+      message: 'Error validating worker availability',
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Enhanced time conflict validation with row locking
+ * @param {Date} scheduledTime - Proposed booking time
+ * @param {number} estimatedDuration - Estimated duration in minutes
+ * @param {Array} workerIds - Array of worker IDs
+ * @param {string} excludeBookingId - Optional booking ID to exclude
+ * @param {Function} queryFunction - Query function (with transaction context)
+ * @returns {Promise<Object>} Conflict validation result
+ */
+async function validateBookingTimeConflictWithLocking(scheduledTime, estimatedDuration, workerIds = [], excludeBookingId = null, queryFunction = query) {
+  try {
+    const startTime = new Date(scheduledTime);
+    const endTime = new Date(startTime.getTime() + (estimatedDuration || 60) * 60 * 1000);
+    
+    // Check for overlapping bookings with row locking
+    let conflictQuery = `
+      SELECT 
+        b.id,
+        b.booking_number,
+        b.scheduled_time,
+        b.status,
+        b.duration,
+        u.name as worker_name,
+        u.id as worker_id,
+        CASE 
+          WHEN b.scheduled_time <= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $1 THEN 'starts_during'
+          WHEN b.scheduled_time < $2 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') >= $2 THEN 'ends_during'
+          WHEN b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2 THEN 'completely_overlaps'
+          ELSE 'adjacent'
+        END as conflict_type
+      FROM bookings b
+      INNER JOIN booking_workers bw ON b.id = bw.booking_id AND bw.status = 'active'
+      INNER JOIN users u ON bw.worker_id = u.id
+      WHERE b.status IN ('scheduled', 'in-progress', 'confirmed')
+        AND (
+          (b.scheduled_time <= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $1) OR
+          (b.scheduled_time < $2 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') >= $2) OR
+          (b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2)
+        )
+    `;
+    
+    const queryParams = [startTime, endTime];
+    
+    // Exclude current booking if updating
+    if (excludeBookingId) {
+      conflictQuery += ` AND b.id != $${queryParams.length + 1}`;
+      queryParams.push(excludeBookingId);
+    }
+    
+    // Filter by workers if provided
+    if (workerIds.length > 0) {
+      conflictQuery += ` AND bw.worker_id = ANY($${queryParams.length + 1})`;
+      queryParams.push(workerIds);
+    }
+    
+    // 🔒 LOCK CONFLICTING BOOKING ROWS TO PREVENT CONCURRENT ASSIGNMENTS
+    conflictQuery += ` ORDER BY b.scheduled_time FOR UPDATE OF b`;
+    
+    const conflicts = await queryFunction(conflictQuery, queryParams);
+    
+    if (conflicts.length > 0) {
+      return {
+        isValid: false,
+        message: `Time conflicts detected with ${conflicts.length} existing booking(s)`,
+        conflicts: conflicts.map(conflict => ({
+          bookingId: conflict.id,
+          bookingNumber: conflict.booking_number,
+          scheduledTime: conflict.scheduled_time,
+          duration: conflict.duration,
+          worker: conflict.worker_name,
+          workerId: conflict.worker_id,
+          conflictType: conflict.conflict_type
+        }))
+      };
+    }
+    
+    return {
+      isValid: true,
+      message: 'No time conflicts detected'
+    };
+    
+  } catch (error) {
+    console.error('Error validating booking time conflict with locking:', error);
+    return {
+      isValid: false,
+      message: 'Error validating time conflicts',
+      error: error.message
+    };
+  }
+}

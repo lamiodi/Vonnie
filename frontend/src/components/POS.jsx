@@ -5,8 +5,10 @@ import { handleError, handleSuccess } from '../utils/errorHandler';
 import { toast } from 'react-hot-toast';
 import { apiGet, apiPost, apiPatch, API_ENDPOINTS } from '../utils/api';
 import { generatePaystackReference, generateBankTransferReference, generatePOSReference } from '../utils/paymentUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 const POS = () => {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
   const [cart, setCart] = useState([]);
@@ -436,8 +438,8 @@ const POS = () => {
       toast.error("Invalid payment amount");
       return;
     }
-    // Manager processes payment - use manager's email for Paystack
-    const managerEmail = "manager@vonniesalon.com"; // This should come from auth context
+    // Manager processes payment - use authenticated user's email for Paystack
+    const managerEmail = user?.email || "manager@vonniesalon.com"; // Fallback to hardcoded if no user email
   
     const config = {
       reference: generatePaystackReference(),
@@ -448,6 +450,9 @@ const POS = () => {
       channels: ["card", "bank", "ussd", "qr", "mobile_money"],
       metadata: {
         booking_id: bookingData?.id,
+        processed_by_user_id: user?.id,
+        processed_by_email: managerEmail,
+        processed_by_name: user?.name || user?.email,
         custom_fields: [
           {
             display_name: "Customer Name",
@@ -477,7 +482,7 @@ const POS = () => {
           {
             display_name: "Processed By",
             variable_name: "processed_by",
-            value: "Manager" // This should come from auth context
+            value: user?.name || user?.email || "Manager"
           }
         ]
       }
