@@ -447,6 +447,7 @@ const POS = () => {
       currency: "NGN",
       channels: ["card", "bank", "ussd", "qr", "mobile_money"],
       metadata: {
+        booking_id: bookingData?.id,
         custom_fields: [
           {
             display_name: "Customer Name",

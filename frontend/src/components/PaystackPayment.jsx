@@ -35,6 +35,7 @@ const PaystackPayment = ({
     currency: currency,
     metadata: {
       ...metadata,
+      booking_id: fullBookingData?.id,
       booking_number: validatedBookingNumber || 'TEMP_BOOKING',
       retry_count: retryCount,
       verification_method: 'enhanced',

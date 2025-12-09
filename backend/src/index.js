@@ -91,6 +91,12 @@ app.use(cors({
   ],
   credentials: true
 }));
+
+// Register webhook routes FIRST (before any body parsing middleware)
+// This ensures they get the raw body for signature verification
+app.use('/api/webhooks', paymentWebhooks);
+
+// Then add body parsing middleware for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -109,7 +115,6 @@ app.use('/api/payment-confirmation', paymentConfirmationRoutes);
 app.use('/api/physical-pos', physicalPosPaymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/queue', queueRoutes);
-app.use('/api/webhooks', paymentWebhooks);
 
 
 
