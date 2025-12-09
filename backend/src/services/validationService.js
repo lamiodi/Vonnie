@@ -441,10 +441,17 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
     const endTime = new Date(startTime.getTime() + estimatedDuration * 60 * 1000);
     
     // Use provided client or default query function
-    const queryFunction = client || query;
+    // Fix: Ensure queryFunction is callable even if client object is passed
+    const queryFunction = client ? (text, params) => client.query(text, params) : query;
     
     // 🔒 CRITICAL: Lock worker rows to prevent concurrent assignments
     const availabilityQuery = `
+      WITH locked_workers AS (
+        SELECT id, name, current_status, is_active
+        FROM users
+        WHERE id = ANY($1) AND role = 'staff'
+        FOR UPDATE SKIP LOCKED
+      )
       SELECT 
         u.id as worker_id,
         u.name as worker_name,
@@ -474,12 +481,9 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
           END) > 0 THEN 'busy'
           ELSE 'available'
         END as availability_status
-      FROM users u
+      FROM locked_workers u
       LEFT JOIN booking_workers bw ON u.id = bw.worker_id AND bw.status = 'active'
       LEFT JOIN bookings b ON bw.booking_id = b.id
-      WHERE u.id = ANY($1) AND u.role = 'staff'
-      -- 🔒 LOCK WORKER ROWS TO PREVENT CONCURRENT ASSIGNMENTS
-      FOR UPDATE OF u SKIP LOCKED
       GROUP BY u.id, u.name, u.current_status, u.is_active
     `;
     
