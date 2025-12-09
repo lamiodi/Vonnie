@@ -716,6 +716,8 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
     const workerIds = workers.map(w => w.worker_id);
     
     // Check if any workers are already assigned to this booking
+    // RELAXED CONSTRAINT: If workers are already assigned, we will overwrite/update their role instead of failing
+    // This allows for re-assigning the same worker (e.g., updating role) or recovering from partial states
     const existingAssignments = await query(
       `SELECT bw.worker_id, u.name as worker_name 
        FROM booking_workers bw
@@ -726,17 +728,9 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
       [id, workerIds]
     );
     
+    // Instead of failing with 409, we'll log a warning and proceed (they will be deactivated and re-inserted below)
     if (existingAssignments.rows.length > 0) {
-      const assignedWorkerNames = existingAssignments.rows.map(row => row.worker_name);
-      return res.status(409).json(errorResponse(
-        `The following workers are already assigned to this booking: ${assignedWorkerNames.join(', ')}`,
-        'WORKER_ALREADY_ASSIGNED_ERROR',
-        409,
-        existingAssignments.rows.map(row => ({
-          worker_id: row.worker_id,
-          worker_name: row.worker_name
-        }))
-      ));
+      console.warn(`Workers already assigned to booking ${id}. Overwriting assignments for: ${existingAssignments.rows.map(w => w.worker_name).join(', ')}`);
     }
     
     // Validate worker availability using enhanced validation service

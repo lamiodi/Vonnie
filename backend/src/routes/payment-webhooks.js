@@ -40,7 +40,16 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
       return res.status(401).json(errorResponse('Invalid signature', 'INVALID_SIGNATURE', 401));
     }
 
-    const event = JSON.parse(req.body.toString('utf8'));
+    let event;
+    if (Buffer.isBuffer(req.body)) {
+      event = JSON.parse(req.body.toString('utf8'));
+    } else if (typeof req.body === 'string') {
+      event = JSON.parse(req.body);
+    } else {
+      // It's already an object (parsed by some upstream middleware)
+      event = req.body;
+    }
+
     console.log('Paystack webhook received:', event.event, event.data?.reference);
 
     // Handle different event types
