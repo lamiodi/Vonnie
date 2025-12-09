@@ -49,52 +49,52 @@ export const sendEmail = async (to, subject, text, html = null) => {
 export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
   const subject = '✅ Booking Confirmed - Vonne X2X';
   const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e5e7eb;">
+    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e5e7eb;">
       <!-- Header with gradient -->
       <div style="background: linear-gradient(135deg, #9333ea 0%, #ec4899 100%); padding: 32px 24px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.5px;">
+        <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
           ✅ Booking Confirmed!
         </h1>
-        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.9; font-weight: 400;">Your appointment has been successfully booked</p>
+        <p style="margin: 8px 0 0 0; font-size: 18px; opacity: 0.9; font-weight: 400;">Your appointment has been successfully booked</p>
       </div>
       
       <!-- Main content -->
       <div style="padding: 32px 24px;">
-        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Dear <strong style="color: #111827;">${bookingDetails.customerName}</strong>,</p>
-        <p style="font-size: 15px; color: #6b7280; line-height: 1.6; margin-bottom: 24px;">
+        <p style="font-size: 18px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Dear <strong style="color: #111827;">${bookingDetails.customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
           Thank you for choosing Vonne X2X! We're excited to confirm your appointment.
         </p>
         
         <!-- Booking Details Card -->
         <div style="background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 24px; margin: 24px 0;">
-          <h3 style="color: #111827; margin: 0 0 16px 0; font-size: 18px; font-weight: 600;">
+          <h3 style="color: #111827; margin: 0 0 16px 0; font-size: 20px; font-weight: 700;">
             📋 Booking Details
           </h3>
           
           <div style="display: grid; gap: 12px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #9333ea;">
-              <span style="font-weight: 500; color: #6b7280;">Booking Number:</span>
-              <span style="color: #9333ea; font-weight: 600; font-size: 14px; font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;">${bookingDetails.bookingNumber}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #9333ea;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Booking Number:</span>
+              <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Courier New', monospace;">${bookingDetails.bookingNumber}</span>
             </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #ec4899;">
-              <span style="font-weight: 500; color: #6b7280;">Service:</span>
-              <span style="color: #374151; font-weight: 500;">${bookingDetails.serviceName}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #ec4899;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Service:</span>
+              <span style="color: #374151; font-weight: 600; font-size: 16px;">${bookingDetails.serviceName}</span>
             </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #9333ea;">
-              <span style="font-weight: 500; color: #6b7280;">Date:</span>
-              <span style="color: #374151; font-weight: 500;">${new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #9333ea;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Date:</span>
+              <span style="color: #374151; font-weight: 600; font-size: 16px;">${new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #ec4899;">
-              <span style="font-weight: 500; color: #6b7280;">Time:</span>
-              <span style="color: #374151; font-weight: 600; font-size: 16px;">${bookingDetails.bookingTime}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #ec4899;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Time:</span>
+              <span style="color: #374151; font-weight: 700; font-size: 18px;">${bookingDetails.bookingTime}</span>
             </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #059669;">
-              <span style="font-weight: 500; color: #6b7280;">Price:</span>
-              <span style="color: #059669; font-weight: 600; font-size: 16px;">₦${bookingDetails.price}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #059669;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Price:</span>
+              <span style="color: #059669; font-weight: 700; font-size: 18px;">₦${bookingDetails.price}</span>
             </div>
           </div>
         </div>
@@ -220,50 +220,50 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
     : '💳 Payment Confirmed - Your Booking is Confirmed!';
     
   const html = `
-    <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border: 2px solid #10b981;">
+    <div style="font-family: Arial, Helvetica, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.08); border: 1px solid #e5e7eb;">
       <!-- Header with gradient -->
-      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 40px 30px; text-align: center; color: white;">
-        <h1 style="margin: 0; font-size: 32px; font-family: 'UnifrakturCook', cursive, serif; font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">
+      <div style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 32px; font-weight: 700; letter-spacing: -0.5px;">
           💳 Payment Confirmed
         </h1>
-        <p style="margin: 10px 0 0 0; font-size: 18px; opacity: 0.9;">Your payment has been successfully processed!</p>
+        <p style="margin: 8px 0 0 0; font-size: 18px; opacity: 0.9; font-weight: 400;">Your payment has been successfully processed!</p>
       </div>
       
       <!-- Main content -->
-      <div style="padding: 30px;">
-        <p style="font-size: 18px; color: #1f2937; margin-bottom: 20px;">Dear <strong style="color: #9333ea;">${customerName}</strong>,</p>
-        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 25px;">
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 18px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Dear <strong style="color: #111827;">${customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
           Your payment has been successfully processed and your booking is now confirmed!
         </p>
         
         <!-- Payment details card -->
-        <div style="background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%); border: 2px solid #10b981; border-radius: 16px; padding: 25px; margin: 25px 0; box-shadow: 0 4px 20px rgba(16, 185, 129, 0.1);">
-          <h3 style="color: #059669; margin: 0 0 20px 0; font-size: 22px; font-family: 'UnifrakturCook', cursive, serif; background: linear-gradient(45deg, #10b981, #059669); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+        <div style="background: #f0fdf4; border: 1px solid #10b981; border-radius: 8px; padding: 24px; margin: 24px 0;">
+          <h3 style="color: #059669; margin: 0 0 16px 0; font-size: 20px; font-weight: 700;">
             💰 Payment Details
           </h3>
           
-          <div style="display: grid; gap: 15px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #10b981;">
-              <span style="font-weight: 600; color: #6b7280;">Amount:</span>
-              <span style="color: #059669; font-weight: bold; font-size: 18px;">₦${amount?.toFixed(2) || '0.00'}</span>
+          <div style="display: grid; gap: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #10b981;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Amount:</span>
+              <span style="color: #059669; font-weight: 700; font-size: 18px;">₦${amount?.toFixed(2) || '0.00'}</span>
             </div>
             
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #059669;">
-              <span style="font-weight: 600; color: #6b7280;">Method:</span>
-              <span style="color: #1f2937; font-weight: 600;">${paymentMethod}</span>
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #059669;">
+              <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Method:</span>
+              <span style="color: #1f2937; font-weight: 600; font-size: 16px;">${paymentMethod}</span>
             </div>
             
             ${bookingNumber ? `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #10b981;">
-                <span style="font-weight: 600; color: #6b7280;">Booking Number:</span>
-                <span style="color: #9333ea; font-weight: bold; font-size: 16px; font-family: monospace;">${bookingNumber}</span>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #10b981;">
+                <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Booking Number:</span>
+                <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Courier New', monospace;">${bookingNumber}</span>
               </div>
             ` : ''}
             
             ${source === 'pos' ? `
-              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 15px; background: white; border-radius: 10px; border-left: 4px solid #059669;">
-                <span style="font-weight: 600; color: #6b7280;">Transaction Type:</span>
-                <span style="color: #1f2937; font-weight: 600;">Point of Sale</span>
+              <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #059669;">
+                <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Transaction Type:</span>
+                <span style="color: #1f2937; font-weight: 600; font-size: 16px;">Point of Sale</span>
               </div>
             ` : ''}
           </div>
