@@ -67,6 +67,18 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
       console.log('No metadata found in webhook data');
     }
 
+    // Persist webhook to database for audit and fallback verification
+    try {
+      await query(
+        'INSERT INTO payment_webhooks (event, reference, data) VALUES ($1, $2, $3)',
+        [event.event, event.data?.reference, event.data]
+      );
+      console.log('Webhook logged to database');
+    } catch (dbError) {
+      console.error('Failed to log webhook to database:', dbError);
+      // Continue processing even if logging fails
+    }
+
     // Handle different event types
     switch (event.event) {
       case 'charge.success':

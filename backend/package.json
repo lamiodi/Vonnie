@@ -12,6 +12,7 @@
     "test:coverage": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --coverage",
     "test:attendance": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js tests/attendance.test.js",
     "test:barcode": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js tests/barcode.test.js",
+    "test:payment": "node scripts/test-payment-flows.js",
     "generate-test-data": "node scripts/generate-test-data.js",
     "insert-products": "node scripts/insert-products.js",
     "db:cleanup": "node scripts/run-sql-file.js ../sql/complete_database_cleanup.sql",
