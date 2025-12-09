@@ -51,6 +51,14 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
     }
 
     console.log('Paystack webhook received:', event.event, event.data?.reference);
+    console.log('Webhook data:', JSON.stringify(event.data, null, 2));
+    
+    // Log metadata for debugging
+    if (event.data?.metadata) {
+      console.log('Metadata found:', JSON.stringify(event.data.metadata, null, 2));
+    } else {
+      console.log('No metadata found in webhook data');
+    }
 
     // Handle different event types
     switch (event.event) {
@@ -85,14 +93,20 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
 async function handleSuccessfulCharge(data) {
   const { reference, amount, customer, metadata } = data;
   
+  console.log('Processing successful charge:', { reference, amount, customer, metadata });
+  
   try {
     // Check if booking_id exists in metadata
     if (!metadata || !metadata.booking_id) {
       console.warn('Missing booking_id in webhook metadata. Skipping booking update.');
+      console.log('Available metadata keys:', metadata ? Object.keys(metadata) : 'No metadata');
       return;
     }
+    
+    console.log('Found booking_id in metadata:', metadata.booking_id);
 
     // Update booking payment status
+    console.log('Attempting to update booking payment status...');
     const result = await query(
       `UPDATE bookings 
        SET payment_status = 'completed', 
@@ -104,6 +118,8 @@ async function handleSuccessfulCharge(data) {
        RETURNING id, status, customer_type, scheduled_time`,
       [reference, metadata.booking_id]
     );
+
+    console.log('Update result:', { rowCount: result.rowCount, rows: result.rows });
 
     if (result.rows.length > 0) {
       console.log('Payment confirmed for booking:', metadata.booking_id);
@@ -127,6 +143,11 @@ async function handleSuccessfulCharge(data) {
       
       // Send confirmation email/notification
       // await sendBookingConfirmation(metadata.booking_id);
+    } else {
+      console.log('No booking updated. Possible reasons:');
+      console.log('- Booking ID not found:', metadata.booking_id);
+      console.log('- Booking payment status is already completed');
+      console.log('- Booking does not exist');
     }
   } catch (error) {
     console.error('Error processing successful charge:', error);
