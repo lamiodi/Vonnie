@@ -450,24 +450,40 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
         u.name as worker_name,
         u.current_status as worker_status,
         u.is_active,
-        COUNT(bw.id) as active_bookings,
+        -- Count only OVERLAPPING active bookings
+        COUNT(CASE 
+          WHEN bw.id IS NOT NULL 
+               AND b.status IN ('scheduled', 'in-progress', 'confirmed')
+               AND (b.scheduled_time < $3 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $2)
+               AND ($4::uuid IS NULL OR b.id != $4)
+          THEN 1 
+          ELSE NULL 
+        END) as active_bookings,
         CASE 
           WHEN u.is_active = false THEN 'inactive'
           WHEN u.current_status = 'unavailable' THEN 'unavailable'
           WHEN u.current_status = 'on_break' THEN 'on_break'
-          WHEN COUNT(bw.id) > 0 THEN 'busy'
+          -- Check overlap count instead of total count
+          WHEN COUNT(CASE 
+            WHEN bw.id IS NOT NULL 
+                 AND b.status IN ('scheduled', 'in-progress', 'confirmed')
+                 AND (b.scheduled_time < $3 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $2)
+                 AND ($4::uuid IS NULL OR b.id != $4)
+            THEN 1 
+            ELSE NULL 
+          END) > 0 THEN 'busy'
           ELSE 'available'
         END as availability_status
       FROM users u
       LEFT JOIN booking_workers bw ON u.id = bw.worker_id AND bw.status = 'active'
-      LEFT JOIN bookings b ON bw.booking_id = b.id AND b.status IN ('scheduled', 'in-progress')
+      LEFT JOIN bookings b ON bw.booking_id = b.id
       WHERE u.id = ANY($1) AND u.role = 'staff'
       -- 🔒 LOCK WORKER ROWS TO PREVENT CONCURRENT ASSIGNMENTS
       FOR UPDATE OF u SKIP LOCKED
       GROUP BY u.id, u.name, u.current_status, u.is_active
     `;
     
-    const availabilityResult = await queryFunction(availabilityQuery, [workerIds]);
+    const availabilityResult = await queryFunction(availabilityQuery, [workerIds, startTime, endTime, excludeBookingId]);
     
     // Check if any workers were skipped due to locking
     if (availabilityResult.rows.length !== workerIds.length) {

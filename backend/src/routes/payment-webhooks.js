@@ -115,7 +115,7 @@ router.post('/paystack-webhook', express.raw({ type: 'application/json' }), asyn
 });
 
 // Handle successful payment
-async function handleSuccessfulCharge(data) {
+async function handleSuccessfulCharge(data, io) {
   const { reference, amount, customer, metadata } = data;
   
   console.log('Processing successful charge:', { reference, amount, customer, metadata });
@@ -173,6 +173,18 @@ async function handleSuccessfulCharge(data) {
         console.log(`Pre-booked customer payment confirmed for booking ${metadata.booking_id} - no auto-completion`);
       }
       
+      // Emit socket event for real-time update
+      if (io) {
+        console.log(`🔌 Emitting payment-verified event for booking ${metadata.booking_id}`);
+        io.emit('payment-verified', {
+          success: true,
+          booking_id: metadata.booking_id,
+          reference: reference,
+          amount: amount,
+          status: 'completed'
+        });
+      }
+
       // Send confirmation email/notification
       // await sendBookingConfirmation(metadata.booking_id);
     } else {
@@ -180,6 +192,20 @@ async function handleSuccessfulCharge(data) {
       console.log('- Booking ID not found:', metadata.booking_id);
       console.log('- Booking payment status is already completed');
       console.log('- Booking does not exist');
+      
+      // Even if update failed (e.g. already completed), emit event so UI can update
+      if (io) {
+        console.log(`🔌 Emitting payment-verified event (duplicate) for booking ${metadata.booking_id}`);
+        io.emit('payment-verified', {
+          success: true,
+          booking_id: metadata.booking_id,
+          reference: reference,
+          amount: amount,
+          status: 'completed',
+          duplicate: true
+        });
+      }
+
       // Add webhook alert for no booking update
       await sendWebhookAlert('No Booking Updated After Payment', {
         error: 'No booking was updated after successful payment',
@@ -201,7 +227,7 @@ async function handleSuccessfulCharge(data) {
 }
 
 // Handle failed payment
-async function handleFailedCharge(data) {
+async function handleFailedCharge(data, io) {
   const { reference, metadata } = data;
   
   try {
@@ -215,6 +241,17 @@ async function handleFailedCharge(data) {
             [metadata.booking_id]
         );
         console.log('Payment failed recorded for booking:', metadata.booking_id);
+        
+        // Emit socket event for failed payment
+        if (io) {
+          console.log(`🔌 Emitting payment-failed event for booking ${metadata.booking_id}`);
+          io.emit('payment-failed', {
+            success: false,
+            booking_id: metadata.booking_id,
+            reference: reference,
+            status: 'failed'
+          });
+        }
     } else {
         // Fallback to updating by payment_reference if booking_id is missing (less reliable if reference wasn't saved yet)
         await query(

@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { usePaystackPayment } from 'react-paystack';
 import { useSearchParams } from 'react-router-dom';
+import io from 'socket.io-client';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 import { toast } from 'react-hot-toast';
 import { apiGet, apiPost, apiPatch, API_ENDPOINTS } from '../utils/api';
@@ -868,6 +869,59 @@ const POS = () => {
       setProcessing(false);
     }
   }, [cart, bookingData, customerInfo, appliedCoupon, getSubtotal, getDiscount, getTotal, clearBooking, handleSuccess, handleError, selectedPaymentMethod]);
+
+  // Socket.IO Integration for Real-time Payment Updates
+  const bookingIdRef = useRef(null);
+  
+  useEffect(() => {
+    bookingIdRef.current = bookingData?.id;
+  }, [bookingData]);
+
+  useEffect(() => {
+    // Determine socket URL from env or default
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5010/api';
+    // Remove /api from the end to get the root URL
+    const SOCKET_URL = API_URL.replace(/\/api$/, '');
+    
+    console.log('🔌 Connecting to socket server at:', SOCKET_URL);
+    const socket = io(SOCKET_URL);
+    
+    socket.on('connect', () => {
+      console.log('✅ Connected to socket server');
+    });
+
+    socket.on('payment-verified', (data) => {
+      console.log('💰 Payment verified event received:', data);
+      
+      // Check if this payment matches the current booking
+      // We use ref to access the latest booking ID without re-running effect
+      if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
+        if (data.success) {
+          handleSuccess(`Payment verified via Webhook! Reference: ${data.reference}`);
+          setPaymentConfirmed(true);
+          setPaystackReference(data.reference);
+          
+          // Clear cart and reset state as requested
+          setCart([]);
+          setAppliedCoupon(null);
+          setCouponCode('');
+          clearBooking();
+          fetchProducts(); // Refresh stock levels
+        }
+      }
+    });
+
+    socket.on('payment-failed', (data) => {
+       if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
+         handleError(null, `Payment failed via Webhook. Reference: ${data.reference}`);
+       }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, []);
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-screen bg-gray-50">
