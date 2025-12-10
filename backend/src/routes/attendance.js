@@ -6,8 +6,8 @@ const router = express.Router();
 
 // Shop coordinates - Updated to your new location
 const BUSINESS_LOCATION = {
-  LATITUDE: 6.4595481,
-  LONGITUDE: 3.5205641,
+  LATITUDE: 6.433331886076934,
+  LONGITUDE: 3.4912971316281003,
   ALLOWED_RADIUS_METERS: 500 // Increased to 500 meters for more flexibility
 };
 

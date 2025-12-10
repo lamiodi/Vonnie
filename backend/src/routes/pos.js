@@ -869,9 +869,11 @@ router.get('/transactions', authenticate, authorize(['staff', 'manager', 'admin'
    
     let queryString = `
       SELECT pt.*, u.name as staff_name, u.email as staff_email,
+             v.name as verified_by_name,
              c.code as coupon_code, c.name as coupon_name, c.discount_type, c.discount_value
       FROM pos_transactions pt
       LEFT JOIN users u ON pt.created_by = u.id
+      LEFT JOIN users v ON pt.verified_by = v.id
       LEFT JOIN coupons c ON pt.coupon_id = c.id
       WHERE 1=1
     `;
@@ -948,9 +950,11 @@ router.get('/transactions/pending-verification', authenticate, authorize(['manag
     const offset = (page - 1) * limit;
     const result = await query(`
       SELECT pt.*, u.name as staff_name, u.email as staff_email,
+             v.name as verified_by_name,
              b.booking_number, b.customer_name, b.customer_email
       FROM pos_transactions pt
       LEFT JOIN users u ON pt.created_by = u.id
+      LEFT JOIN users v ON pt.verified_by = v.id
       LEFT JOIN bookings b ON pt.booking_id = b.id
       WHERE pt.payment_status = 'pending' OR (pt.status = 'pending' AND pt.payment_status IS NULL)
       ORDER BY pt.created_at DESC

@@ -4,7 +4,96 @@ import { useAuth } from '../contexts/AuthContext';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 
 const Attendance = () => {
-  const { user } = useAuth();
+  const { user, hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
+
+  // If user is admin, they don't need to mark attendance
+  if (isAdmin) {
+    return (
+      <div className="p-4 sm:p-6">
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
+          <p className="text-gray-600">Track worker attendance records</p>
+        </div>
+        
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+          <div className="flex items-center space-x-4">
+            <div className="bg-purple-100 p-3 rounded-full">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-medium text-gray-900">Admin Exempt</h3>
+              <p className="text-gray-600 text-sm sm:text-base">As the salon owner/admin, you are exempt from attendance tracking requirements.</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Admin can still see the records table below */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
+            <h3 className="text-lg font-medium text-gray-900">Worker Attendance Records</h3>
+          </div>
+          {/* Reuse the existing table component logic or simpler view for admin */}
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {attendanceRecords.length === 0 ? (
+                  <tr>
+                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
+                      No attendance records found
+                    </td>
+                  </tr>
+                ) : (
+                  attendanceRecords.map((record) => (
+                    <tr key={record.id}>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(record.date)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.worker_name || 'Unknown'}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                        {formatTime(record.check_in_time)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
+                        {formatTime(record.check_out_time)}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 sm:hidden">
+                        <div>In: {formatTime(record.check_in_time)}</div>
+                        <div>Out: {formatTime(record.check_out_time)}</div>
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                          record.status === 'present' ? 'bg-green-100 text-green-800' : 
+                          record.status === 'late' ? 'bg-yellow-100 text-yellow-800' : 
+                          'bg-red-100 text-red-800'
+                        }`}>
+                          {record.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -48,7 +137,7 @@ const Attendance = () => {
     }
   };
 
-  const getCurrentLocation = () => {
+  const getCurrentLocation = (retries = 3) => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
         reject(new Error('Geolocation is not supported by this browser'));
@@ -58,40 +147,60 @@ const Attendance = () => {
       setLocationLoading(true);
       setLocationError('');
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy
-          };
-          setCurrentLocation(location);
-          setLocationLoading(false);
-          resolve(location);
-        },
-        (error) => {
-          setLocationLoading(false);
-          let errorMessage = 'Failed to get location';
-          switch (error.code) {
-            case error.PERMISSION_DENIED:
-              errorMessage = 'Location access denied by user';
-              break;
-            case error.POSITION_UNAVAILABLE:
-              errorMessage = 'Location information unavailable';
-              break;
-            case error.TIMEOUT:
-              errorMessage = 'Location request timed out';
-              break;
-          }
-          setLocationError(errorMessage);
-          reject(new Error(errorMessage));
-        },
-        {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0
+      const success = (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        };
+        // Only accept high accuracy results (< 50m) if possible, but relax for retries
+        // If accuracy is poor (>100m) and we have retries left, try again
+        if (position.coords.accuracy > 100 && retries > 0) {
+          console.log(`GPS accuracy poor (${position.coords.accuracy}m), retrying...`);
+          setTimeout(() => {
+            getCurrentLocation(retries - 1).then(resolve).catch(reject);
+          }, 1000);
+          return;
         }
-      );
+
+        setCurrentLocation(location);
+        setLocationLoading(false);
+        resolve(location);
+      };
+
+      const error = (err) => {
+        if (retries > 0) {
+          console.log(`GPS error (${err.code}), retrying...`);
+          setTimeout(() => {
+            getCurrentLocation(retries - 1).then(resolve).catch(reject);
+          }, 1000);
+          return;
+        }
+
+        setLocationLoading(false);
+        let errorMessage = 'Failed to get location';
+        switch (err.code) {
+          case err.PERMISSION_DENIED:
+            errorMessage = 'Location access denied. Please enable location services in your browser settings.';
+            break;
+          case err.POSITION_UNAVAILABLE:
+            errorMessage = 'Location unavailable. Try moving to an area with better signal (near a window/outside).';
+            break;
+          case err.TIMEOUT:
+            errorMessage = 'Location request timed out. Please try again.';
+            break;
+        }
+        setLocationError(errorMessage);
+        reject(new Error(errorMessage));
+      };
+
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      };
+
+      navigator.geolocation.getCurrentPosition(success, error, options);
     });
   };
 
@@ -128,7 +237,7 @@ const Attendance = () => {
       // Show appropriate notification based on verification status
       const responseData = response.data || response;
       if (responseData.location_verification_status === 'rejected') {
-        setLocationError('Unable to verify attendance. You appear to be too far from shop.');
+        setLocationError('Unable to verify attendance. You appear to be outside the shop. Please ensure you are inside the shop to mark attendance.');
       } else if (responseData.location_verification_status === 'verified') {
         // Success - clear any previous errors
         setLocationError('');
@@ -239,11 +348,13 @@ const Attendance = () => {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
-        <p className="text-gray-600">Track worker attendance with GPS verification</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
+        <p className="text-gray-600">
+          Please ensure you are inside the shop before marking your attendance.
+        </p>
       </div>
 
-      {/* Device Detection Notice */}
+      {/* Device Detection Notice - Hidden as requested to simplify user experience */}
       {!isMobileDevice && (
         <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
           <div className="flex items-start">
@@ -292,7 +403,7 @@ const Attendance = () => {
                 {todayAttendance.gps_check_in_verified && (
                   <span className="text-xs text-green-600 flex items-center">
                     <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                    GPS Verified
+                    Location Verified
                   </span>
                 )}
               </div>
@@ -304,7 +415,7 @@ const Attendance = () => {
                   {todayAttendance.gps_check_out_verified && (
                     <span className="text-xs text-green-600 flex items-center">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                      GPS Verified
+                      Location Verified
                     </span>
                   )}
                 </div>
@@ -444,10 +555,11 @@ const Attendance = () => {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
@@ -455,17 +567,29 @@ const Attendance = () => {
                   <tr key={record.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                       {formatTime(record.check_in_time)}
                       {record.gps_check_in_verified && (
                         <span className="ml-2 text-xs text-green-600">✓ GPS</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                       {formatTime(record.check_out_time) || '-'}
                       {record.gps_check_out_verified && (
                         <span className="ml-2 text-xs text-green-600">✓ GPS</span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 sm:hidden">
+                      <div className="flex flex-col text-xs">
+                        <span className="flex items-center">
+                          In: {formatTime(record.check_in_time)}
+                          {record.gps_check_in_verified && <span className="ml-1 text-green-600">✓</span>}
+                        </span>
+                        <span className="flex items-center mt-1">
+                          Out: {formatTime(record.check_out_time) || '-'}
+                          {record.gps_check_out_verified && <span className="ml-1 text-green-600">✓</span>}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -477,7 +601,7 @@ const Attendance = () => {
                         {record.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
                       {record.location_verification_status === 'verified' ? (
                         <span className="text-green-600">✓ Verified</span>
                       ) : record.location_verification_status === 'rejected' ? (

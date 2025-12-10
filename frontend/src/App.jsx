@@ -12,7 +12,6 @@ import BookingConfirmation from './pages/BookingConfirmation';
 import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
 import POSPage from './pages/POSPage';
-import Reports from './pages/Reports';
 import Coupons from './pages/Coupons';
 
 import Inventory from './components/Inventory';
@@ -49,7 +48,7 @@ function App() {
             <Route path="workers" element={<Workers />} />
             <Route path="attendance" element={<Attendance />} />
             <Route path="coupons" element={<Coupons />} />
-            <Route path="reports" element={<Reports />} />
+            <Route path="reports" element={<Analytics />} />
             <Route path="analytics" element={<Analytics />} />
             <Route path="transactions" element={<TransactionManagement />} />
             <Route path="admin-settings" element={<AdminSettings />} />

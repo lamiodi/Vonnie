@@ -421,10 +421,10 @@ export default function Workers() {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Name</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Phone</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 hidden md:table-cell">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 hidden lg:table-cell">Phone</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Role</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Availability</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 hidden sm:table-cell">Availability</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Actions</th>
               </tr>
             </thead>
@@ -434,13 +434,16 @@ export default function Workers() {
                 const availabilityClass = w.current_status === 'busy' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
                 return (
                   <tr key={w.id}>
-                    <td className="px-6 py-3 text-sm font-medium text-gray-900">{w.name}</td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{w.email}</td>
-                    <td className="px-6 py-3 text-sm text-gray-600">{w.phone || '-'}</td>
+                    <td className="px-6 py-3 text-sm font-medium text-gray-900">
+                      {w.name}
+                      <div className="md:hidden text-xs text-gray-500 mt-1">{w.email}</div>
+                    </td>
+                    <td className="px-6 py-3 text-sm text-gray-600 hidden md:table-cell">{w.email}</td>
+                    <td className="px-6 py-3 text-sm text-gray-600 hidden lg:table-cell">{w.phone || '-'}</td>
                     <td className="px-6 py-3">
                       <Badge text={w.role} className={roleClass} />
                     </td>
-                    <td className="px-6 py-3">
+                    <td className="px-6 py-3 hidden sm:table-cell">
                       <Badge text={w.current_status === 'busy' ? 'Busy' : 'Available'} className={availabilityClass} />
                     </td>
                     <td className="px-6 py-3 text-sm">

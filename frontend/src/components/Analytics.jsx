@@ -1,25 +1,43 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { Link } from 'react-router-dom';
-import AuthContext from '../contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import { apiGet, API_ENDPOINTS } from '../utils/api';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 
 const Analytics = () => {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuth();
+  const [activeTab, setActiveTab] = useState('overview'); // overview, sales, inventory, bookings, coupons
+  
+  // Dashboard Data
   const [salesData, setSalesData] = useState(null);
   const [inventoryData, setInventoryData] = useState(null);
   const [bookingData, setBookingData] = useState(null);
   const [couponData, setCouponData] = useState(null);
+  
+  // Report Data (Detailed)
+  const [reportData, setReportData] = useState(null);
+  
+  // Common State
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState('monthly');
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [dateRange, setDateRange] = useState({
+    startDate: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0]
+  });
+  const [period, setPeriod] = useState('daily'); // daily, monthly, yearly
+  
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
-  const [errorMessages, setErrorMessages] = useState([]);
   const exportMenuRef = useRef(null);
 
+  // Initial Load (Dashboard)
   useEffect(() => {
-    fetchAnalyticsData();
-  }, [dateRange, selectedPeriod]);
+    fetchDashboardData();
+  }, []);
+
+  // Fetch detailed report when tab or filters change
+  useEffect(() => {
+    if (activeTab !== 'overview') {
+      fetchReportData();
+    }
+  }, [activeTab, dateRange, period]);
 
   // Close export menu when clicking outside
   useEffect(() => {
@@ -28,31 +46,23 @@ const Analytics = () => {
         setExportMenuOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchAnalyticsData = async () => {
+  const fetchDashboardData = async () => {
     setLoading(true);
-    setErrorMessages([]);
-    
     try {
       const requests = [];
       const requestTypes = [];
-
-      const params = { period: dateRange };
-      if (selectedPeriod) params.date = selectedPeriod;
       
-      // Always fetch bookings (available to all authenticated users)
-      requests.push(apiGet(API_ENDPOINTS.REPORTS_BOOKINGS || '/reports/bookings', params));
+      // Always fetch bookings
+      requests.push(apiGet(API_ENDPOINTS.REPORTS_BOOKINGS || '/reports/bookings', { period: 'monthly' }));
       requestTypes.push('bookings');
       
-      // Only fetch admin-only data if user is admin or manager
+      // Admin/Manager only data
       if (user?.role === 'admin' || user?.role === 'manager') {
-        requests.push(apiGet(API_ENDPOINTS.REPORTS_SALES || '/reports/sales', params));
+        requests.push(apiGet(API_ENDPOINTS.REPORTS_SALES || '/reports/sales', { period: 'monthly' }));
         requests.push(apiGet(API_ENDPOINTS.REPORTS_INVENTORY || '/reports/inventory'));
         requests.push(apiGet(API_ENDPOINTS.REPORTS_COUPONS || '/reports/coupons'));
         requestTypes.push('sales', 'inventory', 'coupons');
@@ -61,539 +71,500 @@ const Analytics = () => {
       const responses = await Promise.allSettled(requests);
       
       responses.forEach((response, index) => {
-        const requestType = requestTypes[index];
-        
         if (response.status === 'fulfilled') {
-          switch (requestType) {
-            case 'sales':
-              setSalesData(response.value);
-              break;
-            case 'inventory':
-              setInventoryData(response.value);
-              break;
-            case 'bookings':
-              setBookingData(response.value);
-              break;
-            case 'coupons':
-              setCouponData(response.value);
-              break;
-          }
-        } else {
-          // Handle errors gracefully
-          if (response.reason?.response?.status === 403) {
-            // Silently handle 403 errors for staff users
-            console.warn(`Access denied to ${requestType} data for ${user?.role} user`);
-          } else {
-            // Log other errors but don't show them to users
-            console.error(`Failed to load ${requestType} data:`, response.reason);
-            setErrorMessages(prev => [...prev, `Unable to load ${requestType} data`]);
-          }
+          const type = requestTypes[index];
+          if (type === 'sales') setSalesData(response.value);
+          if (type === 'inventory') setInventoryData(response.value);
+          if (type === 'bookings') setBookingData(response.value);
+          if (type === 'coupons') setCouponData(response.value);
         }
       });
-      
     } catch (error) {
-      console.error('Analytics data fetch error:', error);
-      // Don't show error to user for permission issues
-      if (error.response?.status !== 403) {
-        setErrorMessages(['Unable to load some analytics data']);
+      console.error('Dashboard fetch error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReportData = async () => {
+    setLoading(true);
+    try {
+      const params = {
+        start_date: dateRange.startDate,
+        end_date: dateRange.endDate,
+        period: period
+      };
+
+      let endpoint;
+      switch (activeTab) {
+        case 'sales': endpoint = API_ENDPOINTS.REPORTS_SALES; break;
+        case 'inventory': endpoint = API_ENDPOINTS.REPORTS_INVENTORY; break;
+        case 'bookings': endpoint = API_ENDPOINTS.REPORTS_BOOKINGS; break;
+        case 'coupons': endpoint = API_ENDPOINTS.REPORTS_COUPONS; break;
+        default: return;
       }
+
+      const response = await apiGet(endpoint, params);
+      setReportData(response.data || response);
+    } catch (error) {
+      handleError(error, 'Failed to load report data');
     } finally {
       setLoading(false);
     }
   };
 
   const formatCurrency = (amount) => {
-    const formatted = new Intl.NumberFormat('en-NG', {
-      style: 'currency',
-      currency: 'NGN'
-    }).format(amount);
-    
-    // Remove trailing .00 decimals
-    return formatted.replace(/\.00$/, '');
+    if (amount === null || amount === undefined || isNaN(amount)) return '₦0';
+    const num = parseFloat(amount);
+    return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' })
+      .format(num)
+      .replace(/\.00$/, '');
   };
 
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
+    if (!dateString) return '-';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric', month: 'short', day: 'numeric'
+      });
+    } catch (e) { return dateString; }
   };
 
-  const getDateInputType = () => {
-    switch (dateRange) {
-      case 'daily':
-        return 'date';
-      case 'monthly':
-        return 'month';
-      case 'yearly':
-        return 'number';
-      default:
-        return 'date';
-    }
-  };
-
-  const getDatePlaceholder = () => {
-    switch (dateRange) {
-      case 'daily':
-        return 'Select date';
-      case 'monthly':
-        return 'Select month';
-      case 'yearly':
-        return 'Enter year (e.g., 2024)';
-      default:
-        return 'Select date';
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'confirmed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'cancelled':
-        return 'bg-red-100 text-red-800';
-      case 'completed':
-        return 'bg-blue-100 text-blue-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  // Export functions
+  // Export Logic
   const exportToCSV = (data, filename) => {
     if (!data || data.length === 0) {
-      handleError('No data available to export');
+      handleError(null, 'No data to export');
       return;
     }
-
+    
+    // Flatten logic for simple arrays
     const headers = Object.keys(data[0]);
     const csvContent = [
       headers.join(','),
       ...data.map(row => 
         headers.map(header => {
-          const value = row[header];
-          // Handle values that might contain commas or quotes
-          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
-            return `"${value.replace(/"/g, '""')}"`;
-          }
-          return value;
+          const val = row[header];
+          return `"${String(val || '').replace(/"/g, '""')}"`;
         }).join(',')
       )
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
+    link.href = URL.createObjectURL(blob);
+    link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
     link.click();
-    document.body.removeChild(link);
-    handleSuccess(`${filename} exported successfully`);
   };
 
-  const exportToJSON = (data, filename) => {
-    if (!data) {
-      handleError('No data available to export');
-      return;
+  const handleExport = () => {
+    if (activeTab === 'overview') {
+      // Export Dashboard Summary
+      const summary = {
+        sales: salesData?.total_sales,
+        bookings: bookingData?.total_bookings,
+        active_coupons: couponData?.active_coupons?.length,
+        low_stock: inventoryData?.inventory?.filter(i => i.stock_status === 'low_stock').length
+      };
+      const blob = new Blob([JSON.stringify(summary, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'dashboard_summary.json';
+      link.click();
+    } else {
+      // Export Detailed Report
+      // Reuse logic from Reports.jsx for specific formatting if needed, or generic CSV
+      if (Array.isArray(reportData)) {
+        exportToCSV(reportData, `${activeTab}_report`);
+      } else if (reportData && typeof reportData === 'object') {
+        // Handle nested arrays for inventory/coupons
+        if (activeTab === 'inventory' && reportData.products) exportToCSV(reportData.products, 'inventory_report');
+        else if (activeTab === 'coupons' && reportData.coupons) exportToCSV(reportData.coupons, 'coupons_report');
+        else if (activeTab === 'bookings' && reportData.bookings_by_service) {
+           // Convert object to array for CSV
+           const serviceData = Object.entries(reportData.bookings_by_service).map(([k, v]) => ({ service: k, ...v }));
+           exportToCSV(serviceData, 'bookings_by_service');
+        }
+        else {
+           // Try to export the main object as a single row or similar
+           const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+           const link = document.createElement('a');
+           link.href = URL.createObjectURL(blob);
+           link.download = `${activeTab}_report.json`;
+           link.click();
+        }
+      }
     }
-
-    const jsonContent = JSON.stringify(data, null, 2);
-    const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.json`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    handleSuccess(`${filename} exported successfully`);
+    setExportMenuOpen(false);
   };
 
-  const exportAllData = () => {
-    const allData = {
-      export_date: new Date().toISOString(),
-      date_range: dateRange,
-      selected_period: selectedPeriod,
-      sales_data: salesData,
-      inventory_data: inventoryData,
-      booking_data: bookingData,
-      coupon_data: couponData
-    };
-    exportToJSON(allData, 'analytics_complete_report');
-  };
-
-  const exportSalesData = () => {
-    if (salesData?.sales_by_period) {
-      exportToCSV(salesData.sales_by_period, 'sales_report');
-    }
-  };
-
-  const exportBookingData = () => {
-    if (bookingData?.bookings_by_status) {
-      exportToCSV(bookingData.bookings_by_status, 'booking_report');
-    }
-  };
-
-  const exportInventoryData = () => {
-    if (inventoryData?.low_stock_items) {
-      exportToCSV(inventoryData.low_stock_items, 'inventory_report');
-    }
-  };
-
-  const exportCouponData = () => {
-    if (couponData?.active_coupons) {
-      exportToCSV(couponData.active_coupons, 'coupon_report');
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64" role="status" aria-label="Loading analytics dashboard">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-        <span className="sr-only">Loading analytics data...</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6" role="banner">
-        <h2 className="text-2xl font-bold text-gray-800">Analytics Dashboard</h2>
-        
-        {/* Export Controls */}
-         <div className="flex space-x-2" role="group" aria-label="Export controls">
-           <div className="relative" ref={exportMenuRef}>
-             <button
-               onClick={() => setExportMenuOpen(!exportMenuOpen)}
-               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 flex items-center space-x-2"
-               aria-haspopup="true"
-               aria-expanded={exportMenuOpen}
-             >
-               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-               </svg>
-               <span>Export Data</span>
-               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-               </svg>
-             </button>
-             
-             <div className={`${exportMenuOpen ? 'block' : 'hidden'} absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border border-gray-200`}>
-               <div className="py-1" role="menu">
-                 <button
-                   onClick={() => {
-                     exportAllData();
-                     setExportMenuOpen(false);
-                   }}
-                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                   role="menuitem"
-                 >
-                   <div className="flex items-center space-x-2">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                     </svg>
-                     <span>Complete Report (JSON)</span>
-                   </div>
-                 </button>
-                 <hr className="my-1" />
-                 <button
-                   onClick={() => {
-                     exportSalesData();
-                     setExportMenuOpen(false);
-                   }}
-                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                   role="menuitem"
-                 >
-                   <div className="flex items-center space-x-2">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
-                     </svg>
-                     <span>Sales Report (CSV)</span>
-                   </div>
-                 </button>
-                 <button
-                   onClick={() => {
-                     exportBookingData();
-                     setExportMenuOpen(false);
-                   }}
-                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                   role="menuitem"
-                 >
-                   <div className="flex items-center space-x-2">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                     </svg>
-                     <span>Booking Report (CSV)</span>
-                   </div>
-                 </button>
-                 <button
-                   onClick={() => {
-                     exportInventoryData();
-                     setExportMenuOpen(false);
-                   }}
-                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                   role="menuitem"
-                 >
-                   <div className="flex items-center space-x-2">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-                     </svg>
-                     <span>Inventory Report (CSV)</span>
-                   </div>
-                 </button>
-                 <button
-                   onClick={() => {
-                     exportCouponData();
-                     setExportMenuOpen(false);
-                   }}
-                   className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 focus:outline-none focus:bg-gray-100"
-                   role="menuitem"
-                 >
-                   <div className="flex items-center space-x-2">
-                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                     </svg>
-                     <span>Coupon Report (CSV)</span>
-                   </div>
-                 </button>
-               </div>
-             </div>
-           </div>
-         </div>
-      </div>
-
-      {/* Date Range Controls */}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex space-x-4" role="group" aria-label="Date range controls">
-          <label htmlFor="date-range-select" className="sr-only">Select date range type</label>
-          <select
-            id="date-range-select"
-            value={dateRange}
-            onChange={(e) => {
-              setDateRange(e.target.value);
-              setSelectedPeriod('');
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-describedby="date-range-desc"
-          >
-            <option value="daily">Daily</option>
-            <option value="monthly">Monthly</option>
-            <option value="yearly">Yearly</option>
-          </select>
-          <span id="date-range-desc" className="sr-only">Choose the time period for analytics data</span>
-          
-          <label htmlFor="period-input" className="sr-only">Select specific {dateRange} period</label>
-          <input
-            id="period-input"
-            type={getDateInputType()}
-            value={selectedPeriod}
-            onChange={(e) => setSelectedPeriod(e.target.value)}
-            placeholder={getDatePlaceholder()}
-            className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-describedby="period-desc"
-          />
-          <span id="period-desc" className="sr-only">Select a specific {dateRange} period to filter analytics data</span>
-        </div>
-      </div>
-
-      {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8" role="region" aria-label="Key performance metrics">
-        {/* Total Sales */}
-        <div className="bg-white rounded-lg shadow p-6" role="article" aria-labelledby="total-sales-title">
-          <div className="flex items-center">
-            <div className="p-2 bg-green-100 rounded-md" aria-hidden="true">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+  // Render Functions
+  const renderOverview = () => (
+    <div className="space-y-8 animate-fade-in">
+      {/* Metrics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Total Sales</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {formatCurrency(salesData?.total_sales || 0)}
+              </p>
+            </div>
+            <div className="p-3 bg-green-50 rounded-lg">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p id="total-sales-title" className="text-sm font-medium text-gray-600">Total Sales</p>
-              <p className="text-2xl font-semibold text-gray-900" aria-describedby="total-sales-title">
-                {salesData ? formatCurrency(salesData.total_sales || 0) : '₦0.00'}
-              </p>
-            </div>
           </div>
         </div>
-
-        {/* Total Bookings */}
-        <div className="bg-white rounded-lg shadow p-6" role="article" aria-labelledby="total-bookings-title">
-          <div className="flex items-center">
-            <div className="p-2 bg-blue-100 rounded-md" aria-hidden="true">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Total Bookings</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {bookingData?.total_bookings || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-blue-50 rounded-lg">
+              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p id="total-bookings-title" className="text-sm font-medium text-gray-600">Total Bookings</p>
-              <p className="text-2xl font-semibold text-gray-900" aria-describedby="total-bookings-title">
-                {bookingData ? bookingData.total_bookings || 0 : 0}
-              </p>
-            </div>
           </div>
         </div>
 
-        {/* Low Stock Items */}
-        <div className="bg-white rounded-lg shadow p-6" role="article" aria-labelledby="low-stock-title">
-          <div className="flex items-center">
-            <div className="p-2 bg-yellow-100 rounded-md" aria-hidden="true">
-              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Low Stock</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {inventoryData?.inventory?.filter(i => i.stock_status === 'low_stock').length || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-yellow-50 rounded-lg">
+              <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p id="low-stock-title" className="text-sm font-medium text-gray-600">Low Stock Items</p>
-              <p className="text-2xl font-semibold text-gray-900" aria-describedby="low-stock-title">
-                {inventoryData ? inventoryData.inventory?.filter(item => item.stock_status === 'low_stock').length || 0 : 0}
-              </p>
-            </div>
           </div>
         </div>
 
-        {/* Active Coupons */}
-        <div className="bg-white rounded-lg shadow p-6" role="article" aria-labelledby="active-coupons-title">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded-md" aria-hidden="true">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-500">Active Coupons</p>
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {couponData?.active_coupons?.length || 0}
+              </p>
+            </div>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
             </div>
-            <div className="ml-4">
-              <p id="active-coupons-title" className="text-sm font-medium text-gray-600">Active Coupons</p>
-              <p className="text-2xl font-semibold text-gray-900" aria-describedby="active-coupons-title">
-                {couponData ? couponData.active_coupons?.length || 0 : 0}
-              </p>
-            </div>
           </div>
         </div>
       </div>
 
-      {/* Charts and Tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6" role="region" aria-label="Detailed analytics data">
-        {/* Sales Summary */}
-        <div className="bg-white rounded-lg shadow p-6" role="region" aria-labelledby="sales-summary-title">
-          <h3 id="sales-summary-title" className="text-lg font-semibold text-gray-800 mb-4">Sales Summary</h3>
-          {salesData && salesData.sales_by_period ? (
-            <div className="space-y-4" role="list" aria-label="Sales data by period">
-              {salesData.sales_by_period.map((sale, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-md" role="listitem">
-                  <div>
-                    <p className="font-medium text-gray-900">
-                      {dateRange === 'daily' ? formatDate(sale.date) : 
-                       dateRange === 'monthly' ? `${sale.month}/${sale.year}` : 
-                       sale.year}
-                    </p>
-                    <p className="text-sm text-gray-600">{sale.transaction_count} transactions</p>
-                  </div>
-                  <p className="text-lg font-semibold text-green-600">
-                    {formatCurrency(sale.total_revenue)}
-                  </p>
+      {/* Recent Activity / Charts Placeholder */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Sales Trend</h3>
+          {salesData?.sales_by_period ? (
+            <div className="space-y-3">
+              {salesData.sales_by_period.slice(0, 5).map((sale, i) => (
+                <div key={i} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <span className="text-gray-700">{formatDate(sale.date || sale.period)}</span>
+                  <span className="font-semibold text-green-600">{formatCurrency(sale.total_revenue)}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8" role="status">No sales data available</p>
+            <p className="text-gray-500 text-center py-8">No recent sales data</p>
           )}
         </div>
 
-        {/* Booking Status */}
-        <div className="bg-white rounded-lg shadow p-6" role="region" aria-labelledby="booking-status-title">
-          <h3 id="booking-status-title" className="text-lg font-semibold text-gray-800 mb-4">Booking Status</h3>
-          {bookingData && bookingData.bookings_by_status ? (
-            <div className="space-y-4" role="list" aria-label="Booking data by status">
-              {bookingData.bookings_by_status.map((status, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-md" role="listitem">
-                  <div className="flex items-center">
-                    <div className={`w-3 h-3 rounded-full mr-3 ${
-                      status.status === 'scheduled' ? 'bg-green-500' :
-                      status.status === 'pending_confirmation' ? 'bg-yellow-500' :
-                      status.status === 'cancelled' ? 'bg-red-500' :
-                      status.status === 'in-progress' ? 'bg-orange-500' :
-                      'bg-blue-500'
-                    }`} aria-hidden="true"></div>
-                    <p className="font-medium text-gray-900 capitalize">{status.status}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold text-gray-900">{status.count}</p>
-                    <p className="text-sm text-gray-600">
-                      {formatCurrency(status.total_revenue || 0)}
-                    </p>
-                  </div>
-                </div>
-              ))}
+        <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Low Stock Alert</h3>
+          {inventoryData?.inventory?.filter(i => i.stock_status === 'low_stock').length > 0 ? (
+            <div className="space-y-3">
+               {inventoryData.inventory.filter(i => i.stock_status === 'low_stock').slice(0, 5).map((item, i) => (
+                 <div key={i} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                   <div>
+                     <p className="font-medium text-gray-900">{item.name}</p>
+                     <p className="text-xs text-gray-500">SKU: {item.sku}</p>
+                   </div>
+                   <span className="text-sm font-bold text-red-600">{item.stock_level} left</span>
+                 </div>
+               ))}
             </div>
           ) : (
-            <p className="text-gray-500 text-center py-8" role="status">No booking data available</p>
-          )}
-        </div>
-
-        {/* Low Stock Alert */}
-        <div className="bg-white rounded-lg shadow p-6" role="region" aria-labelledby="low-stock-alert-title">
-          <h3 id="low-stock-alert-title" className="text-lg font-semibold text-gray-800 mb-4">Low Stock Alert</h3>
-          {inventoryData && inventoryData.inventory ? (
-            <div className="space-y-3" role="list" aria-label="Low stock items">
-              {inventoryData.inventory
-                .filter(item => item.stock_status === 'low_stock')
-                .slice(0, 5)
-                .map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-3 bg-red-50 rounded-md" role="listitem">
-                    <div>
-                      <p className="font-medium text-gray-900">{item.name}</p>
-                      <p className="text-sm text-gray-600">{item.sku}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-red-600" role="status" aria-label={`${item.stock_level} items remaining`}>
-                        {item.stock_level} left
-                      </p>
-                      <p className="text-xs text-gray-500">{formatCurrency(item.price)}</p>
-                    </div>
-                  </div>
-                ))}
-              {inventoryData.inventory.filter(item => item.stock_status === 'low_stock').length > 5 && (
-                <p className="text-sm text-gray-500 text-center">
-                  +{inventoryData.inventory.filter(item => item.stock_status === 'low_stock').length - 5} more items
-                </p>
-              )}
-              {inventoryData.inventory.filter(item => item.stock_status === 'low_stock').length === 0 && (
-                <p className="text-gray-500 text-center py-8" role="status">All items are well stocked</p>
-              )}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8" role="status">All items are well stocked</p>
-          )}
-        </div>
-
-        {/* Coupon Performance */}
-        <div className="bg-white rounded-lg shadow p-6" role="region" aria-labelledby="coupon-performance-title">
-          <h3 id="coupon-performance-title" className="text-lg font-semibold text-gray-800 mb-4">Coupon Performance</h3>
-          {couponData && couponData.active_coupons && couponData.active_coupons.length > 0 ? (
-            <div className="space-y-3" role="list" aria-label="Active coupons performance">
-              {couponData.active_coupons.slice(0, 5).map((coupon, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-purple-50 rounded-md" role="listitem">
-                  <div>
-                    <p className="font-medium text-gray-900">{coupon.code}</p>
-                    <p className="text-sm text-gray-600">
-                      {coupon.discount_type === 'percentage' ? `${coupon.discount_value}%` : formatCurrency(coupon.discount_value)} off
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-semibold text-purple-600">{coupon.usage_count} uses</p>
-                    <p className="text-xs text-gray-500">
-                      {coupon.usage_limit ? `${coupon.usage_limit - coupon.usage_count} left` : 'Unlimited'}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-gray-500 text-center py-8" role="status">No active coupons</p>
+            <p className="text-gray-500 text-center py-8">All items are well stocked</p>
           )}
         </div>
       </div>
+    </div>
+  );
+
+  const renderSalesTable = () => {
+    if (!reportData || !Array.isArray(reportData)) return <p className="text-center text-gray-500 py-8">No sales data found for this period.</p>;
+    
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Total Sales</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Transactions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Sale</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {reportData.map((item, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.period || item.date)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{formatCurrency(item.total_sales)}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.transaction_count}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {formatCurrency(item.transaction_count > 0 ? item.total_sales / item.transaction_count : 0)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderInventoryTable = () => {
+    const products = reportData?.products || [];
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Product</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Stock</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Value</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {products.map((item, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.name}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.stock_level}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                    item.stock_status === 'in_stock' ? 'bg-green-100 text-green-800' :
+                    item.stock_status === 'low_stock' ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {item.stock_status.replace('_', ' ').toUpperCase()}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatCurrency(item.price * item.stock_level)}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  const renderBookingsTable = () => {
+    // Show service breakdown if available
+    const services = reportData?.bookings_by_service ? Object.entries(reportData.bookings_by_service) : [];
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+           <div className="bg-white p-4 rounded-lg shadow-sm border">
+             <p className="text-gray-500 text-sm">Total Revenue</p>
+             <p className="text-xl font-bold text-green-600">{formatCurrency(reportData?.total_revenue)}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border">
+             <p className="text-gray-500 text-sm">Completed</p>
+             <p className="text-xl font-bold text-blue-600">{reportData?.completed_bookings || 0}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border">
+             <p className="text-gray-500 text-sm">Cancelled</p>
+             <p className="text-xl font-bold text-red-600">{reportData?.cancelled_bookings || 0}</p>
+           </div>
+           <div className="bg-white p-4 rounded-lg shadow-sm border">
+             <p className="text-gray-500 text-sm">Total Bookings</p>
+             <p className="text-xl font-bold text-gray-900">{reportData?.total_bookings || 0}</p>
+           </div>
+        </div>
+
+        {services.length > 0 && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="font-medium text-gray-900">Bookings by Service</h3>
+            </div>
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Service</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Count</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Revenue</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {services.map(([name, data], i) => (
+                  <tr key={i} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{name}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{data.count}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-medium">{formatCurrency(data.revenue)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderCouponsTable = () => {
+    const coupons = reportData?.coupons || [];
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Discount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usage</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {coupons.map((item, i) => (
+              <tr key={i} className="hover:bg-gray-50">
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{item.code}</td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatCurrency(item.discount_amount)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.used_count}</td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                   <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                      item.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                   }`}>
+                     {item.status}
+                   </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
+          <p className="text-gray-500 mt-1">Track your business performance</p>
+        </div>
+        
+        <div className="flex gap-2">
+           <div className="relative" ref={exportMenuRef}>
+             <button
+               onClick={() => setExportMenuOpen(!exportMenuOpen)}
+               className="px-4 py-2 bg-white border border-gray-300 rounded-lg shadow-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+             >
+               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+               </svg>
+               Export
+             </button>
+             {exportMenuOpen && (
+               <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-20 border border-gray-100">
+                 <button onClick={handleExport} className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                   {activeTab === 'overview' ? 'Export Summary (JSON)' : 'Export CSV'}
+                 </button>
+               </div>
+             )}
+           </div>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="border-b border-gray-200 mb-6 overflow-x-auto">
+        <nav className="-mb-px flex space-x-8">
+          {['overview', 'sales', 'inventory', 'bookings', 'coupons'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`
+                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm capitalize
+                ${activeTab === tab 
+                  ? 'border-blue-500 text-blue-600' 
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
+              `}
+            >
+              {tab}
+            </button>
+          ))}
+        </nav>
+      </div>
+
+      {/* Filters (Only for Detailed Reports) */}
+      {activeTab !== 'overview' && (activeTab === 'sales' || activeTab === 'bookings') && (
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-100 mb-6 flex flex-wrap gap-4 items-end">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+            <input 
+              type="date" 
+              value={dateRange.startDate}
+              onChange={(e) => setDateRange({...dateRange, startDate: e.target.value})}
+              className="px-3 py-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+            <input 
+              type="date" 
+              value={dateRange.endDate}
+              onChange={(e) => setDateRange({...dateRange, endDate: e.target.value})}
+              className="px-3 py-2 border rounded-md text-sm"
+            />
+          </div>
+          <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Group By</label>
+             <select 
+               value={period}
+               onChange={(e) => setPeriod(e.target.value)}
+               className="px-3 py-2 border rounded-md text-sm"
+             >
+               <option value="daily">Daily</option>
+               <option value="monthly">Monthly</option>
+               <option value="yearly">Yearly</option>
+             </select>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      {loading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      ) : (
+        <>
+          {activeTab === 'overview' && renderOverview()}
+          {activeTab === 'sales' && renderSalesTable()}
+          {activeTab === 'inventory' && renderInventoryTable()}
+          {activeTab === 'bookings' && renderBookingsTable()}
+          {activeTab === 'coupons' && renderCouponsTable()}
+        </>
+      )}
     </div>
   );
 };
