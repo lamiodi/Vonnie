@@ -918,6 +918,8 @@ const POS = () => {
     });
 
     return () => {
+      socket.off('payment-verified');
+      socket.off('payment-failed');
       socket.disconnect();
     };
   }, []);

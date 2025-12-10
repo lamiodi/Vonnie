@@ -660,8 +660,21 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
     }
     // Update transaction status based on payment_status
-    const effectivePaymentStatus = payment_status || (payment_method === 'bank_transfer' ? 'pending' : 'completed');
+    // FIX: For Paystack, if payment_status is 'pending' (or not explicitly 'completed'), it should be 'pending'
+    // The previous logic defaulted to 'completed' for 'paystack' which prevented webhook verification flow
+    let effectivePaymentStatus = payment_status;
+    if (!effectivePaymentStatus) {
+      if (payment_method === 'bank_transfer') {
+        effectivePaymentStatus = 'pending';
+      } else if (payment_method === 'paystack') {
+        effectivePaymentStatus = 'pending'; // Paystack starts as pending until webhook confirms
+      } else {
+        effectivePaymentStatus = 'completed'; // Cash/Card/POS defaults to completed
+      }
+    }
+    
     const effectiveTransactionStatus = effectivePaymentStatus === 'completed' ? 'completed' : 'pending';
+    
     await client.query(
       `UPDATE pos_transactions
        SET payment_status = $1, status = $2, updated_at = CURRENT_TIMESTAMP
@@ -996,7 +1009,6 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
       LEFT JOIN products p ON pti.product_id = p.id
       LEFT JOIN services s ON pti.service_id = s.id
       WHERE pti.transaction_id = $1
-      ORDER BY pti.created_at ASC
     `, [id]);
    
     transaction.items = itemsResult.rows;

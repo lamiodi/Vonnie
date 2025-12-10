@@ -55,6 +55,7 @@ const TransactionManagement = () => {
       setShowDetailsModal(true);
     } catch (error) {
       console.error('Error fetching transaction details:', error);
+      handleError(error.message || 'Failed to load transaction details');
     } finally {
       setDetailsLoading(false);
     }

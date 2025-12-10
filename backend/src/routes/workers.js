@@ -12,6 +12,34 @@ const router = express.Router();
 // Get all workers
 router.get('/', authenticate, async (req, res) => {
   try {
+    // Auto-correct worker status: Set to 'available' if 'busy' but no active booking currently happening
+    // This fixes issues where workers remain busy after a booking ends or if assigned to future bookings
+    try {
+      await query(`
+        UPDATE users u
+        SET current_status = 'available'
+        WHERE u.current_status = 'busy'
+        AND NOT EXISTS (
+          SELECT 1 
+          FROM booking_workers bw
+          JOIN bookings b ON bw.booking_id = b.id
+          WHERE bw.worker_id = u.id
+          AND bw.status = 'active'
+          AND (
+            b.status = 'in-progress'
+            OR (
+              b.status = 'scheduled' 
+              AND b.scheduled_time <= CURRENT_TIMESTAMP 
+              AND (b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute')) > CURRENT_TIMESTAMP
+            )
+          )
+        )
+      `);
+    } catch (cleanupError) {
+      console.error('Worker status auto-correction failed:', cleanupError);
+      // Continue serving the request even if cleanup fails
+    }
+
     let sql = 'SELECT id, name, email, phone, role, is_active, current_status, created_at, updated_at FROM users WHERE role IN ($1, $2)';
     const params = ['staff', 'manager'];
     if (req.user.role !== 'admin') {
