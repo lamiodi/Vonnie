@@ -5,6 +5,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Layout from './components/Layout';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import SetupAdmin from './pages/SetupAdmin';
 import PublicBooking from './pages/PublicBooking';
 import WalkInBooking from './pages/WalkInBooking';
 import BookingConfirmation from './pages/BookingConfirmation';
@@ -29,6 +30,7 @@ function App() {
           {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/setup-admin" element={<SetupAdmin />} />
         <Route path="/public-booking" element={<PublicBooking />} />
         <Route path="/walk-in-booking" element={<WalkInBooking />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />

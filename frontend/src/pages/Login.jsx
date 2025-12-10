@@ -10,8 +10,6 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showDemoAccounts, setShowDemoAccounts] = useState(false);
-  const [selectedDemoAccount, setSelectedDemoAccount] = useState(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
@@ -21,80 +19,6 @@ const Login = () => {
   
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
-
-  // Demo accounts for testing - only available in development/staging
-  const demoAccounts = [
-    {
-      id: 'admin-demo',
-      name: 'System Administrator',
-      email: 'admin@vonnex2x.com',
-      password: 'password',
-      role: 'admin',
-      icon: '👑',
-      color: 'from-red-500 to-pink-500',
-      description: 'Full system access with all permissions'
-    },
-    {
-      id: 'manager-demo',
-      name: 'General Manager',
-      email: 'manager@vonnex2x.com',
-      password: 'password',
-      role: 'manager',
-      icon: '🎯',
-      color: 'from-blue-500 to-indigo-500',
-      description: 'Management access with booking and inventory permissions'
-    },
-    {
-      id: 'staff-demo',
-      name: 'Grace Hairstylist',
-      email: 'grace@vonnex2x.com',
-      password: 'password',
-      role: 'staff',
-      icon: '⭐',
-      color: 'from-green-500 to-emerald-500',
-      description: 'Hairstylist with customer service and booking management'
-    },
-    {
-      id: 'staff-demo-2',
-      name: 'Sarah Beautician',
-      email: 'sarah@vonnex2x.com',
-      password: 'password',
-      role: 'staff',
-      icon: '💄',
-      color: 'from-purple-500 to-pink-500',
-      description: 'Beautician with customer service and booking management'
-    },
-    {
-      id: 'staff-demo-3',
-      name: 'Joy Nail Tech',
-      email: 'joy@vonnex2x.com',
-      password: 'password',
-      role: 'staff',
-      icon: '💅',
-      color: 'from-teal-500 to-cyan-500',
-      description: 'Nail technician with customer service and booking management'
-    }
-  ];
-
-  // Check if we're in development/staging environment
-  const isDevelopmentEnv = process.env.NODE_ENV === 'development' || 
-                         window.location.hostname === 'localhost' ||
-                         window.location.hostname === '127.0.0.1';
-
-  const handleDemoAccountSelect = (account) => {
-    setFormData({
-      email: account.email,
-      password: account.password
-    });
-    setSelectedDemoAccount(account);
-    setError('');
-  };
-
-  const handleClearDemo = () => {
-    setFormData({ email: '', password: '' });
-    setSelectedDemoAccount(null);
-    setError('');
-  };
 
   const handleChange = (e) => {
     setFormData({
@@ -167,113 +91,6 @@ const Login = () => {
             Vonne X2X Management System
           </p>
         </div>
-
-        {/* Demo Accounts Section */}
-        {isDevelopmentEnv && (
-          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 border-2 border-yellow-200 rounded-2xl p-5 shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <span className="text-2xl">🧪</span>
-                <h3 className="text-base font-bold text-yellow-800">
-                  Demo Accounts
-                </h3>
-              </div>
-              <button
-                onClick={() => setShowDemoAccounts(!showDemoAccounts)}
-                className="text-yellow-600 hover:text-yellow-800 text-sm font-semibold px-4 py-2 rounded-lg hover:bg-yellow-100 transition-all duration-200 flex items-center gap-1"
-              >
-                {showDemoAccounts ? (
-                  <>
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    Hide
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    </svg>
-                    Show
-                  </>
-                )}
-              </button>
-            </div>
-            
-            {showDemoAccounts && (
-              <div className="space-y-4">
-                <p className="text-sm text-yellow-700 flex items-center gap-2">
-                  <span>💡</span>
-                  Click any account below to auto-fill login credentials
-                </p>
-                
-                {selectedDemoAccount && (
-                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-3 shadow-md animate-pulse">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{selectedDemoAccount.icon}</span>
-                        <span className="text-sm font-bold text-green-800">
-                          Selected: {selectedDemoAccount.name}
-                        </span>
-                      </div>
-                      <button
-                        onClick={handleClearDemo}
-                        className="text-green-600 hover:text-green-800 text-sm font-medium px-3 py-1 rounded-lg hover:bg-green-100 transition-all duration-200"
-                      >
-                        ✕ Clear
-                      </button>
-                    </div>
-                  </div>
-                )}
-                
-                <div className="grid grid-cols-1 gap-3">
-                  {demoAccounts.map((account) => (
-                    <button
-                      key={account.id}
-                      onClick={() => handleDemoAccountSelect(account)}
-                      className={`relative overflow-hidden p-4 bg-white border-2 rounded-xl text-left transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-                        selectedDemoAccount?.id === account.id 
-                          ? 'border-purple-400 shadow-lg' 
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-full bg-gradient-to-r ${account.color} flex items-center justify-center text-2xl shadow-lg`}>
-                            {account.icon}
-                          </div>
-                          <div>
-                            <div className="font-bold text-gray-900">{account.name}</div>
-                            <div className="text-sm text-gray-600">{account.email}</div>
-                          </div>
-                        </div>
-                        <span className={`bg-gradient-to-r ${account.color} text-white text-xs px-3 py-1 rounded-full font-bold shadow-md`}>
-                          {account.role.toUpperCase()}
-                        </span>
-                      </div>
-                      {selectedDemoAccount?.id === account.id && (
-                        <div className="absolute top-2 right-2">
-                          <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center">
-                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                
-                <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3 flex items-start gap-2">
-                  <span className="text-yellow-600 text-lg">⚠️</span>
-                  <p className="text-xs text-yellow-800 font-medium">
-                    Demo accounts are only available in development environment.
-                  </p>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Login Form */}
         <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">

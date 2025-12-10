@@ -15,6 +15,46 @@ router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role = 'staff', phone, specialty } = req.body;
     
+    // Check if this is an admin registration attempt
+    if (role === 'admin') {
+      // Check if ANY admin already exists
+      const adminCheck = await query('SELECT 1 FROM users WHERE role = $1', ['admin']);
+      if (adminCheck.rows.length > 0) {
+        return res.status(403).json(errorResponse(
+          'System already has an administrator. Only one admin is allowed.',
+          'ADMIN_EXISTS',
+          403
+        ));
+      }
+      // If no admin exists, proceed to create the FIRST and ONLY admin
+    } else {
+      // For non-admin roles (staff/manager), proceed with normal checks
+      
+      // Check if signups are enabled
+      try {
+        const statusResult = await query('SELECT is_enabled FROM signup_status ORDER BY id DESC LIMIT 1');
+        if (statusResult.rows.length > 0 && !statusResult.rows[0].is_enabled) {
+          return res.status(403).json(errorResponse(
+            'Signups are currently disabled. Please contact your administrator.',
+            'SIGNUPS_DISABLED',
+            403
+          ));
+        }
+      } catch (error) {
+        console.log('Signup status check failed, proceeding with registration:', error.message);
+      }
+      
+      // Validate role - only allow staff and manager roles for registration (unless it was the admin case above)
+      const allowedRoles = ['staff', 'manager'];
+      if (!allowedRoles.includes(role)) {
+        return res.status(400).json(errorResponse(
+          'Invalid role. Only staff and manager roles are allowed for registration.',
+          'INVALID_ROLE',
+          400
+        ));
+      }
+    }
+    
     // Validate required fields
     if (!email || !password) {
       return res.status(400).json(errorResponse(
@@ -76,30 +116,10 @@ router.post('/register', async (req, res) => {
     console.log('Phone:', phone);
     console.log('Full request body:', req.body);
     
-    // Check if signups are enabled
-    try {
-      const statusResult = await query('SELECT is_enabled FROM signup_status ORDER BY id DESC LIMIT 1');
-      if (statusResult.rows.length > 0 && !statusResult.rows[0].is_enabled) {
-        return res.status(403).json(errorResponse(
-          'Signups are currently disabled. Please contact your administrator.',
-          'SIGNUPS_DISABLED',
-          403
-        ));
-      }
-    } catch (error) {
-      // If signup_status table doesn't exist or there's an error, allow registration
-      console.log('Signup status check failed, proceeding with registration:', error.message);
-    }
-    
-    // Validate role - only allow staff and manager roles for registration
-    const allowedRoles = ['staff', 'manager'];
-    if (!allowedRoles.includes(role)) {
-      return res.status(400).json(errorResponse(
-        'Invalid role. Only staff and manager roles are allowed for registration.',
-        'INVALID_ROLE',
-        400
-      ));
-    }
+    /* 
+    // MOVED UP: Checks for signup status and role validation logic have been moved to the top of the function
+    // to support the "Initial Admin Setup" flow.
+    */
     
     // Check if user already exists
     const existingUser = await query('SELECT * FROM users WHERE email = $1', [email]);
