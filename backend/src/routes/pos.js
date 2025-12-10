@@ -993,9 +993,11 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
     // Get transaction details
     const transactionResult = await query(`
       SELECT pt.*, u.name as staff_name, u.email as staff_email,
+             v.name as verified_by_name,
              c.code as coupon_code, c.name as coupon_name, c.discount_percentage, c.fixed_amount
       FROM pos_transactions pt
       LEFT JOIN users u ON pt.created_by = u.id
+      LEFT JOIN users v ON pt.verified_by = v.id
       LEFT JOIN coupons c ON pt.coupon_id = c.id
       WHERE pt.id = $1
     `, [id]);
