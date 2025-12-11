@@ -465,13 +465,23 @@ const Attendance = () => {
             </button>
           )}
           
-          {todayAttendance?.check_in_time && !todayAttendance?.check_out_time && (
+          {todayAttendance?.check_in_time && (
             <button
               onClick={handleCheckOut}
-              disabled={checkingOut || locationLoading}
-              className="w-full bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              disabled={checkingOut || locationLoading || !!todayAttendance.check_out_time}
+              className={`w-full text-white px-4 py-2 rounded-md flex items-center justify-center ${
+                todayAttendance.check_out_time 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-green-600 hover:bg-green-700'
+              }`}
             >
-              {checkingOut ? 'Checking out...' : locationLoading ? 'Getting location...' : 'Check Out'}
+              {todayAttendance.check_out_time 
+                ? 'Checked Out' 
+                : checkingOut 
+                  ? 'Checking out...' 
+                  : locationLoading 
+                    ? 'Getting location...' 
+                    : 'Check Out'}
             </button>
           )}
           
