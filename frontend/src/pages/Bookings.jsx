@@ -620,8 +620,8 @@ const BookingsTable = ({
         </div>
       )}
       
-      <div className="w-full overflow-x-auto">
-        <table className="w-full divide-y divide-gray-200 min-w-full table-auto">
+      <div className="w-full overflow-x-auto min-w-full">
+        <table className="min-w-[1200px] w-full divide-y divide-gray-200 table-auto">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
               <th scope="col" className="w-12 px-2 py-3 text-left">
@@ -2072,7 +2072,7 @@ const Bookings = () => {
           onDateChange={setDateFilter}
           onClearFilters={handleClearFilters}
         />
-        <div className="mb-8 overflow-x-visible">
+        <div className="mb-8 overflow-x-auto">
           <BookingsTable
             bookings={filteredBookings}
             loading={loading}
