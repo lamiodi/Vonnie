@@ -132,11 +132,11 @@ const WalkInBooking = () => {
       
       // Delay navigation slightly to allow user to see the success message
       setTimeout(() => {
-        // Navigate to booking management or confirmation page
-        navigate('/bookings', {
+        // Navigate to booking confirmation page
+        navigate('/booking-confirmation', {
           state: {
-            message: 'Walk-in booking created successfully!',
-            bookingNumber: bookingNumber
+            bookingData: bookingDataResponse,
+            paymentCompleted: false // Walk-in typically pays at POS
           }
         });
       }, 2000);

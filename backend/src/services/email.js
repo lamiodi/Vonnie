@@ -77,7 +77,7 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
           <div style="display: grid; gap: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #9333ea;">
               <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Booking Number:</span>
-              <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Courier New', monospace;">${bookingDetails.bookingNumber}</span>
+              <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Manrope', Arial, sans-serif;">${bookingDetails.bookingNumber}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #ec4899;">
@@ -259,7 +259,7 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
             ${bookingNumber ? `
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #10b981;">
                 <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Booking Number:</span>
-                <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Courier New', monospace;">${bookingNumber}</span>
+                <span style="color: #9333ea; font-weight: 700; font-size: 16px; font-family: 'Manrope', Arial, sans-serif;">${bookingNumber}</span>
               </div>
             ` : ''}
             
@@ -503,7 +503,7 @@ export const sendUnifiedBookingConfirmation = async (email, bookingData, context
           <div style="display: grid; gap: 12px;">
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #9333ea;">
               <span style="font-weight: 500; color: #6b7280;">Booking Number:</span>
-              <span style="color: #9333ea; font-weight: 600; font-size: 14px; font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;">${bookingNumber}</span>
+              <span style="color: #9333ea; font-weight: 600; font-size: 14px; font-family: 'Manrope', Arial, sans-serif;">${bookingNumber}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: white; border-radius: 6px; border-left: 3px solid #ec4899;">
@@ -588,7 +588,7 @@ export const sendPOSTransactionEmail = async (email, transactionData) => {
             <div style="display: grid; gap: 12px;">
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #3b82f6;">
                 <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Booking Number:</span>
-                <span style="color: #1d4ed8; font-weight: 700; font-size: 16px; font-family: 'Courier New', monospace;">${bookingNumber}</span>
+                <span style="color: #1d4ed8; font-weight: 700; font-size: 16px; font-family: 'Manrope', Arial, sans-serif;">${bookingNumber}</span>
               </div>
               <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 6px; border-left: 4px solid #1d4ed8;">
                 <span style="font-weight: 600; color: #6b7280; font-size: 15px;">Transaction ID:</span>

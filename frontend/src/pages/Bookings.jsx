@@ -403,6 +403,7 @@ const BookingsTable = ({
   onDelete = () => {},
   onAssignWorker = () => {},
   onRemoveWorker = () => {},
+  onViewNote = () => {},
   showQueueOrder = false,
   processingPayment = new Set(),
   setProcessingPayment = () => {}
@@ -648,6 +649,9 @@ const BookingsTable = ({
               <th scope="col" className="w-24 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Worker
               </th>
+              <th scope="col" className="w-16 px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Note
+              </th>
               <th scope="col" className="w-20 px-2 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Type
               </th>
@@ -727,6 +731,21 @@ const BookingsTable = ({
                       </div>
                     ) : (
                       <span className="text-gray-500">Not assigned</span>
+                    )}
+                  </td>
+                  <td className="w-16 px-2 py-4 whitespace-nowrap text-center">
+                    {booking.notes ? (
+                      <button
+                        onClick={() => onViewNote(booking.notes)}
+                        className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
+                        title="View Note"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <span className="text-gray-300">-</span>
                     )}
                   </td>
                   <td className="w-20 px-2 py-4 whitespace-nowrap">
@@ -1369,7 +1388,9 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
             Select Workers ({selectedWorkers.length} selected)
           </label>
           <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-            {workers.map(worker => {
+            {workers
+              .filter(worker => worker.status !== 'inactive' && worker.status !== 'suspended')
+              .map(worker => {
               const isSelected = selectedWorkers.includes(worker.id);
               const isCurrentlyAssigned = currentWorkers.some(w => w.worker_id === worker.id);
               const isBusy = busyWorkers.some(bw => bw.worker_id === worker.id);
@@ -1567,6 +1588,47 @@ const WorkerRemovalModal = ({ booking, onClose, onSuccess }) => {
   );
 };
 
+// NoteModal Component
+const NoteModal = ({ note, onClose }) => {
+  if (!note) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" role="dialog" aria-modal="true">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md shadow-xl transform transition-all scale-100 opacity-100">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+            <span className="text-2xl">📝</span> Booking Note
+          </h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+            aria-label="Close note"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="bg-yellow-50 rounded-xl p-5 mb-6 border border-yellow-100 shadow-inner max-h-[60vh] overflow-y-auto">
+          <p className="text-gray-800 whitespace-pre-wrap leading-relaxed text-lg font-medium" style={{ fontFamily: '"Patrick Hand", cursive' }}>
+            {note}
+          </p>
+        </div>
+        
+        <div className="flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2.5 bg-gray-900 text-white rounded-xl hover:bg-gray-800 transition-all duration-200 font-bold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Bookings Component
 const Bookings = () => {
   const navigate = useNavigate();
@@ -1590,6 +1652,8 @@ const Bookings = () => {
   const [selectedBookingForWorker, setSelectedBookingForWorker] = useState(null);
   const [processingPayment, setProcessingPayment] = useState(new Set());
   const [proceedToPOSAfterAssignment, setProceedToPOSAfterAssignment] = useState(false);
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [showNoteModal, setShowNoteModal] = useState(false);
   
   // Fetch bookings on component mount
   useEffect(() => {
@@ -1849,14 +1913,15 @@ const Bookings = () => {
   };
   
   const handleWorkerAssignmentSuccess = () => {
+    const booking = selectedBookingForWorker;
     setShowWorkerModal(false);
     setSelectedBookingForWorker(null);
     fetchBookings();
     
     // If we need to proceed to POS after assignment, navigate there
-    if (proceedToPOSAfterAssignment && selectedBookingForWorker) {
+    if (proceedToPOSAfterAssignment && booking) {
       setProceedToPOSAfterAssignment(false);
-      navigate(`/pos?customer_id=${selectedBookingForWorker.customer_id}&booking_id=${selectedBookingForWorker.id}&booking_number=${selectedBookingForWorker.booking_number}`);
+      navigate(`/pos?customer_id=${booking.customer_id}&booking_id=${booking.id}&booking_number=${booking.booking_number}`);
     }
   };
   
@@ -1864,6 +1929,11 @@ const Bookings = () => {
     setShowWorkerRemovalModal(false);
     setSelectedBookingForWorker(null);
     fetchBookings();
+  };
+
+  const handleViewNote = (note) => {
+    setSelectedNote(note);
+    setShowNoteModal(true);
   };
 
   const handleFormSubmit = async (formData) => {
@@ -2008,6 +2078,7 @@ const Bookings = () => {
             onDelete={handleDelete}
             onAssignWorker={handleAssignWorker}
             onRemoveWorker={handleRemoveWorker}
+            onViewNote={handleViewNote}
             showQueueOrder={true}
             processingPayment={processingPayment}
             setProcessingPayment={setProcessingPayment}
@@ -2049,6 +2120,15 @@ const Bookings = () => {
               setSelectedBookingForWorker(null);
             }}
             onSuccess={handleWorkerRemovalSuccess}
+          />
+        )}
+        {showNoteModal && (
+          <NoteModal
+            note={selectedNote}
+            onClose={() => {
+              setShowNoteModal(false);
+              setSelectedNote(null);
+            }}
           />
         )}
       </div>

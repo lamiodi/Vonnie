@@ -5,7 +5,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 
-const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = false, bookings = [] }) => {
+const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = false, bookings = [], services: propServices, workers: propWorkers }) => {
   const {
     services: servicesEndpoint = '/api/services',
     workers: workersEndpoint = '/api/workers',
@@ -13,10 +13,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     createBooking: createBookingEndpoint = '/api/bookings',
     updateBooking: updateBookingEndpoint = '/api/bookings'
   } = endpoints;
-  const [services, setServices] = useState([]);
-  const [workers, setWorkers] = useState([]);
-  const [servicesLoading, setServicesLoading] = useState(true);
-  const [workersLoading, setWorkersLoading] = useState(true);
+  const [services, setServices] = useState(propServices || []);
+  const [workers, setWorkers] = useState(propWorkers || []);
+  const [servicesLoading, setServicesLoading] = useState(!propServices || propServices.length === 0);
+  const [workersLoading, setWorkersLoading] = useState(!propWorkers || propWorkers.length === 0);
   const [formData, setFormData] = useState({
     service_ids: [],
     workers: [], // Add workers array for multi-worker support
@@ -36,8 +36,19 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   useEffect(() => {
-    fetchServices();
-    fetchWorkers();
+    if (!propServices || propServices.length === 0) {
+      fetchServices();
+    } else {
+      setServices(propServices);
+      setServicesLoading(false);
+    }
+
+    if (!propWorkers || propWorkers.length === 0) {
+      fetchWorkers();
+    } else {
+      setWorkers(propWorkers);
+      setWorkersLoading(false);
+    }
    
     // If booking prop is provided, populate form for editing
     if (booking) {
