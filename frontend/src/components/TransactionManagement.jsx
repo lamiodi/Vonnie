@@ -215,7 +215,7 @@ const TransactionManagement = () => {
                       Coupon
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Staff
+                      Processed By
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -256,7 +256,7 @@ const TransactionManagement = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {transaction.staff_name || 'Unknown'}
+                        {transaction.created_by_name || transaction.staff_name || 'Unknown'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button

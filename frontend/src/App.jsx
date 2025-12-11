@@ -16,7 +16,7 @@ import Coupons from './pages/Coupons';
 
 import Inventory from './components/Inventory';
 import Workers from './pages/Workers';
-import Analytics from './components/Analytics';
+import Reports from './pages/Reports';
 import Attendance from './pages/Attendance';
 import TransactionManagement from './components/TransactionManagement';
 import AdminSettings from './pages/AdminSettings';
@@ -48,8 +48,7 @@ function App() {
             <Route path="workers" element={<Workers />} />
             <Route path="attendance" element={<Attendance />} />
             <Route path="coupons" element={<Coupons />} />
-            <Route path="reports" element={<Analytics />} />
-            <Route path="analytics" element={<Analytics />} />
+            <Route path="reports" element={<Reports />} />
             <Route path="transactions" element={<TransactionManagement />} />
             <Route path="admin-settings" element={<AdminSettings />} />
           </Route>

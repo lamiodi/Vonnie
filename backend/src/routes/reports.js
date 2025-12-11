@@ -261,6 +261,87 @@ router.get('/coupons', authenticate, authorize(['admin', 'manager']), async (req
   }
 });
 
+// Missed Attendance Report
+router.get('/missed-attendance', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    
+    let sql = `
+      SELECT 
+        u.id, 
+        u.name, 
+        u.email, 
+        u.role,
+        CASE WHEN a.date IS NOT NULL THEN a.date ELSE CURRENT_DATE END as date,
+        u.current_status
+      FROM users u
+      LEFT JOIN attendance a ON u.id = a.worker_id
+      WHERE u.role IN ('staff', 'manager')
+      AND u.is_active = true
+      AND (u.current_status = 'absent' OR a.id IS NULL)
+    `;
+    
+    // If filtering by date, we might need a more complex query to find gaps
+    // For simplicity, let's just return users currently marked 'absent' OR those who have no attendance record for the specific range
+    // Actually, the requirement "see who missed attendance" usually implies a list of people who *should* have been there but weren't.
+    // Given our 'absent' status logic, we can query users with 'absent' status.
+    // Or we can query the attendance table for gaps if we had a schedule table.
+    // Since we don't have a schedule table, we'll rely on the 'absent' status set by the system or manual checks.
+    
+    // Better approach:
+    // 1. Get all active staff/managers
+    // 2. Check their attendance for the date range
+    // 3. If no check-in record for a day (and it's a workday?), list them.
+    // For now, let's list those currently marked as 'absent' and those who have NO attendance record for today (if querying for today).
+    
+    const params = [];
+    
+    if (start_date && end_date) {
+        // If historical data is needed, we'd need to generate a series of dates and cross join with users, then left join attendance
+        // This is complex in standard SQL without generate_series permissions or helper functions sometimes.
+        // Let's stick to a simpler version: List all users who are currently 'absent' or have 'absent' status in history if we tracked it (we don't track status history, only current).
+        // BUT we do have the attendance table. If someone is absent, they might NOT be in the attendance table at all for that day.
+        
+        // Let's query: For the given date range, which users have NO attendance record?
+        // We can generate dates in JS or SQL.
+        
+        sql = `
+            SELECT 
+                u.id, 
+                u.name, 
+                u.email,
+                d.date::date as date
+            FROM users u
+            CROSS JOIN generate_series($1::date, $2::date, '1 day'::interval) d(date)
+            WHERE u.role IN ('staff', 'manager') 
+            AND u.is_active = true
+            AND NOT EXISTS (
+                SELECT 1 FROM attendance a 
+                WHERE a.worker_id = u.id 
+                AND a.date = d.date::date
+            )
+            ORDER BY d.date DESC, u.name
+        `;
+        params.push(start_date, end_date);
+    } else {
+        // Default to today/current status if no range
+        sql = `
+            SELECT id, name, email, current_status, CURRENT_DATE as date
+            FROM users 
+            WHERE role IN ('staff', 'manager') 
+            AND is_active = true 
+            AND current_status = 'absent'
+        `;
+    }
+
+    const result = await query(sql, params);
+    res.json(successResponse(result.rows, 'Missed attendance report generated successfully'));
+  } catch (error) {
+    console.error('Missed attendance report error:', error);
+    res.status(400).json(errorResponse(error.message, 'MISSED_ATTENDANCE_REPORT_ERROR', 400));
+  }
+});
+
 // Worker service performance report
 router.get('/worker-performance', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {

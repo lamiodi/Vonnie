@@ -33,7 +33,6 @@ const Layout = () => {
     { name: 'Attendance', href: '/attendance', icon: ClockIcon },
     { name: 'Coupons', href: '/coupons', icon: TicketIcon },
     { name: 'Reports', href: '/reports', icon: DocumentReportIcon },
-    { name: 'Analytics', href: '/analytics', icon: ChartBarIcon },
     { name: 'Transactions', href: '/transactions', icon: DocumentReportIcon },
     { name: 'Admin Settings', href: '/admin-settings', icon: CogIcon },
   ];

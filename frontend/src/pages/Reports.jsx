@@ -39,6 +39,9 @@ const Reports = () => {
         case 'coupons':
           endpoint = API_ENDPOINTS.REPORTS_COUPONS;
           break;
+        case 'missed_attendance':
+          endpoint = '/reports/missed-attendance';
+          break;
         default:
           endpoint = API_ENDPOINTS.REPORTS_SALES;
       }
@@ -590,6 +593,41 @@ const Reports = () => {
     );
   };
 
+  const renderMissedAttendanceReport = () => {
+    if (!reportData || !Array.isArray(reportData)) return <div className="p-6 text-center text-gray-500">No missed attendance records found</div>;
+
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker Name</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {reportData.map((record, idx) => (
+                <tr key={idx}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{record.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                      Absent
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderReport = () => {
     switch (reportType) {
       case 'sales':
@@ -600,6 +638,8 @@ const Reports = () => {
         return renderBookingsReport();
       case 'coupons':
         return renderCouponsReport();
+      case 'missed_attendance':
+        return renderMissedAttendanceReport();
       default:
         return null;
     }
@@ -637,8 +677,9 @@ const Reports = () => {
               <option value="inventory">Inventory Report</option>
               <option value="bookings">Bookings Report</option>
               <option value="coupons">Coupons Report</option>
+              <option value="missed_attendance">Missed Attendance</option>
             </select>
-            <span id="report-type-help" className="sr-only">Select the type of report to generate</span>
+          </div>  <span id="report-type-help" className="sr-only">Select the type of report to generate</span>
           </div>
 
           {(reportType === 'sales' || reportType === 'bookings') && (
