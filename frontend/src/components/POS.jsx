@@ -265,12 +265,19 @@ const POS = () => {
       return matchesSearch && matchesCategory;
     });
   }, [services, serviceSearchTerm, selectedServiceCategory]);
+  // ==========================================
+  // CART MANAGEMENT LOGIC
+  // ==========================================
+
   // Memoize calculations to improve performance
   const getSubtotal = useCallback(() => {
     const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
+    // Include service price from loaded booking if applicable
     const serviceTotal = bookingData ? parseFloat(bookingData.service_price || 0) : 0;
     return cartTotal + serviceTotal;
   }, [cart, bookingData]);
+
+  // Calculate discount based on coupon type (percentage vs fixed)
   const getDiscount = useCallback(() => {
     if (!appliedCoupon) return 0;
   
@@ -281,24 +288,20 @@ const POS = () => {
       return Math.min(appliedCoupon.discount_value, subtotal);
     }
   }, [appliedCoupon, getSubtotal]);
-  const getDiscountAmount = useCallback(() => {
-    if (!appliedCoupon) return 0;
-  
-    const subtotal = getSubtotal();
-    if (appliedCoupon.discount_type === 'percentage') {
-      return (subtotal * appliedCoupon.discount_value) / 100;
-    } else {
-      return Math.min(appliedCoupon.discount_value, subtotal);
-    }
-  }, [appliedCoupon, getSubtotal]);
+
+  // Tax Calculation (VAT)
   const getTaxAmount = useCallback(() => {
-    return 0; // VAT temporarily disabled
+    return 0; // VAT temporarily disabled per business requirement
   }, []);
+
+  // Calculate Grand Total
   const getTotal = useCallback(() => {
     const subtotal = getSubtotal();
     const discount = getDiscount();
-    return subtotal - discount; // Tax removed
+    return subtotal - discount; // Tax removed from total calculation
   }, [getSubtotal, getDiscount]);
+
+  // Add item to cart (handles both products and services)
   const addToCart = useCallback((item, type = 'product') => {
     // Reset payment confirmation when adding new items
     if (paymentConfirmed) {
@@ -308,6 +311,7 @@ const POS = () => {
     const existingItem = cart.find(cartItem => cartItem.id === item.id && cartItem.type === type);
   
     if (type === 'service') {
+      // Services can be added multiple times (quantity increases)
       if (existingItem) {
         setCart(cart.map(cartItem =>
           cartItem.id === item.id && cartItem.type === type
@@ -318,7 +322,7 @@ const POS = () => {
         setCart([...cart, { ...item, quantity: 1, type: 'service' }]);
       }
     } else {
-      // Check product stock availability
+      // Product logic: Check stock levels before adding
       if (item.stock_level <= 0) {
         handleError(null, `Product "${item.name}" is out of stock`);
         return;
@@ -429,7 +433,12 @@ const POS = () => {
         return 'bg-gray-100 text-gray-800';
     }
   }, []);
+  // ==========================================
+  // PAYMENT HANDLERS
+  // ==========================================
+
   // Paystack Payment Function - Manager-operated workflow
+  // This function initiates the Paystack popup for online card payments
   const handlePaystackPayment = useCallback(() => {
     if (!customerInfo.name || !customerInfo.phone) {
       toast.error("Please provide customer name and phone number");
@@ -443,13 +452,14 @@ const POS = () => {
     const managerEmail = user?.email || "manager@vonniesalon.com"; // Fallback to hardcoded if no user email
   
     const config = {
-      reference: generatePaystackReference(),
+      reference: generatePaystackReference(), // Generate unique reference
       email: managerEmail,
-      amount: Math.round(getTotal() * 100), // Convert to kobo
+      amount: Math.round(getTotal() * 100), // Convert to kobo (Paystack expects smallest currency unit)
       publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
       currency: "NGN",
       channels: ["card", "bank", "ussd", "qr", "mobile_money"],
       metadata: {
+        // Metadata for backend verification and webhooks
         booking_id: bookingData?.id,
         processed_by_user_id: user?.id,
         processed_by_email: managerEmail,
@@ -460,6 +470,10 @@ const POS = () => {
             variable_name: "customer_name",
             value: customerInfo.name
           },
+          // ... other metadata fields
+        ]
+      }
+    };
           {
             display_name: "Customer Phone",
             variable_name: "customer_phone",

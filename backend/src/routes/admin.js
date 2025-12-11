@@ -225,4 +225,90 @@ router.put('/settings', authenticate, authorize(['admin']), async (req, res) => 
   }
 });
 
+// Export Customer Data (CSV Format)
+router.get('/export-customers', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  try {
+    // Fetch users with 'customer' role or extract distinct customers from bookings if no specific customer role exists
+    // Assuming we want all users who are not admin/manager/staff, or we can fetch from a dedicated customers table if it existed.
+    // For now, let's fetch all users with role='customer' AND also anyone who has made a booking (distinct email/phone).
+    
+    // Strategy: 
+    // 1. Get registered users with role 'customer'
+    // 2. Get unique customers from bookings table (name, email, phone)
+    // 3. Merge them based on email/phone to avoid duplicates
+    
+    // 1. Fetch registered customers
+    const registeredUsersQuery = `
+      SELECT name, email, phone, created_at 
+      FROM users 
+      WHERE role = 'customer'
+    `;
+    const registeredUsers = (await query(registeredUsersQuery)).rows;
+
+    // 2. Fetch distinct customers from bookings
+    const bookingCustomersQuery = `
+      SELECT DISTINCT customer_name as name, customer_email as email, customer_phone as phone
+      FROM bookings
+      WHERE customer_email IS NOT NULL OR customer_phone IS NOT NULL
+    `;
+    const bookingCustomers = (await query(bookingCustomersQuery)).rows;
+
+    // 3. Merge list (using a Map to deduplicate by email or phone)
+    const customerMap = new Map();
+
+    // Helper to generate a unique key (prefer email, fallback to phone)
+    const getKey = (c) => c.email ? c.email.toLowerCase() : (c.phone || Math.random().toString());
+
+    // Add registered users first (they might have more accurate data)
+    registeredUsers.forEach(user => {
+      if (user.email || user.phone) {
+        customerMap.set(getKey(user), {
+          name: user.name || 'N/A',
+          email: user.email || '',
+          phone: user.phone || '',
+          source: 'Registered'
+        });
+      }
+    });
+
+    // Add booking customers (if not already present)
+    bookingCustomers.forEach(cust => {
+      const key = getKey(cust);
+      if (!customerMap.has(key)) {
+        customerMap.set(key, {
+          name: cust.name || 'Guest',
+          email: cust.email || '',
+          phone: cust.phone || '',
+          source: 'Walk-in/Booking'
+        });
+      }
+    });
+
+    const allCustomers = Array.from(customerMap.values());
+
+    // 4. Generate CSV
+    // Simple CSV generation without external library to keep it lightweight
+    const csvHeader = 'Name,Email,Phone,Source\n';
+    const csvRows = allCustomers.map(c => {
+      // Escape quotes and handle commas in fields
+      const safeName = `"${(c.name || '').replace(/"/g, '""')}"`;
+      const safeEmail = `"${(c.email || '').replace(/"/g, '""')}"`;
+      const safePhone = `"${(c.phone || '').replace(/"/g, '""')}"`;
+      const safeSource = `"${(c.source || '').replace(/"/g, '""')}"`;
+      return `${safeName},${safeEmail},${safePhone},${safeSource}`;
+    }).join('\n');
+
+    const csvContent = csvHeader + csvRows;
+
+    // 5. Send Response
+    res.header('Content-Type', 'text/csv');
+    res.attachment('customer_export.csv');
+    return res.send(csvContent);
+
+  } catch (error) {
+    console.error('Error exporting customers:', error);
+    res.status(500).json({ error: 'Failed to export customer data' });
+  }
+});
+
 export default router;

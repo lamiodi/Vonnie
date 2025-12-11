@@ -387,6 +387,33 @@ export default function Workers() {
         )}
       </div>
 
+      {/* Worker Management Guidelines */}
+      <div className="bg-gray-50 border border-gray-200 rounded-md p-4 mb-6">
+        <h3 className="text-sm font-semibold text-gray-800 mb-2 flex items-center">
+          <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          Management Guidelines
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
+          <div>
+            <p className="mb-1"><strong>Roles:</strong></p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Admin:</strong> Full system access, including settings and financial reports.</li>
+              <li><strong>Manager:</strong> Can manage staff, bookings, and inventory, but restricted from some system settings.</li>
+              <li><strong>Staff:</strong> Can view their own schedule, mark attendance, and manage assigned bookings.</li>
+            </ul>
+          </div>
+          <div>
+            <p className="mb-1"><strong>Status & Availability:</strong></p>
+            <ul className="list-disc pl-5 space-y-1">
+              <li><strong>Active/Inactive:</strong> Use the "Edit" button to archive former employees (set status to inactive) instead of deleting them to preserve history.</li>
+              <li><strong>Availability:</strong> Staff availability is used for booking scheduling. Ensure schedules are up-to-date.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
         <input
           placeholder="Search name, email, phone"

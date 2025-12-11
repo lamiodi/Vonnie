@@ -13,7 +13,8 @@ const router = express.Router();
 // Register
 router.post('/register', async (req, res) => {
   try {
-    const { name, email, password, role = 'staff', phone, specialty } = req.body;
+    const { name, email: inputEmail, password, role = 'staff', phone, specialty } = req.body;
+    const email = inputEmail ? inputEmail.toLowerCase() : inputEmail;
     
     // Check if this is an admin registration attempt
     if (role === 'admin') {
@@ -132,7 +133,7 @@ router.post('/register', async (req, res) => {
     */
     
     // Check if user already exists
-    const existingUser = await query('SELECT * FROM users WHERE email = $1', [email]);
+    const existingUser = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email]);
     if (existingUser.rows.length > 0) {
       return res.status(400).json(errorResponse(
         'User with this email already exists.',
@@ -185,8 +186,11 @@ router.post('/login', async (req, res) => {
       ));
     }
     
+    // Normalize email to lowercase for case-insensitive login
+    const normalizedEmail = email.toLowerCase();
+    
     // Validate email format
-    const emailValidation = validateEmail(email);
+    const emailValidation = validateEmail(normalizedEmail);
     if (!emailValidation.isValid) {
       return res.status(400).json(errorResponse(
         `Email: ${emailValidation.message}`,
@@ -195,12 +199,12 @@ router.post('/login', async (req, res) => {
       ));
     }
     
-    console.log('Login attempt for email:', email);
+    console.log('Login attempt for email:', normalizedEmail);
     console.log('Request body:', req.body);
     
     const result = await query(
-      'SELECT * FROM users WHERE email = $1',
-      [email]
+      'SELECT * FROM users WHERE LOWER(email) = $1',
+      [normalizedEmail]
     );
 
     console.log('Database query result:', result);

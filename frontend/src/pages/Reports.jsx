@@ -645,18 +645,56 @@ const Reports = () => {
     }
   };
 
+  const handleExportCustomers = async () => {
+    try {
+      // Use direct fetch/axios to handle blob response properly since apiGet wrapper might expect JSON
+      const token = localStorage.getItem('token'); // Assuming token is stored in localStorage
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5010/api'}/admin/export-customers`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) throw new Error('Failed to export customers');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `customer_contact_list_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      handleSuccess('Customer list exported successfully');
+    } catch (error) {
+      handleError('Failed to export customer list', error);
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900">Reports & Analytics</h1>
-        <button
-          onClick={exportToCSV}
-          disabled={!hasDataForReport(reportData, reportType)}
-          className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md font-medium transition-colors"
-          aria-label="Export report data to CSV file"
-        >
-          Export CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExportCustomers}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+            title="Export all customer names, emails, and phones for newsletter"
+          >
+            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+            </svg>
+            Export Customers
+          </button>
+          <button
+            onClick={exportToCSV}
+            disabled={!hasDataForReport(reportData, reportType)}
+            className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-4 py-2 rounded-md font-medium transition-colors"
+            aria-label="Export report data to CSV file"
+          >
+            Export Report CSV
+          </button>
+        </div>
       </div>
 
       {/* Controls */}
