@@ -1009,8 +1009,22 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
     const transaction = transactionResult.rows[0];
    
     // Get transaction items (both products and services)
+    // FIX: Using alias for ambiguous columns like id, name, created_at
     const itemsResult = await query(`
-      SELECT pti.*, p.sku, p.category, s.duration as service_duration
+      SELECT 
+        pti.id,
+        pti.transaction_id,
+        pti.product_id,
+        pti.service_id,
+        pti.product_name,
+        pti.service_name,
+        pti.quantity,
+        pti.unit_price,
+        pti.total_price,
+        pti.created_at,
+        p.sku, 
+        p.category, 
+        s.duration as service_duration
       FROM pos_transaction_items pti
       LEFT JOIN products p ON pti.product_id = p.id
       LEFT JOIN services s ON pti.service_id = s.id
