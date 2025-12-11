@@ -102,6 +102,20 @@ async function runTest() {
       console.log('Response:', JSON.stringify(res.body, null, 2));
       if (res.body.data && res.body.data.id) {
         transactionId = res.body.data.id;
+
+        // 6. Verify GET transaction details
+        console.log(`Verifying GET /transactions/${transactionId}...`);
+        const getRes = await request(app)
+          .get(`/api/pos/transactions/${transactionId}`)
+          .set('Authorization', `Bearer ${token}`);
+        
+        if (getRes.status === 200) {
+          console.log('✅ TEST PASSED: GET transaction details successful.');
+          console.log('Transaction Details:', JSON.stringify(getRes.body, null, 2));
+        } else {
+          console.error('❌ TEST FAILED: GET transaction details failed.');
+          console.error('Error Response:', JSON.stringify(getRes.body, null, 2));
+        }
       }
     } else {
       console.error('❌ TEST FAILED: POS checkout failed.');
