@@ -121,102 +121,96 @@ async function handleSuccessfulCharge(data, io) {
   console.log('Processing successful charge:', { reference, amount, customer, metadata });
   
   try {
-    // Check if booking_id exists in metadata
-    if (!metadata || !metadata.booking_id) {
-      console.warn('Missing booking_id in webhook metadata. Skipping booking update.');
-      console.log('Available metadata keys:', metadata ? Object.keys(metadata) : 'No metadata');
-      // Add webhook alert for missing booking_id
-      await sendWebhookAlert('Missing Booking ID in Webhook', {
-        error: 'booking_id missing in webhook metadata',
-        reference: reference,
-        available_metadata: metadata ? Object.keys(metadata) : 'No metadata',
-        metadata: metadata
-      });
-      return;
+    let posTransactionUpdated = false;
+
+    // 1. Always attempt to update pos_transactions first (works for both Bookings and Walk-ins)
+    try {
+      const refUpdate = await query(
+        `UPDATE pos_transactions 
+         SET payment_status = 'completed', 
+             status = 'completed',
+             payment_method = 'paystack',
+             updated_at = NOW()
+         WHERE payment_reference = $1 AND payment_status != 'completed'
+         RETURNING id`,
+        [reference]
+      );
+      
+      if (refUpdate.rowCount > 0) {
+        console.log(`Updated ${refUpdate.rowCount} pos_transactions by reference: ${reference}`);
+        posTransactionUpdated = true;
+      }
+    } catch (err) {
+      console.error('Error updating pos_transactions:', err);
     }
-    
-    console.log('Found booking_id in metadata:', metadata.booking_id);
 
-    // Update booking payment status
-    console.log('Attempting to update booking payment status...');
-    const result = await query(
-      `UPDATE bookings 
-       SET payment_status = 'completed', 
-           payment_method = 'paystack',
-           payment_reference = $1,
-           payment_date = NOW(),
-           updated_at = NOW()
-       WHERE id = $2 AND payment_status != 'completed'
-       RETURNING id, status, customer_type, scheduled_time`,
-      [reference, metadata.booking_id]
-    );
+    // 2. Check for booking_id and update booking if present
+    if (metadata && metadata.booking_id) {
+      console.log('Found booking_id in metadata:', metadata.booking_id);
 
-    console.log('Update result:', { rowCount: result.rowCount, rows: result.rows });
+      // Update booking payment status
+      console.log('Attempting to update booking payment status...');
+      const result = await query(
+        `UPDATE bookings 
+         SET payment_status = 'completed', 
+             payment_method = 'paystack',
+             payment_reference = $1,
+             payment_date = NOW(),
+             updated_at = NOW()
+         WHERE id = $2 AND payment_status != 'completed'
+         RETURNING id, status, customer_type, scheduled_time`,
+        [reference, metadata.booking_id]
+      );
 
-    if (result.rows.length > 0) {
-      console.log('Payment confirmed for booking:', metadata.booking_id);
-      
-      // Auto-complete the service since payment is completed (Nigeria salon workflow)
-      // Walk-in customers: service-before-payment, so auto-complete after payment
-      // Pre-booked customers: payment-before-service, so no auto-completion (service happens later)
-      const updatedBooking = result.rows[0];
-      if (updatedBooking.customer_type === 'walk_in') {
-        // For walk-in customers, auto-complete the service after payment confirmation
-        await query(
-          'UPDATE bookings SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
-          ['completed', metadata.booking_id]
-        );
-        console.log(`Auto-completed walk-in booking ${metadata.booking_id} after payment confirmation`);
-      } else if (updatedBooking.customer_type === 'pre_booked') {
-        // For pre-booked customers, only confirm payment but don't auto-complete
-        // They will receive service at their scheduled time
-        console.log(`Pre-booked customer payment confirmed for booking ${metadata.booking_id} - no auto-completion`);
+      console.log('Update result:', { rowCount: result.rowCount, rows: result.rows });
+
+      if (result.rows.length > 0) {
+        console.log('Payment confirmed for booking:', metadata.booking_id);
+        
+        // Auto-complete the service since payment is completed (Nigeria salon workflow)
+        const updatedBooking = result.rows[0];
+        if (updatedBooking.customer_type === 'walk_in') {
+          await query(
+            'UPDATE bookings SET status = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2',
+            ['completed', metadata.booking_id]
+          );
+          console.log(`Auto-completed walk-in booking ${metadata.booking_id} after payment confirmation`);
+        } else if (updatedBooking.customer_type === 'pre_booked') {
+          console.log(`Pre-booked customer payment confirmed for booking ${metadata.booking_id} - no auto-completion`);
+        }
+        
+        // Emit socket event for real-time update
+        if (io) {
+          console.log(`🔌 Emitting payment-verified event for booking ${metadata.booking_id}`);
+          io.emit('payment-verified', {
+            success: true,
+            booking_id: metadata.booking_id,
+            reference: reference,
+            amount: amount,
+            status: 'completed'
+          });
+        }
+      } else {
+        console.log('No booking updated. Possible reasons: Booking ID not found, already completed, or does not exist');
       }
-      
-      // Emit socket event for real-time update
-      if (io) {
-        console.log(`🔌 Emitting payment-verified event for booking ${metadata.booking_id}`);
-        io.emit('payment-verified', {
-          success: true,
-          booking_id: metadata.booking_id,
-          reference: reference,
-          amount: amount,
-          status: 'completed'
-        });
-      }
-
-      // Send confirmation email/notification
-      // await sendBookingConfirmation(metadata.booking_id);
     } else {
-      console.log('No booking updated. Possible reasons:');
-      console.log('- Booking ID not found:', metadata.booking_id);
-      console.log('- Booking payment status is already completed');
-      console.log('- Booking does not exist');
-      
-      // Even if update failed (e.g. already completed), emit event so UI can update
-      if (io) {
-        console.log(`🔌 Emitting payment-verified event (duplicate) for booking ${metadata.booking_id}`);
-        io.emit('payment-verified', {
-          success: true,
-          booking_id: metadata.booking_id,
+      // No booking_id
+      if (posTransactionUpdated) {
+        console.log('✅ Payment processed for standalone POS transaction (no booking_id)');
+      } else {
+        console.warn('⚠️ Missing booking_id AND no POS transaction found for reference:', reference);
+        console.log('Available metadata keys:', metadata ? Object.keys(metadata) : 'No metadata');
+        
+        // Only alert if we couldn't match ANY transaction
+        await sendWebhookAlert('Unmatched Payment in Webhook', {
+          error: 'Payment could not be linked to Booking or POS Transaction',
           reference: reference,
-          amount: amount,
-          status: 'completed',
-          duplicate: true
+          metadata: metadata
         });
       }
-
-      // Add webhook alert for no booking update
-      await sendWebhookAlert('No Booking Updated After Payment', {
-        error: 'No booking was updated after successful payment',
-        booking_id: metadata.booking_id,
-        reference: reference,
-        possible_reasons: ['Booking ID not found', 'Payment status already completed', 'Booking does not exist']
-      });
     }
   } catch (error) {
     console.error('Error processing successful charge:', error);
-    // Add webhook alert for successful charge processing failure
     await sendWebhookAlert('Successful Charge Processing Failure', {
       error: error.message,
       stack: error.stack,

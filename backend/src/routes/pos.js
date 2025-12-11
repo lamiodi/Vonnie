@@ -599,12 +599,28 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
     }
     const computed_total = subtotal_amount - discount_amount + Number(tax || 0);
+
+    // Determine payment status and transaction status BEFORE insertion
+    let effectivePaymentStatus = payment_status;
+    
+    if (!effectivePaymentStatus) {
+      if (payment_method === 'bank_transfer') {
+        effectivePaymentStatus = 'pending';
+      } else if (payment_method === 'paystack') {
+        effectivePaymentStatus = 'pending'; // Paystack starts as pending until webhook confirms
+      } else {
+        effectivePaymentStatus = 'completed'; // Cash/Card/POS defaults to completed
+      }
+    }
+    
+    const effectiveTransactionStatus = effectivePaymentStatus === 'completed' ? 'completed' : 'pending';
+
     // Create transaction
     const transactionNumber = `TXN-${Date.now()}`;
     const transactionResult = await client.query(
       `INSERT INTO pos_transactions
-       (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, coupon_id, created_by, booking_id, payment_reference)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, payment_status, status, coupon_id, created_by, booking_id, payment_reference)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         transactionNumber,
@@ -615,6 +631,8 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         discount_amount,
         computed_total,
         payment_method,
+        effectivePaymentStatus,
+        effectiveTransactionStatus,
         coupon_id,
         processed_by,
         booking?.id || null,
@@ -674,28 +692,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         );
       }
     }
-    // Update transaction status based on payment_status
-    // FIX: For Paystack, if payment_status is 'pending' (or not explicitly 'completed'), it should be 'pending'
-    // The previous logic defaulted to 'completed' for 'paystack' which prevented webhook verification flow
-    let effectivePaymentStatus = payment_status;
-    if (!effectivePaymentStatus) {
-      if (payment_method === 'bank_transfer') {
-        effectivePaymentStatus = 'pending';
-      } else if (payment_method === 'paystack') {
-        effectivePaymentStatus = 'pending'; // Paystack starts as pending until webhook confirms
-      } else {
-        effectivePaymentStatus = 'completed'; // Cash/Card/POS defaults to completed
-      }
-    }
     
-    const effectiveTransactionStatus = effectivePaymentStatus === 'completed' ? 'completed' : 'pending';
-    
-    await client.query(
-      `UPDATE pos_transactions
-       SET payment_status = $1, status = $2, updated_at = CURRENT_TIMESTAMP
-       WHERE id = $3`,
-      [effectivePaymentStatus, effectiveTransactionStatus, transaction.id]
-    );
     await client.query('COMMIT');
     // If booking exists and payment completed, update booking payment/status
     if (booking && effectivePaymentStatus === 'completed') {
@@ -723,15 +720,25 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
 // Initialize Paystack payment
 router.post('/payment/initialize', authenticate, async (req, res) => {
   const { email, amount, booking_number } = req.body;
- 
+
   try {
+    let metadata = {};
+    if (booking_number) {
+      const bookingResult = await query('SELECT id FROM bookings WHERE booking_number = $1', [booking_number]);
+      if (bookingResult.rows.length > 0) {
+        metadata.booking_id = bookingResult.rows[0].id;
+        metadata.booking_number = booking_number;
+      }
+    }
+
     const response = await axios.post(
       'https://api.paystack.co/transaction/initialize',
       {
         email,
         amount: amount * 100, // Convert to kobo
         reference: `${booking_number}_${Date.now()}`,
-        callback_url: `${process.env.FRONTEND_URL}/payment/callback`
+        callback_url: `${process.env.FRONTEND_URL}/payment/callback`,
+        metadata
       },
       {
         headers: {
@@ -853,16 +860,47 @@ router.post('/payment/webhook', async (req, res) => {
           }
         );
        
-        // Also update POS transaction if it exists
-        await query(
-          `UPDATE pos_transactions
-           SET payment_method = $1,
-               payment_reference = $2,
-               status = $3,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE booking_id = $4`,
-          ['paystack', reference, 'completed', booking.id]
+        // Also update POS transaction if it exists, or create one if it doesn't
+        const transactionCheck = await query(
+          'SELECT id FROM pos_transactions WHERE booking_id = $1',
+          [booking.id]
         );
+
+        if (transactionCheck.rows.length > 0) {
+          await query(
+            `UPDATE pos_transactions
+             SET payment_method = $1,
+                 payment_reference = $2,
+                 status = $3,
+                 payment_status = $4,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE booking_id = $5`,
+            ['paystack', reference, 'completed', 'completed', booking.id]
+          );
+        } else {
+          // Create new transaction record for this payment
+          const transactionNumber = `TXN-${Date.now()}`;
+          await query(
+            `INSERT INTO pos_transactions
+             (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, payment_status, status, payment_reference, created_by, booking_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [
+              transactionNumber,
+              booking.customer_name,
+              booking.customer_email,
+              null, // Phone might not be in booking query result, acceptable as null
+              booking.total_amount,
+              0, // Discount unknown
+              booking.total_amount,
+              'paystack',
+              'completed',
+              'completed',
+              reference,
+              null, // System created
+              booking.id
+            ]
+          );
+        }
        
         console.log(`Payment webhook processed successfully for booking ${booking_number}`);
       }
