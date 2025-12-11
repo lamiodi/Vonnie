@@ -249,10 +249,10 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
     const transaction = transactionResult.rows[0];
     
     // Log coupon usage if coupon was applied
-    if (coupon_id && customer_info.email) {
+    if (coupon_id && booking?.customer_email) {
       await client.query(
         'INSERT INTO coupon_usage (coupon_id, customer_email, used_at, transaction_id, discount_amount) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4)',
-        [coupon_id, customer_info.email, transaction.id, discount_amount]
+        [coupon_id, booking.customer_email, transaction.id, discount_amount]
       );
     }
     

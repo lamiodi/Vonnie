@@ -121,6 +121,7 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
         COUNT(bw.id) as active_bookings,
         CASE 
           WHEN u.is_active = false THEN 'inactive'
+          WHEN u.current_status = 'absent' THEN 'absent'
           WHEN u.current_status = 'unavailable' THEN 'unavailable'
           WHEN u.current_status = 'on_break' THEN 'on_break'
           WHEN COUNT(bw.id) > 0 THEN 'busy'

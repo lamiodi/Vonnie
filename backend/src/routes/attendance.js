@@ -115,6 +115,13 @@ router.post('/checkin', authenticate, async (req, res) => {
       ]
     );
     
+    // Update user status to 'available' on checkin (if not busy)
+     try {
+       await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
+     } catch (statusError) {
+       console.error('Failed to update user status on checkin:', statusError);
+     }
+    
     // Return appropriate message based on verification status
     let message = 'Check-in successful';
     if (locationVerificationStatus === 'verified') {
@@ -125,6 +132,20 @@ router.post('/checkin', authenticate, async (req, res) => {
       message = 'Check-in recorded without location verification.';
     }
     
+    // Update user status to 'offline' on checkout
+    try {
+      await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
+    } catch (statusError) {
+      console.error('Failed to update user status on checkout:', statusError);
+    }
+
+    // Update user status to 'offline' on checkout
+    try {
+      await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
+    } catch (statusError) {
+      console.error('Failed to update user status on checkout:', statusError);
+    }
+
     res.json({
       message: message,
       attendance: result.rows[0],
@@ -182,6 +203,13 @@ router.post('/checkout', authenticate, async (req, res) => {
        RETURNING *`,
       [new Date().toISOString(), latitude || null, longitude || null, locationVerificationStatus, worker_id, today]
     );
+    
+    // Update user status to 'offline' on checkout
+    try {
+      await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
+    } catch (statusError) {
+      console.error('Failed to update user status on checkout:', statusError);
+    }
     
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No check-in record found for today' });

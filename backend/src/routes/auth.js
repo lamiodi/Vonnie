@@ -27,8 +27,18 @@ router.post('/register', async (req, res) => {
         ));
       }
       // If no admin exists, proceed to create the FIRST and ONLY admin
+    } else if (role === 'manager') {
+      // Check if ANY manager already exists
+      const managerCheck = await query('SELECT 1 FROM users WHERE role = $1', ['manager']);
+      if (managerCheck.rows.length > 0) {
+        return res.status(403).json(errorResponse(
+          'System already has a manager. Only one manager is allowed.',
+          'MANAGER_EXISTS',
+          403
+        ));
+      }
     } else {
-      // For non-admin roles (staff/manager), proceed with normal checks
+      // For non-admin/manager roles (staff), proceed with normal checks
       
       // Check if signups are enabled
       try {

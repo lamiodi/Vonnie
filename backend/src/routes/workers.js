@@ -12,8 +12,7 @@ const router = express.Router();
 // Get all workers
 router.get('/', authenticate, async (req, res) => {
   try {
-    // Auto-correct worker status: Set to 'available' if 'busy' but no active booking currently happening
-    // This fixes issues where workers remain busy after a booking ends or if assigned to future bookings
+    // 1. Auto-correct 'busy' -> 'available' if no active booking
     try {
       await query(`
         UPDATE users u
@@ -37,7 +36,42 @@ router.get('/', authenticate, async (req, res) => {
       `);
     } catch (cleanupError) {
       console.error('Worker status auto-correction failed:', cleanupError);
-      // Continue serving the request even if cleanup fails
+    }
+
+    // 2. Mark workers as 'absent' if they haven't checked in today
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await query(`
+        UPDATE users u
+        SET current_status = 'absent'
+        WHERE role IN ('staff', 'manager')
+        AND u.current_status != 'busy' -- Don't touch busy workers (edge case where they worked overnight?)
+        AND NOT EXISTS (
+           SELECT 1 FROM attendance a 
+           WHERE a.worker_id = u.id 
+           AND a.date = $1 
+           AND a.check_in_time IS NOT NULL 
+           AND a.check_out_time IS NULL
+        )
+      `, [today]);
+      
+      // 3. Mark workers as 'available' if they ARE checked in and not busy
+      await query(`
+        UPDATE users u
+        SET current_status = 'available'
+        WHERE role IN ('staff', 'manager')
+        AND u.current_status = 'absent'
+        AND EXISTS (
+           SELECT 1 FROM attendance a 
+           WHERE a.worker_id = u.id 
+           AND a.date = $1 
+           AND a.check_in_time IS NOT NULL 
+           AND a.check_out_time IS NULL
+        )
+      `, [today]);
+
+    } catch (attendanceError) {
+      console.error('Worker attendance status sync failed:', attendanceError);
     }
 
     let sql = 'SELECT id, name, email, phone, role, is_active, current_status, created_at, updated_at FROM users WHERE role IN ($1, $2)';
@@ -125,6 +159,18 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
         'INSUFFICIENT_PERMISSIONS',
         403
       ));
+    }
+    
+    // Check if manager already exists
+    if (normalizedRole === 'manager') {
+      const managerCheck = await query('SELECT 1 FROM users WHERE role = $1', ['manager']);
+      if (managerCheck.rows.length > 0) {
+        return res.status(403).json(errorResponse(
+          'System already has a manager. Only one manager is allowed.',
+          'MANAGER_EXISTS',
+          403
+        ));
+      }
     }
     
     // Check if email already exists
@@ -255,6 +301,18 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
           'INSUFFICIENT_PERMISSIONS',
           403
         ));
+      }
+      
+      // Check if manager already exists
+      if (normalizedRole === 'manager') {
+        const managerCheck = await query('SELECT 1 FROM users WHERE role = $1 AND id != $2', ['manager', req.params.id]);
+        if (managerCheck.rows.length > 0) {
+          return res.status(403).json(errorResponse(
+            'System already has a manager. Only one manager is allowed.',
+            'MANAGER_EXISTS',
+            403
+          ));
+        }
       }
     }
     
