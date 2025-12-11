@@ -30,6 +30,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
     if (staff_id) {
       const staffValidation = validateRequiredFields({ staff_id }, ['staff_id']);
       if (!staffValidation.isValid) {
+        console.error('Invalid staff_id format');
         await client.query('ROLLBACK');
         return res.status(400).json(validationErrorResponse(staffValidation.missingFields, 'Missing required fields'));
       }
@@ -39,6 +40,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
     if (items && items.length > 0) {
       for (const item of items) {
         if (!item.type || !['product', 'service'].includes(item.type)) {
+          console.error('Invalid item type in transaction:', item);
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse('Invalid item type. Must be "product" or "service"', 'INVALID_ITEM_TYPE', 400));
         }
@@ -92,11 +94,12 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
       booking = bookingResult.rows[0];
      
       // Validate booking status for POS transactions
-      const allowedStatusesForPOS = ['scheduled', 'in-progress'];
+      const allowedStatusesForPOS = ['scheduled', 'in-progress', 'completed'];
       if (!allowedStatusesForPOS.includes(booking.status)) {
+        console.error(`Invalid booking status for POS transaction: ${booking.status}`);
         await client.query('ROLLBACK');
         return res.status(400).json(errorResponse(
-          `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'scheduled' or 'in-progress' can be processed through POS.`,
+          `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'scheduled', 'in-progress', or 'completed' can be processed through POS.`,
           'INVALID_BOOKING_STATUS',
           400
         ));
@@ -461,9 +464,10 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     // Get booking if provided
     if (booking_number) {
       const bookingResult = await client.query(
-        `SELECT b.*, s.name as service_name, s.price as service_price
+        `SELECT b.*, 
+                (SELECT string_agg(s.name, ', ') FROM booking_services bs JOIN services s ON bs.service_id = s.id WHERE bs.booking_id = b.id) as service_name,
+                (SELECT SUM(bs.total_price) FROM booking_services bs WHERE bs.booking_id = b.id) as service_price
          FROM bookings b
-         LEFT JOIN services s ON b.service_id = s.id
          WHERE b.booking_number = $1`,
         [booking_number]
       );
@@ -473,11 +477,13 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
       booking = bookingResult.rows[0];
       // Align allowed statuses with frontend POS processing
-      const allowedStatusesForPOS = ['scheduled', 'in-progress'];
+      // Allow 'completed' status to enable payment for completed services (Awaiting Payment)
+      const allowedStatusesForPOS = ['scheduled', 'in-progress', 'completed'];
       if (!allowedStatusesForPOS.includes(booking.status)) {
+        console.error(`Invalid booking status for POS: ${booking.status}`);
         await client.query('ROLLBACK');
         return res.status(400).json(errorResponse(
-          `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'scheduled' or 'in-progress' can be processed through POS.`,
+          `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'scheduled', 'in-progress', or 'completed' can be processed through POS.`,
           'INVALID_BOOKING_STATUS',
           400
         ));
