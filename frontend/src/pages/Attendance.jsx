@@ -340,25 +340,29 @@ const Attendance = () => {
 
   const getTodayAttendance = () => {
     const today = new Date().toISOString().split('T')[0];
-    return attendanceRecords.find(record => record.date === today);
+    return attendanceRecords.find(record => {
+      // Handle potential full ISO string from backend
+      const recordDate = new Date(record.date).toISOString().split('T')[0];
+      return recordDate === today;
+    });
   };
 
   const todayAttendance = getTodayAttendance();
 
   return (
-    <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
-        <p className="text-gray-600">
+    <div className="p-4 sm:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
+        <p className="text-gray-600 text-sm sm:text-base">
           Please ensure you are inside the shop before marking your attendance.
         </p>
       </div>
 
       {/* Device Detection Notice - Hidden as requested to simplify user experience */}
       {!isMobileDevice && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+        <div className="bg-blue-50 border border-blue-200 rounded-md p-3 sm:p-4 mb-6">
           <div className="flex items-start">
-            <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <div>
@@ -379,14 +383,14 @@ const Attendance = () => {
       )}
 
       {/* Today's Attendance Status */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Today's Attendance</h2>
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Today's Attendance</h2>
         
         {todayAttendance ? (
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Status:</span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span className="text-gray-600 font-medium">Status:</span>
+              <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
                 todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
                 todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
                 todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
@@ -396,12 +400,12 @@ const Attendance = () => {
               </span>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <span className="text-gray-600">Check-in:</span>
-                <p className="font-medium">{formatTime(todayAttendance.check_in_time)}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="bg-gray-50 p-3 rounded-md">
+                <span className="text-gray-600 text-sm block mb-1">Check-in:</span>
+                <p className="font-semibold text-gray-900">{formatTime(todayAttendance.check_in_time)}</p>
                 {todayAttendance.gps_check_in_verified && (
-                  <span className="text-xs text-green-600 flex items-center">
+                  <span className="text-xs text-green-600 flex items-center mt-1">
                     <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
                     Location Verified
                   </span>
@@ -409,11 +413,11 @@ const Attendance = () => {
               </div>
               
               {todayAttendance.check_out_time && (
-                <div>
-                  <span className="text-gray-600">Check-out:</span>
-                  <p className="font-medium">{formatTime(todayAttendance.check_out_time)}</p>
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <span className="text-gray-600 text-sm block mb-1">Check-out:</span>
+                  <p className="font-semibold text-gray-900">{formatTime(todayAttendance.check_out_time)}</p>
                   {todayAttendance.gps_check_out_verified && (
-                    <span className="text-xs text-green-600 flex items-center">
+                    <span className="text-xs text-green-600 flex items-center mt-1">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
                       Location Verified
                     </span>
@@ -422,44 +426,46 @@ const Attendance = () => {
               )}
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-gray-600">Location Status:</span>
-              <span className={`px-2 py-1 rounded text-xs ${
-                todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
-                todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                'bg-yellow-100 text-yellow-800'
-              }`}>
-                {todayAttendance.location_verification_status === 'verified' ? 'Verified' :
-                 todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
-                 todayAttendance.location_verification_status === 'flagged' ? 'Flagged' :
-                 'Pending'}
-              </span>
-            </div>
-
-            {todayAttendance.distance_from_shop && (
-              <div className="flex items-center justify-between">
-                <span className="text-gray-600">Distance from Shop:</span>
-                <span className="font-medium text-sm">
-                  {todayAttendance.distance_from_shop <= 1000 ? 
-                    `${Math.round(todayAttendance.distance_from_shop)}m` :
-                    `${(todayAttendance.distance_from_shop / 1000).toFixed(1)}km`
-                  }
+            <div className="border-t border-gray-100 pt-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">Location Status:</span>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                  todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
+                  todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                  todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                  'bg-yellow-100 text-yellow-800'
+                }`}>
+                  {todayAttendance.location_verification_status === 'verified' ? 'Verified' :
+                   todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
+                   todayAttendance.location_verification_status === 'flagged' ? 'Flagged' :
+                   'Pending'}
                 </span>
               </div>
-            )}
+
+              {todayAttendance.distance_from_shop && (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Distance from Shop:</span>
+                  <span className="font-medium">
+                    {todayAttendance.distance_from_shop <= 1000 ? 
+                      `${Math.round(todayAttendance.distance_from_shop)}m` :
+                      `${(todayAttendance.distance_from_shop / 1000).toFixed(1)}km`
+                    }
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
-          <p className="text-gray-500">No attendance record for today</p>
+          <p className="text-gray-500 text-sm sm:text-base">No attendance record for today</p>
         )}
 
         {/* Action Buttons */}
-        <div className="mt-6 space-y-4">
+        <div className="mt-6 space-y-3">
           {!todayAttendance?.check_in_time && (
             <button
               onClick={handleCheckIn}
               disabled={checkingIn || locationLoading}
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="w-full bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform"
             >
               {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In'}
             </button>
@@ -469,7 +475,7 @@ const Attendance = () => {
             <button
               onClick={handleCheckOut}
               disabled={checkingOut || locationLoading || !!todayAttendance.check_out_time}
-              className={`w-full text-white px-4 py-2 rounded-md flex items-center justify-center ${
+              className={`w-full text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform ${
                 todayAttendance.check_out_time 
                   ? 'bg-gray-400 cursor-not-allowed' 
                   : 'bg-green-600 hover:bg-green-700'
@@ -489,7 +495,7 @@ const Attendance = () => {
             <button
               onClick={verifyLocation}
               disabled={locationLoading}
-              className="w-full bg-gray-600 text-white px-4 py-2 rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="w-full bg-gray-600 text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform"
             >
               {locationLoading ? 'Getting location...' : 'Verify Location'}
             </button>
@@ -518,8 +524,8 @@ const Attendance = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-800 mb-4">Filters</h2>
+      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Filters</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
@@ -542,7 +548,7 @@ const Attendance = () => {
           <div className="flex items-end">
             <button
               onClick={fetchAttendanceRecords}
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm active:scale-95 transition-transform"
             >
               Apply Filters
             </button>
@@ -552,8 +558,8 @@ const Attendance = () => {
 
       {/* Attendance Records */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800">Attendance History</h2>
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
+          <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Attendance History</h2>
         </div>
         
         {loading ? (
@@ -563,45 +569,47 @@ const Attendance = () => {
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {attendanceRecords.map((record) => (
                   <tr key={record.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                       {formatTime(record.check_in_time)}
                       {record.gps_check_in_verified && (
                         <span className="ml-2 text-xs text-green-600">✓ GPS</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
                       {formatTime(record.check_out_time) || '-'}
                       {record.gps_check_out_verified && (
                         <span className="ml-2 text-xs text-green-600">✓ GPS</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 sm:hidden">
-                      <div className="flex flex-col text-xs">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 sm:hidden">
+                      <div className="flex flex-col text-xs space-y-1">
                         <span className="flex items-center">
-                          In: {formatTime(record.check_in_time)}
+                          <span className="w-6 text-gray-500">In:</span> 
+                          {formatTime(record.check_in_time)}
                           {record.gps_check_in_verified && <span className="ml-1 text-green-600">✓</span>}
                         </span>
-                        <span className="flex items-center mt-1">
-                          Out: {formatTime(record.check_out_time) || '-'}
+                        <span className="flex items-center">
+                          <span className="w-6 text-gray-500">Out:</span> 
+                          {formatTime(record.check_out_time) || '-'}
                           {record.gps_check_out_verified && <span className="ml-1 text-green-600">✓</span>}
                         </span>
                       </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         record.status === 'present' ? 'bg-green-100 text-green-800' :
                         record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
@@ -611,13 +619,13 @@ const Attendance = () => {
                         {record.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
                       {record.location_verification_status === 'verified' ? (
-                        <span className="text-green-600">✓ Verified</span>
+                        <span className="text-green-600 flex items-center"><span className="mr-1">✓</span> Verified</span>
                       ) : record.location_verification_status === 'rejected' ? (
-                        <span className="text-red-600">✗ Rejected</span>
+                        <span className="text-red-600 flex items-center"><span className="mr-1">✗</span> Rejected</span>
                       ) : record.location_verification_status === 'flagged' ? (
-                        <span className="text-yellow-600">⚠ Flagged</span>
+                        <span className="text-yellow-600 flex items-center"><span className="mr-1">⚠</span> Flagged</span>
                       ) : (
                         <span className="text-gray-400">No Data</span>
                       )}

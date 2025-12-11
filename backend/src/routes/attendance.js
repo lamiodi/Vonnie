@@ -65,8 +65,10 @@ router.post('/checkin', authenticate, async (req, res) => {
     
     // Check if already checked in today
     const existing = await query(
-      'SELECT * FROM attendance WHERE worker_id = $1 AND date = $2',
-      [worker_id, today]
+      `SELECT * FROM attendance 
+       WHERE worker_id = $1 
+       AND (date = $2 OR date::text LIKE $3)`,
+      [worker_id, today, `${today}%`]
     );
     
     if (existing.rows.length > 0) {
@@ -132,19 +134,8 @@ router.post('/checkin', authenticate, async (req, res) => {
       message = 'Check-in recorded without location verification.';
     }
     
-    // Update user status to 'offline' on checkout
-    try {
-      await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
-    } catch (statusError) {
-      console.error('Failed to update user status on checkout:', statusError);
-    }
-
-    // Update user status to 'offline' on checkout
-    try {
-      await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
-    } catch (statusError) {
-      console.error('Failed to update user status on checkout:', statusError);
-    }
+    // REMOVED INCORRECT LOGIC: "Update user status to 'offline' on checkout" block was copy-pasted into checkin route
+    // The checkin route should set status to 'available', which is already handled above.
 
     res.json({
       message: message,
@@ -238,12 +229,26 @@ router.post('/checkout', authenticate, async (req, res) => {
 });
 
 // Get attendance records
-router.get('/', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
-    const { start_date, end_date, worker_id } = req.query;
+    let { start_date, end_date, worker_id } = req.query;
     
+    // If not admin/manager, can only view own attendance
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      worker_id = req.user.id;
+    }
+
+    // For regular staff, convert full date string to YYYY-MM-DD for accurate comparison
+    // This fixes the issue where timezone differences might cause date mismatch in queries
+    if (start_date && start_date.includes('T')) {
+      start_date = start_date.split('T')[0];
+    }
+    if (end_date && end_date.includes('T')) {
+      end_date = end_date.split('T')[0];
+    }
+
     let sql = `
-      SELECT a.*, u.name, u.email 
+      SELECT a.*, a.date::text as date_str, u.name, u.email 
       FROM attendance a 
       LEFT JOIN users u ON a.worker_id = u.id 
       WHERE 1=1
@@ -263,13 +268,15 @@ router.get('/', authenticate, authorize(['admin', 'manager']), async (req, res) 
       sql += ` AND a.worker_id = $${params.length}`;
     }
     
+    // Ensure we're fetching dates as strings to avoid timezone shifts in JSON response
     sql += ' ORDER BY a.date DESC, a.check_in_time DESC';
     
     const result = await query(sql, params);
     
-    // Process results to include GPS verification status
+    // Process results to include GPS verification status and ensure date is string
     const processedRows = result.rows.map(row => ({
       ...row,
+      date: row.date_str || row.date, // Use the text version of date to avoid timezone shifts
       gps_check_in_verified: !!(row.check_in_latitude && row.check_in_longitude),
       gps_check_out_verified: !!(row.check_out_latitude && row.check_out_longitude)
     }));

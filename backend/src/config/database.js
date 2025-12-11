@@ -1,7 +1,11 @@
-import { Pool } from 'pg';
+import { Pool, types } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
+
+// Override DATE parser to return string (YYYY-MM-DD) instead of Date object
+// This prevents timezone issues where dates are shifted when converted to UTC
+types.setTypeParser(1082, (str) => str);
 
 // Database connection configuration
 const pool = new Pool({
