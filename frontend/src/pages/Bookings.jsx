@@ -620,7 +620,7 @@ const BookingsTable = ({
         </div>
       )}
       
-      <div className="w-full overflow-visible">
+      <div className="w-full overflow-x-auto">
         <table className="w-full divide-y divide-gray-200 min-w-full table-auto">
           <thead className="bg-gray-50 sticky top-0 z-10">
             <tr>
