@@ -535,18 +535,21 @@ const BookingsTable = ({
     
     // Sort by queue priority
     const sortedBookings = [...todaysBookings].sort((a, b) => {
-      const paymentPriority = { 'completed': 0, 'pending': 1, 'failed': 2 };
-      const aPayment = paymentPriority[a.payment_status] || 1;
-      const bPayment = paymentPriority[b.payment_status] || 1;
+      // Priority 1: Payment status (Unpaid/Pending first)
+      const paymentPriority = { 'pending': 0, 'failed': 1, 'refunded': 2, 'completed': 3 };
+      const aPayment = paymentPriority[a.payment_status] !== undefined ? paymentPriority[a.payment_status] : 1; // Default to pending-like priority if unknown
+      const bPayment = paymentPriority[b.payment_status] !== undefined ? paymentPriority[b.payment_status] : 1;
      
       if (aPayment !== bPayment) return aPayment - bPayment;
       
-      // Priority 2: Customer type (pre-booked first)
+      // Priority 2: Customer type (Walk-in first)
       const aType = normalizeCustomerType(a.customer_type);
       const bType = normalizeCustomerType(b.customer_type);
       const isAWalkIn = !a.customer_id || aType === 'walk_in';
       const isBWalkIn = !b.customer_id || bType === 'walk_in';
-      if (isAWalkIn !== isBWalkIn) return isAWalkIn ? 1 : -1;
+      
+      // If one is walk-in and other is not, walk-in comes first
+      if (isAWalkIn !== isBWalkIn) return isAWalkIn ? -1 : 1;
       
       // Priority 3: Scheduled time (earlier first)
       return new Date(a.scheduled_time) - new Date(b.scheduled_time);

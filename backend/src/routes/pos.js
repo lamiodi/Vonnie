@@ -362,6 +362,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
 // Unified POS checkout endpoint to match frontend API_ENDPOINTS.POS_CHECKOUT
 // Accepts mixed items (products/services), optional booking_number, coupon_code, and payment details
 router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']), async (req, res) => {
+  console.log('POS Checkout Request Body:', JSON.stringify(req.body, null, 2));
   const client = await getClient();
   try {
     await client.query('BEGIN');
@@ -380,9 +381,11 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
    
     // Use authenticated user ID if staff_id not provided
     const processed_by = staff_id || req.user.id;
+    console.log('Processing checkout by:', processed_by);
    
     // Validate required fields
     if (!processed_by) {
+      console.error('Missing staff_id');
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Staff ID is required', 'MISSING_STAFF_ID', 400));
     }
@@ -390,12 +393,14 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     // Validate payment method
     const validPaymentMethods = ['cash', 'card', 'transfer', 'paystack', 'physical_pos', 'bank_transfer_pos'];
     if (!validPaymentMethods.includes(payment_method)) {
+      console.error('Invalid payment method:', payment_method);
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid payment method. Must be one of: cash, card, transfer, paystack, physical_pos, bank_transfer_pos', 'INVALID_PAYMENT_METHOD', 400));
     }
    
     // Validate payment status if provided
     if (payment_status && !['completed', 'pending'].includes(payment_status)) {
+      console.error('Invalid payment status:', payment_status);
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid payment status. Must be "completed" or "pending"', 'INVALID_PAYMENT_STATUS', 400));
     }
@@ -404,18 +409,22 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     if (items && items.length > 0) {
       for (const item of items) {
         if (!item.type || !['product', 'service'].includes(item.type)) {
+          console.error('Invalid item type:', item);
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse('Invalid item type. Must be "product" or "service"', 'INVALID_ITEM_TYPE', 400));
         }
         if (!item.quantity || item.quantity <= 0) {
+          console.error('Invalid item quantity:', item);
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse('Item quantity must be greater than 0', 'INVALID_ITEM_QUANTITY', 400));
         }
         if (item.type === 'product' && !item.product_id) {
+          console.error('Missing product_id:', item);
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse('Product items must have product_id', 'MISSING_PRODUCT_ID', 400));
         }
         if (item.type === 'service' && !item.service_id) {
+          console.error('Missing service_id:', item);
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse('Service items must have service_id', 'MISSING_SERVICE_ID', 400));
         }
