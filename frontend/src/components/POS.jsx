@@ -1424,10 +1424,12 @@ const POS = () => {
                       <span className="font-medium">-₦{formatPrice(getDiscount())}</span>
                     </div>
                   )}
+                  {/* Tax section commented out per user request
                   <div className="flex justify-between text-gray-600">
                     <span>Tax (7.5%)</span>
                     <span className="font-medium">₦{formatPrice(getTaxAmount())}</span>
                   </div>
+                  */}
                 </div>
               
                 <div className="pt-2 border-t-2 border-gray-200">
