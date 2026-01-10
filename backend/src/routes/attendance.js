@@ -11,6 +11,19 @@ const BUSINESS_LOCATION = {
   ALLOWED_RADIUS_METERS: 500 // Increased to 500 meters for more flexibility
 };
 
+// Work hours configuration (Lagos Time)
+const WORK_HOURS = {
+  RESUMPTION: { HOUR: 9, MINUTE: 0 }, // 9:00 AM
+  CLOSING: { HOUR: 20, MINUTE: 30 }   // 8:30 PM
+};
+
+// Helper to get current Lagos time
+function getLagosTime() {
+  const now = new Date();
+  const lagosTimeStr = now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' });
+  return new Date(lagosTimeStr);
+}
+
 // Calculate distance between two coordinates in meters
 function calculateDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3; // Earth's radius in meters
@@ -100,20 +113,6 @@ router.post('/checkin', authenticate, async (req, res) => {
       // No GPS data provided
       locationVerificationStatus = 'flagged';
     }
-
-    // Check for late resumption
-    const nowLagos = getLagosTime();
-    const currentHour = nowLagos.getHours();
-    const currentMinute = nowLagos.getMinutes();
-    
-    // If arriving after 9:00 AM
-    if (currentHour > WORK_HOURS.RESUMPTION.HOUR || 
-       (currentHour === WORK_HOURS.RESUMPTION.HOUR && currentMinute > WORK_HOURS.RESUMPTION.MINUTE)) {
-      // Only mark as late if not already flagged for location issues
-      if (attendanceStatus === 'present') {
-        attendanceStatus = 'late';
-      }
-    }
     
     const result = await query(
       `INSERT INTO attendance (worker_id, date, check_in_time, status, check_in_latitude, check_in_longitude, 
@@ -141,7 +140,9 @@ router.post('/checkin', authenticate, async (req, res) => {
     // Return appropriate message based on verification status
     let message = 'Check-in successful';
     if (locationVerificationStatus === 'verified') {
-      message = 'Attendance marked successfully.';
+      message = attendanceStatus === 'late' 
+        ? 'Attendance marked (Late). Work starts at 9:00 AM.' 
+        : 'Attendance marked successfully.';
     } else if (locationVerificationStatus === 'rejected') {
       message = 'Unable to verify attendance. You appear to be too far from shop.';
     } else if (locationVerificationStatus === 'flagged') {
