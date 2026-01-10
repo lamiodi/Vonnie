@@ -518,9 +518,7 @@ const POS = () => {
             value: customerInfo.name
           },
           // ... other metadata fields
-        ]
-      }
-    };
+
           {
             display_name: "Customer Phone",
             variable_name: "customer_phone",

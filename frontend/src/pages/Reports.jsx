@@ -717,7 +717,7 @@ const Reports = () => {
               <option value="coupons">Coupons Report</option>
               <option value="missed_attendance">Missed Attendance</option>
             </select>
-          </div>  <span id="report-type-help" className="sr-only">Select the type of report to generate</span>
+            <span id="report-type-help" className="sr-only">Select the type of report to generate</span>
           </div>
 
           {(reportType === 'sales' || reportType === 'bookings') && (
