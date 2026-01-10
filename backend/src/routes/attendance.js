@@ -100,6 +100,20 @@ router.post('/checkin', authenticate, async (req, res) => {
       // No GPS data provided
       locationVerificationStatus = 'flagged';
     }
+
+    // Check for late resumption
+    const nowLagos = getLagosTime();
+    const currentHour = nowLagos.getHours();
+    const currentMinute = nowLagos.getMinutes();
+    
+    // If arriving after 9:00 AM
+    if (currentHour > WORK_HOURS.RESUMPTION.HOUR || 
+       (currentHour === WORK_HOURS.RESUMPTION.HOUR && currentMinute > WORK_HOURS.RESUMPTION.MINUTE)) {
+      // Only mark as late if not already flagged for location issues
+      if (attendanceStatus === 'present') {
+        attendanceStatus = 'late';
+      }
+    }
     
     const result = await query(
       `INSERT INTO attendance (worker_id, date, check_in_time, status, check_in_latitude, check_in_longitude, 
