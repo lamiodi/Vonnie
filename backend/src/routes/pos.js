@@ -116,7 +116,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
       for (const item of items) {
         if (item.type === 'product' && item.product_id) {
           const productResult = await client.query(
-            'SELECT price, stock_level FROM products WHERE id = $1 FOR UPDATE',
+            'SELECT price, stock_level, stock_by_size FROM products WHERE id = $1 FOR UPDATE',
             [item.product_id]
           );
          
@@ -126,23 +126,47 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           }
          
           const product = productResult.rows[0];
-         
-          if (product.stock_level < item.quantity) {
-            await client.query('ROLLBACK');
-            return res.status(400).json(errorResponse(
-              `Insufficient stock for product ${item.product_id}`,
-              'INSUFFICIENT_STOCK',
-              400
-            ));
+          
+          if (item.size) {
+            const stockBySize = product.stock_by_size || {};
+            const sizeStock = Number(stockBySize[item.size]) || 0;
+            
+            if (sizeStock < item.quantity) {
+               await client.query('ROLLBACK');
+               return res.status(400).json(errorResponse(
+                 `Insufficient stock for product ${item.product_id} size ${item.size}`,
+                 'INSUFFICIENT_STOCK',
+                 400
+               ));
+            }
+            
+            // Deduct from size stock
+            stockBySize[item.size] = sizeStock - item.quantity;
+            
+            // Update product with new size stock and total stock
+            await client.query(
+              'UPDATE products SET stock_by_size = $1, stock_level = stock_level - $2 WHERE id = $3',
+              [stockBySize, item.quantity, item.product_id]
+            );
+          } else {
+             // Fallback to general stock level if no size specified (legacy behavior or non-sized products)
+             if (product.stock_level < item.quantity) {
+               await client.query('ROLLBACK');
+               return res.status(400).json(errorResponse(
+                 `Insufficient stock for product ${item.product_id}`,
+                 'INSUFFICIENT_STOCK',
+                 400
+               ));
+             }
+             
+             // Update stock
+             await client.query(
+               'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
+               [item.quantity, item.product_id]
+             );
           }
          
           product_amount += product.price * item.quantity;
-         
-          // Update stock
-          await client.query(
-            'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
-            [item.quantity, item.product_id]
-          );
         } else if (item.type === 'service' && item.service_id) {
           const serviceResult = await client.query(
             'SELECT name, price, duration FROM services WHERE id = $1',
@@ -271,8 +295,8 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           const product = productResult.rows[0];
          
           await client.query(
-            'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price) VALUES ($1, $2, $3, $4, $5, $6)',
-            [transaction.id, item.product_id, product.name, item.quantity, product.price, item.quantity * product.price]
+            'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price, size) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [transaction.id, item.product_id, product.name, item.quantity, product.price, item.quantity * product.price, item.size || null]
           );
         } else if (item.type === 'service' && item.service_id) {
           // Get service details

@@ -365,7 +365,7 @@ const TransactionManagement = () => {
                                 {transactionDetails.items.map((item, index) => (
                                   <li key={index} className="flex justify-between text-sm">
                                     <span className="text-gray-700">
-                                      {item.quantity}x {item.product_name || item.service_name || 'Unknown Item'}
+                                      {item.quantity}x {item.product_name || item.service_name || 'Unknown Item'} {item.size ? `(Size: ${item.size})` : ''}
                                     </span>
                                     <span className="text-gray-900 font-medium">
                                       {formatCurrency(item.total_price)}
@@ -570,7 +570,7 @@ const TransactionManagement = () => {
                               transactionDetails.items.map((item, index) => (
                                 <tr key={index}>
                                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {item.product_name || item.service_name || 'N/A'}
+                                    {item.product_name || item.service_name || 'N/A'} {item.size ? `(Size: ${item.size})` : ''}
                                   </td>
                                   <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
                                     {item.product_id ? 'Product' : 'Service'}

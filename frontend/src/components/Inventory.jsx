@@ -17,8 +17,10 @@ const Inventory = () => {
     sku: '',
     price: '',
     category: '',
-    stock_level: ''
+    stock_level: '',
+    stock_by_size: { S: 0, M: 0, L: 0, XL: 0 }
   });
+  const [useSizeStock, setUseSizeStock] = useState(false);
   const [formErrors, setFormErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -50,10 +52,26 @@ const Inventory = () => {
     }
     
     // Stock validation
-    if (!formData.stock_level || parseInt(formData.stock_level) < 0) {
-      errors.stock_level = 'Stock level cannot be negative';
-    } else if (parseInt(formData.stock_level) > 100000) {
-      errors.stock_level = 'Stock level cannot exceed 100,000';
+    if (!useSizeStock) {
+      if (formData.stock_level === '' || parseInt(formData.stock_level) < 0) {
+        errors.stock_level = 'Stock level cannot be negative';
+      } else if (parseInt(formData.stock_level) > 100000) {
+        errors.stock_level = 'Stock level cannot exceed 100,000';
+      }
+    } else {
+      // Validate size stocks
+      const sizes = ['S', 'M', 'L', 'XL'];
+      let total = 0;
+      sizes.forEach(size => {
+        const val = parseInt(formData.stock_by_size[size] || 0);
+        if (val < 0) {
+          errors[`stock_${size}`] = `${size} stock cannot be negative`;
+        }
+        total += val;
+      });
+      if (total > 100000) {
+        errors.stock_by_size = 'Total stock cannot exceed 100,000';
+      }
     }
     
     // Required fields validation
@@ -82,6 +100,16 @@ const Inventory = () => {
     }));
   };
 
+  const handleSizeStockChange = (size, value) => {
+    setFormData(prev => ({
+      ...prev,
+      stock_by_size: {
+        ...prev.stock_by_size,
+        [size]: parseInt(value) || 0
+      }
+    }));
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -97,8 +125,16 @@ const Inventory = () => {
       const submitData = {
         ...formData,
         price: parseFloat(formData.price).toFixed(2),
-        stock_level: parseInt(formData.stock_level)
       };
+
+      if (useSizeStock) {
+         submitData.stock_by_size = formData.stock_by_size;
+         // Calculate total stock level from sizes
+         submitData.stock_level = Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0);
+      } else {
+         submitData.stock_level = parseInt(formData.stock_level);
+         submitData.stock_by_size = null; // Or empty object if preferred
+      }
       
       if (editingProduct) {
         await apiPut(`${API_ENDPOINTS.INVENTORY}/${editingProduct.id}`, submitData);
@@ -127,22 +163,27 @@ const Inventory = () => {
 
   const handleEdit = (product) => {
     setEditingProduct(product);
+    const hasSizeStock = product.stock_by_size && Object.keys(product.stock_by_size).length > 0;
+    setUseSizeStock(hasSizeStock);
+    
     setFormData({
       name: product.name,
-      description: product.description,
+      description: product.description || '',
       sku: product.sku,
       price: product.price,
       category: product.category,
-      stock_level: product.stock_level
+      stock_level: product.stock_level,
+      stock_by_size: hasSizeStock ? product.stock_by_size : { S: 0, M: 0, L: 0, XL: 0 }
     });
     setShowAddForm(true);
   };
 
-  const handleStockAdjustment = async (productId, adjustment, reason) => {
+  const handleStockAdjustment = async (productId, adjustment, reason, size = null) => {
     try {
       await apiPost(`${API_ENDPOINTS.INVENTORY}/adjust/${productId}`, {
         adjustment: parseInt(adjustment),
-        reason
+        reason,
+        size
       });
       fetchProducts();
       alert('Stock adjusted successfully!');
@@ -159,8 +200,10 @@ const Inventory = () => {
       sku: '',
       price: '',
       category: '',
-      stock_level: ''
+      stock_level: '',
+      stock_by_size: { S: 0, M: 0, L: 0, XL: 0 }
     });
+    setUseSizeStock(false);
     setEditingProduct(null);
     setShowAddForm(false);
   };
@@ -187,13 +230,16 @@ const Inventory = () => {
       setScannedProduct(product);
       if (scanningMode) {
         // Auto-fill form for quick stock adjustment
+        const hasSizeStock = product.stock_by_size && Object.keys(product.stock_by_size).length > 0;
+        setUseSizeStock(hasSizeStock);
         setFormData({
           name: product.name,
           description: product.description,
           sku: product.sku,
           price: product.price,
           category: product.category,
-          stock_level: product.stock_level
+          stock_level: product.stock_level,
+          stock_by_size: hasSizeStock ? product.stock_by_size : { S: 0, M: 0, L: 0, XL: 0 }
         });
         setEditingProduct(product);
         setShowAddForm(true);
@@ -214,9 +260,21 @@ const Inventory = () => {
   const quickStockAdjustment = async (adjustment) => {
     if (!scannedProduct) return;
     
+    // Check if product has sizes
+    const hasSizeStock = scannedProduct.stock_by_size && Object.keys(scannedProduct.stock_by_size).length > 0;
+    
+    let size = null;
+    if (hasSizeStock) {
+       size = prompt(`Enter size to adjust (${Object.keys(scannedProduct.stock_by_size).join(', ')}):`);
+       if (!size || !scannedProduct.stock_by_size.hasOwnProperty(size)) {
+         alert('Invalid size selected');
+         return;
+       }
+    }
+
     const reason = prompt('Enter reason for stock adjustment:');
     if (reason) {
-      await handleStockAdjustment(scannedProduct.id, adjustment, reason);
+      await handleStockAdjustment(scannedProduct.id, adjustment, reason, size);
       setScannedProduct(null);
       setBarcodeInput('');
     }
@@ -433,24 +491,67 @@ const Inventory = () => {
               </div>
         
               <div>
-                <label htmlFor="product-stock" className="block text-sm font-medium text-gray-700 mb-1">
-                  Stock Level *
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Stock Management
                 </label>
-                <input
-                  id="product-stock"
-                  type="number"
-                  name="stock_level"
-                  value={formData.stock_level}
-                  onChange={handleInputChange}
-                  required
-                  aria-required="true"
-                  min="0"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.stock_level ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {formErrors.stock_level && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.stock_level}</p>
+                <div className="flex items-center mb-3">
+                  <input
+                    id="use-size-stock"
+                    type="checkbox"
+                    checked={useSizeStock}
+                    onChange={(e) => setUseSizeStock(e.target.checked)}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="use-size-stock" className="ml-2 block text-sm text-gray-900">
+                    Track stock by size (S, M, L, XL)
+                  </label>
+                </div>
+
+                {useSizeStock ? (
+                  <div className="grid grid-cols-4 gap-2">
+                    {['S', 'M', 'L', 'XL'].map((size) => (
+                      <div key={size}>
+                        <label htmlFor={`stock-${size}`} className="block text-xs font-medium text-gray-700 mb-1">
+                          Size {size}
+                        </label>
+                        <input
+                          id={`stock-${size}`}
+                          type="number"
+                          value={formData.stock_by_size[size]}
+                          onChange={(e) => handleSizeStockChange(size, e.target.value)}
+                          min="0"
+                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        {formErrors[`stock_${size}`] && (
+                          <p className="mt-1 text-xs text-red-600">{formErrors[`stock_${size}`]}</p>
+                        )}
+                      </div>
+                    ))}
+                    {formErrors.stock_by_size && (
+                      <div className="col-span-4 mt-1 text-sm text-red-600">{formErrors.stock_by_size}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <label htmlFor="product-stock" className="block text-sm font-medium text-gray-700 mb-1">
+                      Stock Level *
+                    </label>
+                    <input
+                      id="product-stock"
+                      type="number"
+                      name="stock_level"
+                      value={formData.stock_level}
+                      onChange={handleInputChange}
+                      required={!useSizeStock}
+                      min="0"
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        formErrors.stock_level ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.stock_level && (
+                      <p className="mt-1 text-sm text-red-600">{formErrors.stock_level}</p>
+                    )}
+                  </div>
                 )}
               </div>
         
@@ -552,6 +653,14 @@ const Inventory = () => {
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900" role="cell">
                       {product.stock_level}
+                      {product.stock_by_size && Object.keys(product.stock_by_size).length > 0 && (
+                        <div className="text-xs text-gray-500 mt-1">
+                           {Object.entries(product.stock_by_size)
+                             .filter(([_, qty]) => qty > 0)
+                             .map(([size, qty]) => `${size}:${qty}`)
+                             .join(', ')}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap" role="cell">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${stockStatus.color}`} role="status" aria-label={`Stock status: ${stockStatus.status}`}>
@@ -573,9 +682,20 @@ const Inventory = () => {
                           <button
                             onClick={() => {
                               const adjustment = prompt('Enter stock adjustment (positive to add, negative to remove):');
-                              const reason = prompt('Enter reason for adjustment:');
-                              if (adjustment && reason) {
-                                handleStockAdjustment(product.id, adjustment, reason);
+                              if (adjustment) {
+                                let size = null;
+                                if (product.stock_by_size && Object.keys(product.stock_by_size).length > 0) {
+                                   size = prompt(`Enter size to adjust (${Object.keys(product.stock_by_size).join(', ')}):`);
+                                   if (!size || !product.stock_by_size.hasOwnProperty(size)) {
+                                     alert('Invalid size selected');
+                                     return;
+                                   }
+                                }
+                                
+                                const reason = prompt('Enter reason for adjustment:');
+                                if (reason) {
+                                  handleStockAdjustment(product.id, adjustment, reason, size);
+                                }
                               }
                             }}
                             className="text-green-600 hover:text-green-900"

@@ -18,6 +18,7 @@ router.get('/sales', authenticate, authorize(['admin', 'manager']), async (req, 
         tii.quantity,
         tii.unit_price,
         tii.total_price,
+        tii.size,
         p.name as product_name,
         p.category as product_category
       FROM pos_transactions t
@@ -72,6 +73,13 @@ router.get('/sales', authenticate, authorize(['admin', 'manager']), async (req, 
       acc[key].transaction_count += 1;
       acc[key].items_sold += parseInt(transaction.quantity || 0);
       
+      // Optional: Track size breakdown in metadata if needed
+      if (transaction.size) {
+         if (!acc[key].size_breakdown) acc[key].size_breakdown = {};
+         if (!acc[key].size_breakdown[transaction.size]) acc[key].size_breakdown[transaction.size] = 0;
+         acc[key].size_breakdown[transaction.size] += parseInt(transaction.quantity || 0);
+      }
+
       return acc;
     }, {});
     

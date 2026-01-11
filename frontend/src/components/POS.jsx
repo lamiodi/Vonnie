@@ -30,6 +30,11 @@ const POS = () => {
   const [selectedServiceCategory, setSelectedServiceCategory] = useState('');
   const [skuInput, setSkuInput] = useState('');
   const [scanningMode, setScanningMode] = useState(false);
+  
+  // Size Selection Modal State
+  const [showSizeModal, setShowSizeModal] = useState(false);
+  const [selectedProductForSize, setSelectedProductForSize] = useState(null);
+
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -349,36 +354,50 @@ const POS = () => {
   }, [getSubtotal, getDiscount]);
 
   // Add item to cart (handles both products and services)
-  const addToCart = useCallback((item, type = 'product') => {
+  const addToCart = useCallback((item, type = 'product', size = null) => {
     // Reset payment confirmation when adding new items
     if (paymentConfirmed) {
       setPaymentConfirmed(false);
     }
   
-    const existingItem = cart.find(cartItem => cartItem.id === item.id && cartItem.type === type);
+    // Check if product has sizes and no size is selected yet
+    if (type === 'product' && !size && item.stock_by_size && Object.keys(item.stock_by_size).length > 0) {
+      setSelectedProductForSize(item);
+      setShowSizeModal(true);
+      return;
+    }
+
+    const cartItemId = size ? `${item.id}-${size}` : item.id;
+    const existingItem = cart.find(cartItem => cartItem.cartItemId === cartItemId && cartItem.type === type);
   
     if (type === 'service') {
       // Services can be added multiple times (quantity increases)
       if (existingItem) {
         setCart(cart.map(cartItem =>
-          cartItem.id === item.id && cartItem.type === type
+          cartItem.cartItemId === cartItemId && cartItem.type === type
             ? { ...cartItem, quantity: cartItem.quantity + 1 }
             : cartItem
         ));
       } else {
-        setCart([...cart, { ...item, quantity: 1, type: 'service' }]);
+        setCart([...cart, { ...item, quantity: 1, type: 'service', cartItemId: item.id }]);
       }
     } else {
       // Product logic: Check stock levels before adding
-      if (item.stock_level <= 0) {
-        handleError(null, `Product "${item.name}" is out of stock`);
+      let availableStock = item.stock_level;
+      
+      if (size) {
+        availableStock = item.stock_by_size[size] || 0;
+      }
+
+      if (availableStock <= 0) {
+        handleError(null, `Product "${item.name}" ${size ? `(Size ${size})` : ''} is out of stock`);
         return;
       }
       
       if (existingItem) {
-        if (existingItem.quantity < item.stock_level) {
+        if (existingItem.quantity < availableStock) {
           setCart(cart.map(cartItem =>
-            cartItem.id === item.id && cartItem.type === type
+            cartItem.cartItemId === cartItemId && cartItem.type === type
               ? { ...cartItem, quantity: cartItem.quantity + 1 }
               : cartItem
           ));
@@ -386,30 +405,39 @@ const POS = () => {
           handleError(null, 'Not enough stock available');
         }
       } else {
-        setCart([...cart, { ...item, quantity: 1, type: 'product' }]);
+        setCart([...cart, { ...item, quantity: 1, type: 'product', size, cartItemId }]);
       }
     }
   }, [cart, paymentConfirmed]);
-  const updateQuantity = useCallback((itemId, newQuantity, itemType = 'product') => {
+
+  const updateQuantity = useCallback((cartItemId, newQuantity, itemType = 'product') => {
     if (newQuantity === 0) {
-      removeFromCart(itemId, itemType);
+      removeFromCart(cartItemId, itemType);
       return;
     }
-    if (itemType === 'product') {
-      const product = products.find(p => p.id === itemId);
-      if (newQuantity > product.stock_level) {
-        handleError(null, 'Not enough stock available');
-        return;
+    
+    setCart(cart.map(item => {
+      if (item.cartItemId === cartItemId && item.type === itemType) {
+        if (itemType === 'product') {
+           const product = products.find(p => p.id === item.id);
+           let availableStock = product.stock_level;
+           if (item.size && product.stock_by_size) {
+             availableStock = product.stock_by_size[item.size] || 0;
+           }
+           
+           if (newQuantity > availableStock) {
+             handleError(null, 'Not enough stock available');
+             return item;
+           }
+        }
+        return { ...item, quantity: newQuantity };
       }
-    }
-    setCart(cart.map(item =>
-      item.id === itemId && item.type === itemType
-        ? { ...item, quantity: newQuantity }
-        : item
-    ));
+      return item;
+    }));
   }, [cart, products]);
-  const removeFromCart = useCallback((itemId, itemType = 'product') => {
-    setCart(cart.filter(item => !(item.id === itemId && item.type === itemType)));
+
+  const removeFromCart = useCallback((cartItemId, itemType = 'product') => {
+    setCart(cart.filter(item => !(item.cartItemId === cartItemId && item.type === itemType)));
   }, [cart]);
   const handleSkuInput = useCallback((e) => {
     const sku = e.target.value;
@@ -1375,7 +1403,9 @@ const POS = () => {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center mb-1">
                             <span className="text-sm mr-2">{item.type === 'service' ? '🔧' : '📦'}</span>
-                            <h4 className="font-semibold text-sm text-gray-900 truncate">{item.name}</h4>
+                            <h4 className="font-semibold text-sm text-gray-900 truncate">
+                              {item.name} {item.size ? `(Size: ${item.size})` : ''}
+                            </h4>
                           </div>
                           <p className="text-xs text-gray-500">₦{formatPrice(item.price)} each</p>
                           {item.type === 'service' && (
@@ -1383,7 +1413,7 @@ const POS = () => {
                           )}
                         </div>
                         <button
-                          onClick={() => removeFromCart(item.id, item.type)}
+                          onClick={() => removeFromCart(item.cartItemId || item.id, item.type)}
                           className="ml-2 w-6 h-6 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition flex-shrink-0"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1394,7 +1424,7 @@ const POS = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity - 1, item.type)}
+                            onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity - 1, item.type)}
                             className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1403,7 +1433,7 @@ const POS = () => {
                           </button>
                           <span className="w-8 text-center text-sm font-semibold text-gray-900">{item.quantity}</span>
                           <button
-                            onClick={() => updateQuantity(item.id, item.quantity + 1, item.type)}
+                            onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity + 1, item.type)}
                             className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1567,7 +1597,47 @@ const POS = () => {
           </div>
         </div>
       </div>
+    {/* Size Selection Modal */}
+      {showSizeModal && selectedProductForSize && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-4">Select Size for {selectedProductForSize.name}</h3>
+            
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {Object.entries(selectedProductForSize.stock_by_size || {})
+                .filter(([_, stock]) => stock > 0)
+                .map(([size, stock]) => (
+                <button
+                  key={size}
+                  onClick={() => {
+                    addToCart(selectedProductForSize, 'product', size);
+                    setShowSizeModal(false);
+                    setSelectedProductForSize(null);
+                  }}
+                  className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
+                >
+                  <span className="text-lg font-bold text-gray-800">{size}</span>
+                  <span className="text-xs text-gray-500">{stock} available</span>
+                </button>
+              ))}
+            </div>
+            
+            <div className="flex justify-end">
+              <button
+                onClick={() => {
+                  setShowSizeModal(false);
+                  setSelectedProductForSize(null);
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 export default POS;
