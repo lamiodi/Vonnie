@@ -179,7 +179,15 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           }
          
           const service = serviceResult.rows[0];
-          service_amount += service.price * item.quantity;
+          // Use item.price if provided (manual override), otherwise use service price
+          const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
+          
+          if (unitPrice < 0) {
+             await client.query('ROLLBACK');
+             return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
+          }
+
+          service_amount += unitPrice * item.quantity;
         }
       }
     } else {
@@ -521,7 +529,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       for (const item of items) {
         if (item.type === 'product' && item.product_id) {
           const productResult = await client.query(
-            'SELECT name, price, stock_level FROM products WHERE id = $1 FOR UPDATE',
+            'SELECT name, price, stock_level, stock_by_size FROM products WHERE id = $1 FOR UPDATE',
             [item.product_id]
           );
           if (productResult.rows.length === 0) {
@@ -529,21 +537,47 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             return res.status(404).json(notFoundResponse('Product', item.product_id));
           }
           const product = productResult.rows[0];
-          if (product.stock_level < item.quantity) {
-            await client.query('ROLLBACK');
-            return res.status(400).json(errorResponse(
-              `Insufficient stock for product ${item.product_id}`,
-              'INSUFFICIENT_STOCK',
-              400
-            ));
+          
+          if (item.size) {
+            const stockBySize = product.stock_by_size || {};
+            const sizeStock = Number(stockBySize[item.size]) || 0;
+            
+            if (sizeStock < item.quantity) {
+               await client.query('ROLLBACK');
+               return res.status(400).json(errorResponse(
+                 `Insufficient stock for product ${item.product_id} size ${item.size}`,
+                 'INSUFFICIENT_STOCK',
+                 400
+               ));
+            }
+            
+            // Deduct from size stock
+            stockBySize[item.size] = sizeStock - item.quantity;
+            
+            // Update product with new size stock and total stock
+            await client.query(
+              'UPDATE products SET stock_by_size = $1, stock_level = stock_level - $2 WHERE id = $3',
+              [stockBySize, item.quantity, item.product_id]
+            );
+          } else {
+             // Fallback to general stock level if no size specified
+             if (product.stock_level < item.quantity) {
+               await client.query('ROLLBACK');
+               return res.status(400).json(errorResponse(
+                 `Insufficient stock for product ${item.product_id}`,
+                 'INSUFFICIENT_STOCK',
+                 400
+               ));
+             }
+             
+             // Update stock
+             await client.query(
+               'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
+               [item.quantity, item.product_id]
+             );
           }
+
           product_amount += Number(product.price) * Number(item.quantity);
-         
-          // Update stock
-          await client.query(
-            'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
-            [item.quantity, item.product_id]
-          );
         } else if (item.type === 'service' && item.service_id) {
           const serviceResult = await client.query(
             'SELECT name, price, duration FROM services WHERE id = $1',
@@ -556,7 +590,15 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           }
          
           const service = serviceResult.rows[0];
-          service_amount += Number(service.price) * Number(item.quantity);
+          // Use item.price if provided (manual override), otherwise use service price
+          const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
+          
+          if (unitPrice < 0) {
+             await client.query('ROLLBACK');
+             return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
+          }
+
+          service_amount += unitPrice * Number(item.quantity);
         }
       }
     } else if (products && products.length > 0) {
@@ -686,8 +728,8 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           const product = productResult.rows[0];
          
           await client.query(
-            'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price) VALUES ($1, $2, $3, $4, $5, $6)',
-            [transaction.id, item.product_id, product.name, item.quantity, product.price, Number(item.quantity) * Number(product.price)]
+            'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price, size) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [transaction.id, item.product_id, product.name, item.quantity, product.price, Number(item.quantity) * Number(product.price), item.size || null]
           );
         } else if (item.type === 'service' && item.service_id) {
           const serviceResult = await client.query(
@@ -695,10 +737,13 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             [item.service_id]
           );
           const service = serviceResult.rows[0];
+          
+          // Use item.price if provided (manual override), otherwise use service price
+          const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
          
           await client.query(
             'INSERT INTO pos_transaction_items (transaction_id, service_id, service_name, quantity, unit_price, total_price, service_duration) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-            [transaction.id, item.service_id, service.name, item.quantity, service.price, Number(item.quantity) * Number(service.price), service.duration]
+            [transaction.id, item.service_id, service.name, item.quantity, unitPrice, Number(item.quantity) * unitPrice, service.duration]
           );
         }
       }
@@ -817,7 +862,7 @@ router.get('/transactions', authenticate, authorize(['staff', 'manager', 'admin'
     const offset = (page - 1) * limit;
    
     let queryString = `
-      SELECT pt.*, u.name as staff_name, u.email as staff_email,
+      SELECT pt.*, u.name as staff_name, u.name as created_by_name, u.email as staff_email,
              v.name as verified_by_name,
              c.code as coupon_code, c.name as coupon_name, c.discount_type, c.discount_value
       FROM pos_transactions pt

@@ -436,6 +436,20 @@ const POS = () => {
     }));
   }, [cart, products]);
 
+  const updateItemPrice = useCallback((cartItemId, newPrice, itemType) => {
+    const price = parseFloat(newPrice);
+    if (isNaN(price) || price < 0) {
+      handleError(null, 'Invalid price');
+      return;
+    }
+    
+    setCart(cart.map(item => 
+      (item.cartItemId === cartItemId && item.type === itemType)
+        ? { ...item, price: price }
+        : item
+    ));
+  }, [cart]);
+
   const removeFromCart = useCallback((cartItemId, itemType = 'product') => {
     setCart(cart.filter(item => !(item.cartItemId === cartItemId && item.type === itemType)));
   }, [cart]);
@@ -590,6 +604,7 @@ const POS = () => {
             type: item.type
           })),
           customer_info: customerInfo,
+          staff_id: user?.id,
           coupon_code: appliedCoupon?.code || null,
           tax: getTaxAmount(),
           payment_reference: response.reference,
@@ -668,6 +683,7 @@ const POS = () => {
           type: item.type
         })),
         customer_info: customerInfo,
+        staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
         payment_reference: generatePOSReference(),
@@ -750,6 +766,7 @@ const POS = () => {
           type: item.type
         })),
         customer_info: customerInfo,
+        staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
         payment_reference: generateBankTransferReference(),
@@ -827,6 +844,7 @@ const POS = () => {
           type: item.type
         })),
         customer_info: customerInfo,
+        staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
         payment_reference: generatePOSReference(),
@@ -918,6 +936,7 @@ const POS = () => {
           type: item.type
         })),
         customer_info: customerInfo,
+        staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount()
       };
@@ -1407,7 +1426,25 @@ const POS = () => {
                               {item.name} {item.size ? `(Size: ${item.size})` : ''}
                             </h4>
                           </div>
-                          <p className="text-xs text-gray-500">₦{formatPrice(item.price)} each</p>
+                          <div className="flex items-center space-x-1">
+                            <p className="text-xs text-gray-500">₦{formatPrice(item.price)} each</p>
+                            {item.type === 'service' && (
+                              <button 
+                                onClick={() => {
+                                  const newPrice = prompt("Enter new price:", item.price);
+                                  if (newPrice !== null) {
+                                    updateItemPrice(item.cartItemId || item.id, newPrice, item.type);
+                                  }
+                                }}
+                                className="text-blue-500 hover:text-blue-700 p-1"
+                                title="Edit Price"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
                           {item.type === 'service' && (
                             <p className="text-xs text-purple-600 font-medium">{item.duration} minutes</p>
                           )}
