@@ -11,6 +11,8 @@ const WalkInBooking = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState([]);
+  const [filteredServices, setFilteredServices] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedServices, setSelectedServices] = useState([]);
   const [formData, setFormData] = useState({
     customer_name: '',
@@ -24,18 +26,36 @@ const WalkInBooking = () => {
     fetchServices();
   }, []);
 
+  useEffect(() => {
+    if (searchQuery.trim() === '') {
+      setFilteredServices(services);
+    } else {
+      const lowerQuery = searchQuery.toLowerCase();
+      const filtered = services.filter(service => 
+        service.name.toLowerCase().includes(lowerQuery) || 
+        (service.description && service.description.toLowerCase().includes(lowerQuery))
+      );
+      setFilteredServices(filtered);
+    }
+  }, [searchQuery, services]);
+
   const fetchServices = async () => {
     try {
       const data = await apiGet(API_ENDPOINTS.SERVICES);
-      setServices(Array.isArray(data) ? data : (data.data || []));
+      const fetchedServices = Array.isArray(data) ? data : (data.data || []);
+      setServices(fetchedServices);
+      setFilteredServices(fetchedServices);
     } catch (error) {
       try {
         // Fallback to public endpoint if authenticated endpoint fails
         const fallback = await apiGet(API_ENDPOINTS.PUBLIC_SERVICES);
-        setServices(Array.isArray(fallback) ? fallback : (fallback.data || []));
+        const fetchedFallback = Array.isArray(fallback) ? fallback : (fallback.data || []);
+        setServices(fetchedFallback);
+        setFilteredServices(fetchedFallback);
       } catch (fallbackError) {
         console.error('Error fetching services:', fallbackError);
         setServices([]);
+        setFilteredServices([]);
       }
     }
   };
@@ -277,11 +297,27 @@ const WalkInBooking = () => {
                 <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   Select Services
                 </h2>
-                <p className="text-gray-600">Choose beauty services for the walk-in customer (optional)</p>
+                <p className="text-gray-600 mb-4">Choose beauty services for the walk-in customer (optional)</p>
+                
+                {/* Search Bar */}
+                <div className="max-w-md mx-auto relative">
+                  <input
+                    type="text"
+                    placeholder="Search services..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 shadow-sm"
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {services.map(service => {
+                {filteredServices.map(service => {
                   const isSelected = selectedServices.includes(service.id);
                   return (
                     <div
@@ -335,6 +371,18 @@ const WalkInBooking = () => {
                 <div className="text-center py-8">
                   <div className="text-gray-500 text-lg">No services available</div>
                   <p className="text-gray-400 text-sm mt-2">Services can be assigned later by the manager</p>
+                </div>
+              )}
+
+              {services.length > 0 && filteredServices.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-gray-500 text-lg">No services found matching "{searchQuery}"</div>
+                  <button 
+                    onClick={() => setSearchQuery('')}
+                    className="text-purple-600 hover:text-purple-800 text-sm mt-2 font-medium"
+                  >
+                    Clear search
+                  </button>
                 </div>
               )}
               
