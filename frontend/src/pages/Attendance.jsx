@@ -343,7 +343,8 @@ const Attendance = () => {
     return attendanceRecords.find(record => {
       // Handle potential full ISO string from backend
       const recordDate = new Date(record.date).toISOString().split('T')[0];
-      return recordDate === today;
+      // Ensure we only look at OUR attendance record (matching current user ID)
+      return recordDate === today && record.worker_id === user.id;
     });
   };
 
