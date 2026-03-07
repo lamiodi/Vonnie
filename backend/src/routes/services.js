@@ -9,9 +9,25 @@ const router = express.Router();
 // Get all services
 router.get('/', authenticate, async (req, res) => {
   try {
-    const result = await query(
-      'SELECT id, name, description, price, duration, category FROM services WHERE is_active = true ORDER BY name'
-    );
+    const result = await query(`
+      SELECT s.id, s.name, s.description, s.price, s.duration, s.category,
+             COALESCE(
+               json_agg(
+                 json_build_object(
+                   'product_id', sp.product_id,
+                   'product_name', p.name,
+                   'quantity_required', sp.quantity_required
+                 )
+               ) FILTER (WHERE sp.id IS NOT NULL),
+               '[]'
+             ) as required_products
+      FROM services s
+      LEFT JOIN service_products sp ON s.id = sp.service_id
+      LEFT JOIN products p ON sp.product_id = p.id
+      WHERE s.is_active = true
+      GROUP BY s.id
+      ORDER BY s.name
+    `);
     res.json(result.rows);
   } catch (error) {
     console.error('Get services error:', error);

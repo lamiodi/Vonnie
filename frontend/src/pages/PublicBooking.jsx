@@ -867,6 +867,7 @@ const handlePaymentClose = () => {
                 ) : (
                   filteredServices.map(service => {
                   const isSelected = selectedServices.find(s => s.id === service.id);
+                  const requiredProducts = service.required_products || [];
                   return (
                     <div
                       key={service.id}
@@ -888,6 +889,21 @@ const handlePaymentClose = () => {
                         <p className="text-gray-600 text-sm mb-3 text-center min-h-[40px]">
                           {service.description || 'Professional beauty service'}
                         </p>
+
+                        {requiredProducts.length > 0 && (
+                          <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-100">
+                            <p className="text-xs font-bold text-blue-800 mb-1 text-center uppercase tracking-wide">Includes</p>
+                            <ul className="space-y-1">
+                              {requiredProducts.map((prod, idx) => (
+                                <li key={idx} className="text-xs text-blue-700 flex justify-between px-2">
+                                  <span>{prod.product_name}</span>
+                                  <span className="font-semibold">x{prod.quantity_required}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        
                         <div className="text-center space-y-1">
                           <div>
                             <span className="text-2xl font-bold text-purple-600">

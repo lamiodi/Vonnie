@@ -74,6 +74,40 @@ export const createBooking = async (bookingData, skipNotification = false) => {
   const totalPrice = services.reduce((sum, service) => sum + parseFloat(service.price), 0);
   const totalDuration = services.reduce((sum, service) => sum + parseInt(service.duration || 0), 0);
 
+  // Check product availability for selected services
+  const productRequirementsResult = await query(
+    `SELECT sp.service_id, sp.product_id, sp.quantity_required, p.name as product_name, p.stock_level
+     FROM service_products sp
+     JOIN products p ON sp.product_id = p.id
+     WHERE sp.service_id = ANY($1)`,
+    [service_ids]
+  );
+
+  const productUpdates = {}; // productId -> { name, required, current }
+
+  for (const req of productRequirementsResult.rows) {
+    if (!productUpdates[req.product_id]) {
+      productUpdates[req.product_id] = {
+        name: req.product_name,
+        required: 0,
+        current: req.stock_level
+      };
+    }
+    // Assume service_ids are unique as per validation above
+    productUpdates[req.product_id].required += parseFloat(req.quantity_required);
+  }
+
+  // Verify stock levels
+  for (const [productId, data] of Object.entries(productUpdates)) {
+    if (data.required > data.current) {
+      throw {
+        success: false,
+        message: `Insufficient stock for ${data.name}. Required: ${data.required}, Available: ${data.current}`,
+        status: 409
+      };
+    }
+  }
+
   // Generate server-side booking number (ignore frontend-provided number to prevent conflicts)
   const bookingNumber = await generateBookingNumberWithName(customer_name);
 
@@ -148,6 +182,14 @@ export const createBooking = async (bookingData, skipNotification = false) => {
         `INSERT INTO booking_services (booking_id, service_id, quantity, unit_price, total_price)
          VALUES ($1, $2, $3, $4, $5)`,
         [booking.id, service.id, 1, service.price, service.price]
+      );
+    }
+
+    // Deduct stock for linked products
+    for (const [productId, data] of Object.entries(productUpdates)) {
+      await client.query(
+        'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
+        [data.required, productId]
       );
     }
 
