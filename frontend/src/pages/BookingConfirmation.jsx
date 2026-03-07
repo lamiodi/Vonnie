@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation, Link } from 'react-router-dom';
+import { useLocation, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useAuth } from '../contexts/AuthContext';
 
 const BookingConfirmation = () => {
   const location = useLocation();
-  
-  // Enhanced state handling with localStorage fallback
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isInternal = user && location.pathname.includes('booking-confirmation');
   let bookingData = location.state?.bookingData || {};
   let paymentCompleted = location.state?.paymentCompleted || false;
   
@@ -248,6 +250,22 @@ const BookingConfirmation = () => {
         `}
       </style>
       <div className="max-w-3xl mx-auto">
+        
+        {/* Navigation for internal users */}
+        {user && (
+          <div className="mb-6">
+            <button
+              onClick={() => navigate('/bookings')}
+              className="flex items-center text-gray-600 hover:text-gray-900 font-bold text-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Bookings
+            </button>
+          </div>
+        )}
+
         {/* Success Header */}
         <div className="bg-white rounded-3xl shadow-2xl p-10 mb-8 text-center border-4 border-gray-900">
           <div className={`mb-6 ${

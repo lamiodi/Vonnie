@@ -11,7 +11,8 @@ const Signup = () => {
     password: '',
     confirmPassword: '',
     role: 'staff',
-    specialty: ''
+    specialty: '',
+    professions: [] // Array to store selected professions
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -19,6 +20,14 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupStatus, setSignupStatus] = useState(null);
+  
+  // Available professions
+  const AVAILABLE_PROFESSIONS = [
+    { id: 'pedicurist', label: 'Pedicurist' },
+    { id: 'nail_technician', label: 'Nail Technician' },
+    { id: 'hairstylist', label: 'Hairstylist' },
+    { id: 'lash_technician', label: 'Lash Technician' }
+  ];
   
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -48,12 +57,51 @@ const Signup = () => {
   };
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value
-    });
+    const { name, value } = e.target;
+    
+    // If changing role to manager, clear professions
+    if (name === 'role' && value === 'manager') {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        professions: []
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }
+    
     if (error) setError('');
     if (success) setSuccess('');
+  };
+
+  const handleProfessionToggle = (professionId) => {
+    setFormData(prev => {
+      const currentProfessions = prev.professions || [];
+      
+      // If already selected, remove it
+      if (currentProfessions.includes(professionId)) {
+        return {
+          ...prev,
+          professions: currentProfessions.filter(id => id !== professionId)
+        };
+      }
+      
+      // If not selected, add it (limit to 2)
+      if (currentProfessions.length < 2) {
+        return {
+          ...prev,
+          professions: [...currentProfessions, professionId]
+        };
+      }
+      
+      // If already has 2, don't add
+      return prev;
+    });
+    
+    if (error) setError('');
   };
 
   const validateForm = () => {
@@ -77,6 +125,13 @@ const Signup = () => {
       setError('Please enter a valid phone number (at least 10 digits)');
       return false;
     }
+    
+    // Validate role/professions
+    if (formData.role === 'staff' && (!formData.professions || formData.professions.length === 0)) {
+      setError('Please select at least one profession');
+      return false;
+    }
+    
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
       return false;
@@ -98,7 +153,20 @@ const Signup = () => {
     setSuccess('');
 
     try {
-      await register(formData);
+      // Combine professions into specialty string for backend compatibility
+      const specialty = formData.role === 'manager' 
+        ? 'Manager' 
+        : formData.professions.map(p => {
+            const profession = AVAILABLE_PROFESSIONS.find(ap => ap.id === p);
+            return profession ? profession.label : p;
+          }).join(', ');
+
+      const submitData = {
+        ...formData,
+        specialty // Override/set specialty field for backend
+      };
+
+      await register(submitData);
       setSuccess('Account created successfully! Redirecting to login...');
       
       // Redirect to login after 2 seconds
@@ -287,31 +355,42 @@ const Signup = () => {
               </div>
             </div>
             
-            {/* Specialty Field - Only show for staff/manager roles */}
-            {(formData.role === 'staff' || formData.role === 'manager') && (
+            {/* Profession Selection - Only show for staff role */}
+            {formData.role === 'staff' && (
               <div>
-                <label htmlFor="specialty" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
                   <span>⭐</span>
-                  Specialty (Optional)
+                  Select Profession (Max 2)
                 </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <input
-                    id="specialty"
-                    name="specialty"
-                    type="text"
-                    className="appearance-none block w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 text-base transition-all duration-200"
-                    placeholder="e.g., Hair Styling, Nail Art, Massage"
-                    value={formData.specialty}
-                    onChange={handleChange}
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  {AVAILABLE_PROFESSIONS.map((profession) => {
+                    const isSelected = formData.professions.includes(profession.id);
+                    const isDisabled = !isSelected && formData.professions.length >= 2;
+                    
+                    return (
+                      <button
+                        key={profession.id}
+                        type="button"
+                        onClick={() => handleProfessionToggle(profession.id)}
+                        disabled={isDisabled}
+                        className={`
+                          px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-200
+                          ${isSelected 
+                            ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-sm' 
+                            : isDisabled
+                              ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
+                              : 'border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:bg-gray-50'
+                          }
+                        `}
+                      >
+                        {isSelected && <span className="mr-2">✓</span>}
+                        {profession.label}
+                      </button>
+                    );
+                  })}
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
-                  Describe your area of expertise to help with assignment decisions
+                <p className="mt-2 text-xs text-gray-500">
+                  Select your area(s) of expertise to help with assignment decisions. You can select up to 2.
                 </p>
               </div>
             )}

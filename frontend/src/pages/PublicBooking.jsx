@@ -1,15 +1,19 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
+import { useAuth } from '../contexts/AuthContext';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
 
 const PublicBooking = () => {
   const navigate = useNavigate();
-  
+  const location = useLocation();
+  const { user } = useAuth();
+  const isInternal = location.pathname.includes('public-booking') && user;
+
   // Form State
   const [formData, setFormData] = useState({
     customer_name: '',
@@ -212,6 +216,20 @@ const PublicBooking = () => {
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto">
         
+        {isInternal && (
+          <div className="mb-6">
+            <button
+              onClick={() => navigate('/bookings')}
+              className="flex items-center text-gray-600 hover:text-gray-900 font-bold text-lg transition-colors"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Bookings
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
