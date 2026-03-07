@@ -167,6 +167,36 @@ export function validateDuration(duration, options = {}) {
 }
 
 /**
+ * Validate duration range
+ * @param {number} minDuration - Minimum duration in minutes
+ * @param {number} maxDuration - Maximum duration in minutes
+ * @returns {Object} Validation result
+ */
+export function validateDurationRange(minDuration, maxDuration) {
+  // First validate both individually
+  const minValidation = validateDuration(minDuration);
+  if (!minValidation.isValid) return minValidation;
+
+  if (maxDuration !== null && maxDuration !== undefined) {
+    const maxValidation = validateDuration(maxDuration);
+    if (!maxValidation.isValid) return maxValidation;
+
+    // Check relationship
+    if (maxDuration < minDuration) {
+      return {
+        isValid: false,
+        message: 'Maximum duration cannot be less than minimum duration'
+      };
+    }
+  }
+
+  return {
+    isValid: true,
+    message: 'Duration range is valid'
+  };
+}
+
+/**
  * Validate string length
  * @param {string} str - String to validate
  * @param {Object} options - Validation options

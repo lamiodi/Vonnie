@@ -34,6 +34,7 @@ const PublicBooking = () => {
   const [slotsError, setSlotsError] = useState(null);
   const [totalPrice, setTotalPrice] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
+  const [minTotalDuration, setMinTotalDuration] = useState(0);
   const [bookingResponse, setBookingResponse] = useState(null);
   const [paymentCompleted, setPaymentCompleted] = useState(false);
   const [paymentProcessing, setPaymentProcessing] = useState(false);
@@ -314,9 +315,15 @@ const PublicBooking = () => {
 
   useEffect(() => {
     const total = selectedServices.reduce((sum, service) => sum + parseFloat(service.price || 0), 0);
-    const duration = selectedServices.reduce((sum, service) => sum + parseInt(service.duration || 60), 0);
+    const maxDur = selectedServices.reduce((sum, service) => {
+      const d = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 60);
+      return sum + d;
+    }, 0);
+    const minDur = selectedServices.reduce((sum, service) => sum + parseInt(service.duration || 60), 0);
+    
     setTotalPrice(total);
-    setTotalDuration(duration);
+    setTotalDuration(maxDur);
+    setMinTotalDuration(minDur);
   }, [selectedServices]);
 
   const fetchServices = async () => {
@@ -914,7 +921,7 @@ const handlePaymentClose = () => {
                             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                               <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
                             </svg>
-                            {service.duration || 60} minutes
+                            {service.duration || 60}{service.max_duration ? `-${service.max_duration}` : ''} minutes
                           </div>
                         </div>
                         
@@ -956,7 +963,11 @@ const handlePaymentClose = () => {
                   <div className="border-t-2 border-purple-200 mt-4 pt-4">
                     <div className="flex justify-between items-center mb-2">
                       <span className="text-gray-700 font-medium">Total Duration:</span>
-                      <span className="font-bold text-gray-800">{formatDuration(totalDuration)}</span>
+                      <span className="font-bold text-gray-800">
+                        {minTotalDuration !== totalDuration 
+                          ? `${formatDuration(minTotalDuration)} - ${formatDuration(totalDuration)}` 
+                          : formatDuration(totalDuration)}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center text-xl">
                       <span className="text-gray-800 font-bold">Total Price:</span>

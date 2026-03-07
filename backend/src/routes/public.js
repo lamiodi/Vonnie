@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/services', async (req, res) => {
   try {
     const result = await query(
-      'SELECT id, name, description, price, duration FROM services WHERE is_active = true ORDER BY name'
+      'SELECT id, name, description, price, duration, max_duration FROM services WHERE is_active = true ORDER BY name'
     );
     res.json(result.rows);
   } catch (error) {
@@ -89,9 +89,9 @@ router.get('/bookings/available-slots', async (req, res) => {
       return res.status(400).json(errorResponse('At least one valid service_id is required', 'INVALID_SERVICE_IDS', 400));
     }
 
-    // Get total duration for all services
+    // Get total duration for all services (use max_duration if available to ensure sufficient slot size)
     const serviceResult = await query(
-      'SELECT SUM(duration) as total_duration FROM services WHERE id = ANY($1)',
+      'SELECT SUM(COALESCE(max_duration, duration)) as total_duration FROM services WHERE id = ANY($1)',
       [serviceIds]
     );
     

@@ -2,7 +2,7 @@ import express from 'express';
 import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
-import { validatePrice, validateDuration, validateStringLength } from '../utils/inputValidation.js';
+import { validatePrice, validateDuration, validateStringLength, validateDurationRange } from '../utils/inputValidation.js';
 
 const router = express.Router();
 
@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   try {
     const result = await query(`
-      SELECT s.id, s.name, s.description, s.price, s.duration, s.category,
+      SELECT s.id, s.name, s.description, s.price, s.duration, s.max_duration, s.category,
              COALESCE(
                json_agg(
                  json_build_object(
@@ -40,7 +40,7 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const result = await query(
-      'SELECT id, name, description, price, duration, category FROM services WHERE id = $1',
+      'SELECT id, name, description, price, duration, max_duration, category FROM services WHERE id = $1',
       [id]
     );
     
@@ -58,7 +58,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create new service
 router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
-    const { name, description, price, duration, category } = req.body;
+    const { name, description, price, duration, max_duration, category } = req.body;
     
     // Validate required fields
     if (!name || !price || !duration) {
@@ -89,8 +89,8 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
       ));
     }
     
-    // Validate duration
-    const durationValidation = validateDuration(duration, { min: 15, max: 300 });
+    // Validate duration range
+    const durationValidation = validateDurationRange(duration, max_duration);
     if (!durationValidation.isValid) {
       return res.status(400).json(errorResponse(
         `Service duration: ${durationValidation.message}`,
@@ -124,10 +124,10 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
     }
     
     const result = await query(
-      `INSERT INTO services (name, description, price, duration, category)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO services (name, description, price, duration, max_duration, category)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [name, description || null, price, duration, category || null]
+      [name, description || null, price, duration, max_duration || null, category || null]
     );
     
     res.status(201).json(successResponse(result.rows[0], 'Service created successfully', 201));
@@ -141,7 +141,7 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
 router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, description, price, duration, category } = req.body;
+    const { name, description, price, duration, max_duration, category } = req.body;
     
     // Validate required fields if provided
     if (name !== undefined && !name) {
@@ -192,18 +192,6 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
       }
     }
     
-    // Validate duration if provided
-    if (duration !== undefined) {
-      const durationValidation = validateDuration(duration, { min: 15, max: 300 });
-      if (!durationValidation.isValid) {
-        return res.status(400).json(errorResponse(
-          `Service duration: ${durationValidation.message}`,
-          'INVALID_SERVICE_DURATION',
-          400
-        ));
-      }
-    }
-    
     // Validate description if provided
     if (description !== undefined) {
       const descValidation = validateStringLength(description, { max: 500, allowEmpty: true });
@@ -230,7 +218,7 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
     
     // Get current service data to merge with updates
     const currentResult = await query(
-      'SELECT name, description, price, duration, category FROM services WHERE id = $1',
+      'SELECT name, description, price, duration, max_duration, category FROM services WHERE id = $1',
       [id]
     );
     
@@ -244,15 +232,26 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
       description: description !== undefined ? description : currentService.description,
       price: price !== undefined ? price : currentService.price,
       duration: duration !== undefined ? duration : currentService.duration,
+      max_duration: max_duration !== undefined ? max_duration : currentService.max_duration,
       category: category !== undefined ? category : currentService.category
     };
+
+    // Validate duration range with merged values
+    const durationValidation = validateDurationRange(updatedService.duration, updatedService.max_duration);
+    if (!durationValidation.isValid) {
+      return res.status(400).json(errorResponse(
+        `Service duration: ${durationValidation.message}`,
+        'INVALID_SERVICE_DURATION',
+        400
+      ));
+    }
     
     const result = await query(
       `UPDATE services 
-       SET name = $1, description = $2, price = $3, duration = $4, category = $5
-       WHERE id = $6
+       SET name = $1, description = $2, price = $3, duration = $4, max_duration = $5, category = $6
+       WHERE id = $7
        RETURNING *`,
-      [updatedService.name, updatedService.description, updatedService.price, updatedService.duration, updatedService.category, id]
+      [updatedService.name, updatedService.description, updatedService.price, updatedService.duration, updatedService.max_duration, updatedService.category, id]
     );
     
     res.json(successResponse(result.rows[0], 'Service updated successfully'));

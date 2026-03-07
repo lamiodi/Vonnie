@@ -58,7 +58,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
 
   // Validate services exist and calculate pricing
   const servicesResult = await query(
-    'SELECT id, name, price, duration FROM services WHERE id = ANY($1) AND is_active = true',
+    'SELECT id, name, price, duration, max_duration FROM services WHERE id = ANY($1) AND is_active = true',
     [service_ids]
   );
 
@@ -72,7 +72,12 @@ export const createBooking = async (bookingData, skipNotification = false) => {
 
   const services = servicesResult.rows;
   const totalPrice = services.reduce((sum, service) => sum + parseFloat(service.price), 0);
-  const totalDuration = services.reduce((sum, service) => sum + parseInt(service.duration || 0), 0);
+  
+  // Calculate total duration using max_duration if available to ensure sufficient time allocation
+  const totalDuration = services.reduce((sum, service) => {
+    const duration = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 0);
+    return sum + duration;
+  }, 0);
 
   // Check product availability for selected services
   const productRequirementsResult = await query(
