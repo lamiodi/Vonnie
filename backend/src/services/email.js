@@ -346,6 +346,64 @@ export const sendWebhookAlert = async (alertType, errorDetails, webhookData = nu
   return await sendEmail(supportEmail, subject, '', html);
 };
 
+export const sendInventoryAlert = async (alertDetails) => {
+  const { alertType, products = [], recipientEmail } = alertDetails;
+  
+  const subject = `📦 Inventory Alert: ${alertType === 'low_stock' ? 'Low Stock Warning' : 'Stock Update'} - Vonne X2X`;
+  
+  // Generate products list HTML
+  const productsHtml = products.map(product => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: white; border-radius: 8px; border: 1px solid #fee2e2; margin-bottom: 8px;">
+      <div>
+        <p style="margin: 0; font-weight: 600; color: #1f2937; font-size: 14px;">${product.name}</p>
+        <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 12px; font-family: monospace;">SKU: ${product.sku || 'N/A'}</p>
+      </div>
+      <div style="text-align: right;">
+        <span style="display: inline-block; padding: 4px 10px; background: #fee2e2; color: #991b1b; border-radius: 999px; font-size: 12px; font-weight: 700;">
+          ${product.stock_level} left
+        </span>
+      </div>
+    </div>
+  `).join('');
+
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 800;">📦 Inventory Alert</h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95;">Action Required: Low Stock Detected</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          The following items have fallen below the minimum stock threshold (5 units). Please restock soon.
+        </p>
+        
+        <!-- Products List -->
+        <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: #991b1b; margin: 0 0 16px 0; font-size: 16px; font-weight: 700;">⚠️ Low Stock Items</h3>
+          ${productsHtml}
+        </div>
+        
+        <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px;">
+          <h3 style="color: #1d4ed8; margin: 0 0 8px 0; font-size: 15px; font-weight: 700;">🔍 Action Required</h3>
+          <p style="margin: 0; color: #1e40af; line-height: 1.5; font-size: 14px;">
+            Review inventory levels and place replenishment orders to avoid stockouts.
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 24px; padding: 12px; background: #f8fafc; border-radius: 8px;">
+          <p style="margin: 0; color: #64748b; font-size: 12px;">
+            Time: ${new Date().toLocaleString('en-US', { timeZone: 'Africa/Lagos' })}
+          </p>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(recipientEmail, subject, '', html);
+};
+
 export const sendPOSTransactionEmail = async (email, transactionDetails) => {
   const { 
     transactionId, 
