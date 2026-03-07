@@ -345,3 +345,84 @@ export const sendWebhookAlert = async (alertType, errorDetails, webhookData = nu
   await sendEmail(adminEmail, subject, '', html);
   return await sendEmail(supportEmail, subject, '', html);
 };
+
+export const sendPOSTransactionEmail = async (email, transactionDetails) => {
+  const { 
+    transactionId, 
+    customerName = 'Valued Customer', 
+    items = [], 
+    totalAmount, 
+    paymentMethod,
+    date = new Date()
+  } = transactionDetails;
+  
+  const subject = '🧾 POS Receipt - Vonne X2X';
+  
+  // Generate items list HTML
+  const itemsHtml = items.map(item => `
+    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f3f4f6;">
+      <div>
+        <p style="margin: 0; font-weight: 600; color: #1f2937; font-size: 14px;">${item.name || 'Item'}</p>
+        <p style="margin: 4px 0 0 0; color: #6b7280; font-size: 12px;">Qty: ${item.quantity} x ₦${item.price?.toLocaleString('en-NG')}</p>
+      </div>
+      <p style="margin: 0; font-weight: 600; color: #1f2937; font-size: 14px;">₦${(item.quantity * item.price)?.toLocaleString('en-NG')}</p>
+    </div>
+  `).join('');
+
+  const content = `
+      <!-- Header with gradient -->
+      <div style="background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">
+          Receipt
+        </h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95; font-weight: 500;">Thank you for your purchase</p>
+      </div>
+      
+      <!-- Main content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Hello <strong style="color: #111827;">${customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 24px;">
+          Here is your receipt for your recent transaction at Vonne X2X.
+        </p>
+        
+        <!-- Transaction Details -->
+        <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; margin: 24px 0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+          <div style="border-bottom: 2px dashed #e5e7eb; padding-bottom: 16px; margin-bottom: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: #6b7280; font-size: 13px;">Transaction ID</span>
+              <span style="color: #374151; font-weight: 600; font-size: 13px; font-family: monospace;">${transactionId}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span style="color: #6b7280; font-size: 13px;">Date</span>
+              <span style="color: #374151; font-weight: 600; font-size: 13px;">${new Date(date).toLocaleString('en-NG')}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span style="color: #6b7280; font-size: 13px;">Payment Method</span>
+              <span style="color: #374151; font-weight: 600; font-size: 13px; text-transform: capitalize;">${paymentMethod}</span>
+            </div>
+          </div>
+          
+          <!-- Items List -->
+          <div style="margin-bottom: 16px;">
+            <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;">Items Purchased</p>
+            ${itemsHtml}
+          </div>
+          
+          <!-- Total -->
+          <div style="border-top: 2px solid #e5e7eb; padding-top: 16px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 16px; font-weight: 700; color: #111827;">Total Paid</span>
+            <span style="font-size: 20px; font-weight: 800; color: #2563eb;">₦${totalAmount?.toLocaleString('en-NG', {minimumFractionDigits: 2})}</span>
+          </div>
+        </div>
+        
+        <!-- Footer Info -->
+        <div style="text-align: center; margin-top: 32px;">
+          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Questions about this receipt?</p>
+          <a href="mailto:support@vonneex2x.store" style="display: inline-block; color: #2563eb; text-decoration: none; font-weight: 600; font-size: 14px;">support@vonneex2x.store</a>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(email, subject, '', html);
+};
