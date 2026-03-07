@@ -220,13 +220,13 @@ const BookingsHeader = ({ todaysBookings = [], onNewBooking = () => {} }) => {
         </div>
         <div className="flex flex-wrap gap-3">
           <button
-            onClick={() => navigate('/walk-in-booking')}
+            onClick={() => navigate('/public-booking')}
             className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium inline-flex items-center gap-2"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            Walk-in Customer
+            New Booking
           </button>
 
         </div>
@@ -1272,6 +1272,19 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       
       await assignWithRetry();
       
+      // Auto-start booking if status is 'scheduled'
+      if (booking.status === 'scheduled') {
+        try {
+          console.log('Auto-starting booking after worker assignment...');
+          await apiPatch(API_ENDPOINTS.BOOKING_STATUS(booking.id), { status: 'in-progress' });
+          toast.success('Booking automatically started');
+        } catch (statusError) {
+          console.error('Failed to auto-start booking:', statusError);
+          // Don't block the success flow if auto-start fails, just notify
+          toast.error('Worker assigned, but failed to start booking automatically');
+        }
+      }
+
       // Success callback and close modal
       onSuccess();
       onClose();
