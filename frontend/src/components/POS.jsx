@@ -316,25 +316,7 @@ const POS = () => {
     setCustomerInfo({ name: '', email: '', phone: '' });
     setPaymentConfirmed(false);
   }, []);
-  // Memoize filtered products to improve performance
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = !selectedCategory || product.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, searchTerm, selectedCategory]);
-  // Memoize filtered services to improve performance
-  const filteredServices = useMemo(() => {
-    return services.filter(service => {
-      const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
-                           service.description.toLowerCase().includes(serviceSearchTerm.toLowerCase());
-      const matchesCategory = !selectedServiceCategory || service.category === selectedServiceCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [services, serviceSearchTerm, selectedServiceCategory]);
+  
   // ==========================================
   // CART MANAGEMENT LOGIC
   // ==========================================
@@ -1058,605 +1040,329 @@ const POS = () => {
       </div>
     );
   }
+
+  // REFACTORED: 2-Column Layout
   return (
-    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
-      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
-        {/* Main Content - Products/Services */}
-        <div className="flex-1 p-4 lg:p-6 overflow-y-auto order-2 lg:order-1">
-          <div className="max-w-7xl mx-auto space-y-4">
-            {/* Header */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Point of Sale</h1>
-              <p className="text-gray-500 mt-1 text-sm lg:text-base">Manage sales and transactions</p>
-            </div>
-            {apiOnline === false && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Server is unreachable. Please start the backend or check your connection.</span>
-                  <span className="text-xs">API: {import.meta.env.VITE_API_URL}</span>
-                </div>
-              </div>
-            )}
-            {/* Booking Lookup */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-                Booking Lookup
-              </h3>
-              <div className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  placeholder="Enter booking number (e.g., BK-JOHN-123)"
-                  value={bookingNumber}
-                  onChange={(e) => setBookingNumber(e.target.value.toUpperCase())}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                />
-                <div className="flex gap-2">
-                  <button
-                    onClick={fetchBooking}
-                    disabled={bookingLoading}
-                    className="flex-1 sm:flex-none px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm whitespace-nowrap"
+    <div className="flex h-screen bg-gray-100 overflow-hidden font-sans">
+      {/* LEFT PANEL: CATALOG & SELECTION */}
+      <div className="flex-1 flex flex-col overflow-hidden relative">
+         {/* Top Header Bar */}
+         <div className="bg-white p-4 shadow-sm z-10 flex flex-col gap-4 border-b border-gray-200">
+            <div className="flex justify-between items-center">
+               <div>
+                 <h1 className="text-2xl font-bold text-gray-800">POS Terminal</h1>
+                 <p className="text-xs text-gray-500">
+                    {apiOnline ? <span className="text-green-600">● Online</span> : <span className="text-red-600">● Offline</span>}
+                 </p>
+               </div>
+               
+               {/* Tab Switcher */}
+               <div className="flex bg-gray-100 p-1 rounded-lg border border-gray-200">
+                  <button 
+                    onClick={() => setActiveTab('products')} 
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'products' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
                   >
-                    {bookingLoading ? 'Loading...' : 'Find Booking'}
+                    📦 Products
                   </button>
-                  {bookingData && (
-                    <button
-                      onClick={clearBooking}
-                      className="px-4 py-2.5 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition"
-                    >
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
+                  <button 
+                    onClick={() => setActiveTab('services')} 
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'services' ? 'bg-white shadow text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
+                  >
+                    🔧 Services
+                  </button>
+               </div>
+            </div>
             
-              {bookingData && (
-                <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start justify-between mb-3">
-                    <h4 className="font-semibold text-blue-900 flex items-center">
-                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Booking Details
-                    </h4>
+            {/* Search & Filters Row */}
+            <div className="flex gap-3">
+               <div className="flex-1 relative">
+                  <input 
+                    type="text" 
+                    placeholder={activeTab === 'products' ? "Search products (Name/SKU)..." : "Search services..."}
+                    value={activeTab === 'products' ? searchTerm : serviceSearchTerm}
+                    onChange={(e) => activeTab === 'products' ? setSearchTerm(e.target.value) : setServiceSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+                  />
+                  <svg className="w-5 h-5 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+               </div>
+               
+               {/* Category Filter */}
+               <select 
+                  value={activeTab === 'products' ? selectedCategory : selectedServiceCategory}
+                  onChange={(e) => activeTab === 'products' ? setSelectedCategory(e.target.value) : setSelectedServiceCategory(e.target.value)}
+                  className="w-48 px-3 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 shadow-sm"
+               >
+                  {(activeTab === 'products' ? categories : serviceCategories).map(c => (
+                     <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
+               </select>
+
+               {/* Scan Toggle (Small) */}
+               <button 
+                  onClick={toggleScanningMode}
+                  className={`px-3 py-2 rounded-lg border shadow-sm transition-all ${scanningMode ? 'bg-green-100 border-green-300 text-green-700' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+                  title="Toggle Barcode Scanner"
+               >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" /></svg>
+               </button>
+            </div>
+            
+            {/* Scanner Input (Conditional) */}
+            {scanningMode && (
+               <div className="relative animate-fadeIn">
+                 <input 
+                   autoFocus
+                   type="text"
+                   placeholder="Scan barcode here..."
+                   value={skuInput}
+                   onChange={handleSkuInput}
+                   className="w-full px-3 py-2 pl-10 bg-green-50 border border-green-300 rounded-lg text-sm focus:ring-2 focus:ring-green-500"
+                 />
+                 <span className="absolute left-3 top-2.5 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
+                 </span>
+               </div>
+            )}
+         </div>
+
+         {/* Content Grid */}
+         <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+            {/* Booking Lookup (Collapsible or Banner) */}
+            <div className="mb-4 bg-white p-3 rounded-lg shadow-sm border border-blue-100">
+               <div className="flex gap-2 items-center">
+                  <div className="text-blue-500 mr-2">
+                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center">
-                      <span className="text-gray-600 font-medium">Customer:</span>
-                      <span className="ml-2 text-gray-900">{bookingData.customer_name}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-gray-600 font-medium">Service:</span>
-                      <span className="ml-2 text-gray-900">{bookingData.service_names ? bookingData.service_names.join(', ') : bookingData.service_name || 'N/A'}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-gray-600 font-medium">Price:</span>
-                      <span className="ml-2 text-gray-900 font-semibold">₦{formatPrice(bookingData.service_price || 0)}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <span className="text-gray-600 font-medium">Status:</span>
-                      <span className={`ml-2 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        bookingData.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                        bookingData.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                        bookingData.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {bookingData.status.replace('_', ' ').toUpperCase()}
-                      </span>
-                    </div>
-                    {bookingData.payment_status && (
-                      <div className="flex items-center">
-                        <span className="text-gray-600 font-medium">Payment:</span>
-                        <span className={`ml-2 px-2.5 py-1 rounded-full text-xs font-medium ${getPaymentStatusColor(bookingData.payment_status)}`}>
-                          {bookingData.payment_status.replace('_', ' ').toUpperCase()}
+                  <input 
+                     type="text" 
+                     placeholder="Load Booking (e.g., BK-123)..." 
+                     value={bookingNumber}
+                     onChange={(e) => setBookingNumber(e.target.value.toUpperCase())}
+                     className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-1 focus:ring-blue-500"
+                  />
+                  <button onClick={fetchBooking} className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700 shadow-sm disabled:opacity-50" disabled={bookingLoading}>
+                     {bookingLoading ? 'Loading...' : 'Load Booking'}
+                  </button>
+               </div>
+               {bookingData && (
+                  <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-blue-200 text-sm flex justify-between items-center animate-fadeIn">
+                     <div className="flex items-center gap-3">
+                        <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded text-xs font-bold">ACTIVE</span>
+                        <div className="flex flex-col">
+                           <span className="font-bold text-gray-800">{bookingData.customer_name}</span>
+                           <span className="text-gray-600 text-xs">{bookingData.service_names ? bookingData.service_names.join(', ') : bookingData.service_name}</span>
+                        </div>
+                     </div>
+                     <button onClick={clearBooking} className="text-xs text-red-600 hover:text-red-800 font-medium px-2 py-1 hover:bg-red-50 rounded transition-colors">
+                        Clear Selection
+                     </button>
+                  </div>
+               )}
+            </div>
+
+            {/* Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 pb-20">
+               {activeTab === 'products' ? (
+                  filteredProducts.map(product => (
+                    <div
+                      key={product.id}
+                      onClick={() => addToCart(product, 'product')}
+                      className={`bg-white rounded-xl shadow-sm border p-4 hover:shadow-lg transition-all cursor-pointer group relative overflow-hidden ${
+                        product.stock_level <= 0 
+                          ? 'border-red-200 opacity-60 cursor-not-allowed' 
+                          : product.stock_level <= 5 
+                            ? 'border-yellow-200 hover:border-yellow-300' 
+                            : 'border-gray-200 hover:border-blue-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center text-xl">📦</div>
+                        <span className={`px-2 py-1 text-xs font-bold rounded-full ${
+                          product.stock_level <= 0 ? 'bg-red-100 text-red-700' : product.stock_level <= 5 ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {product.stock_level <= 0 ? 'Out' : product.stock_level}
                         </span>
                       </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-            {/* Tab Navigation */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setActiveTab('products')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                    activeTab === 'products'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  📦 Products
-                </button>
-                <button
-                  onClick={() => setActiveTab('services')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                    activeTab === 'services'
-                      ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                >
-                  🔧 Services
-                </button>
-              </div>
-            </div>
-            {/* Barcode Scanner */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                  </svg>
-                  Barcode Scanner
-                </h3>
-                <button
-                  onClick={toggleScanningMode}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${
-                    scanningMode
-                      ? 'bg-red-500 text-white hover:bg-red-600'
-                      : 'bg-green-500 text-white hover:bg-green-600'
-                  }`}
-                >
-                  {scanningMode ? '⏹ Stop Scanning' : '▶ Start Scanning'}
-                </button>
-              </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Scan or enter SKU..."
-                  value={skuInput}
-                  onChange={handleSkuInput}
-                  className={`w-full px-4 py-3 pr-12 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
-                    scanningMode
-                      ? 'border-green-300 focus:ring-green-500 bg-green-50'
-                      : 'border-gray-300 focus:ring-blue-500 bg-white'
-                  }`}
-                />
-                {scanningMode && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="flex items-center text-green-600">
-                      <div className="animate-pulse w-3 h-3 bg-green-500 rounded-full"></div>
+                      <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-2 min-h-[40px]">{product.name}</h3>
+                      <p className="text-xs text-gray-400 mb-2">{product.sku}</p>
+                      <div className="flex items-center justify-between mt-auto">
+                        <span className="text-lg font-bold text-blue-600">₦{formatPrice(product.price)}</span>
+                        <button className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition shadow-sm">
+                          +
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-              <p className="mt-2 text-sm text-gray-500">
-                {scanningMode
-                  ? '✓ Scanning active - Products will auto-add to cart'
-                  : 'Enter SKU to search. Toggle "Start Scanning" for auto-add mode.'
-                }
-              </p>
-            </div>
-            {/* Search and Filters */}
-            {activeTab === 'products' && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                <div className="grid grid-cols-2 gap-3">
-                  <input
-                    type="text"
-                    placeholder="🔍 Search products..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                  />
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
-                  >
-                    {categories.map(category => (
-                      <option key={category.value} value={category.value}>
-                        {category.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-            {activeTab === 'services' && (
-              <div className="space-y-6">
-                {/* Services Search and Filter */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <input
-                      type="text"
-                      placeholder="🔍 Search services..."
-                      value={serviceSearchTerm}
-                      onChange={(e) => setServiceSearchTerm(e.target.value)}
-                      className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                    />
-                    <select
-                      value={selectedServiceCategory}
-                      onChange={(e) => setSelectedServiceCategory(e.target.value)}
-                      className="px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition bg-white"
-                    >
-                      {serviceCategories.map(category => (
-                        <option key={category.value} value={category.value}>
-                          {category.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {/* Services Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                  {filteredServices.map(service => (
+                  ))
+               ) : (
+                  filteredServices.map(service => (
                     <div
                       key={service.id}
                       onClick={() => addToCart(service, 'service')}
                       className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-lg hover:border-purple-300 transition-all cursor-pointer group"
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center group-hover:bg-purple-200 transition">
-                          <span className="text-xl">🔧</span>
-                        </div>
-                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-medium rounded-full">
-                          {service.duration} min
+                        <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center text-xl">🔧</div>
+                        <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full">
+                          {service.duration}m
                         </span>
                       </div>
-                      <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{service.name}</h3>
-                      <p className="text-xs text-gray-500 mb-3">{service.category}</p>
-                      <div className="flex items-center justify-between">
+                      <h3 className="font-bold text-gray-800 text-sm mb-1 line-clamp-2 min-h-[40px]">{service.name}</h3>
+                      <p className="text-xs text-gray-400 mb-2">{service.category}</p>
+                      <div className="flex items-center justify-between mt-auto">
                         <span className="text-lg font-bold text-purple-600">₦{formatPrice(service.price)}</span>
-                        <button className="w-8 h-8 bg-purple-600 text-white rounded-lg flex items-center justify-center hover:bg-purple-700 transition">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                          </svg>
+                        <button className="w-8 h-8 bg-purple-600 text-white rounded-lg flex items-center justify-center hover:bg-purple-700 transition shadow-sm">
+                          +
                         </button>
                       </div>
-                      {service.description && (
-                        <p className="text-xs text-gray-400 mt-2 line-clamp-2">{service.description}</p>
-                      )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Products Grid */}
-            {activeTab === 'products' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filteredProducts.map(product => (
-                  <div
-                    key={product.id}
-                    onClick={() => addToCart(product, 'product')}
-                    className={`bg-white rounded-xl shadow-sm border p-4 hover:shadow-lg transition-all cursor-pointer group ${
-                      product.stock_level <= 0 
-                        ? 'border-red-200 opacity-60 cursor-not-allowed' 
-                        : product.stock_level <= 5 
-                          ? 'border-yellow-200 hover:border-yellow-300' 
-                          : 'border-gray-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
-                        <span className="text-xl">📦</span>
-                      </div>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        product.stock_level <= 0 
-                          ? 'bg-red-100 text-red-700' 
-                          : product.stock_level <= 5 
-                            ? 'bg-yellow-100 text-yellow-700' 
-                            : 'bg-gray-100 text-gray-600'
-                      }`}>
-                        {product.stock_level <= 0 ? 'Out of Stock' : `${product.stock_level} in stock`}
-                      </span>
-                    </div>
-                    <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">{product.name}</h3>
-                    <p className="text-xs text-gray-500 mb-3">{product.sku}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-blue-600">₦{formatPrice(product.price)}</span>
-                      <button className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                        </svg>
-                      </button>
-                    </div>
-                    {product.description && (
-                      <p className="text-xs text-gray-400 mt-2 line-clamp-2">{product.description}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Cart Sidebar - Desktop */}
-        <div className="w-full lg:w-[400px] h-[300px] lg:h-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col shadow-xl order-1 lg:order-2 overflow-hidden">
-          <div className="p-4 flex flex-col h-full overflow-hidden">
-            <div className="flex items-center justify-between mb-4 flex-shrink-0">
-              <h3 className="text-lg font-bold text-gray-900 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
-                Shopping Cart
-              </h3>
-              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
-                {cart.length + (bookingData ? 1 : 0)}
-              </span>
+                  ))
+               )}
             </div>
-            {/* Customer Info */}
-            <div className="mb-3 flex-shrink-0">
-              <h4 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Customer Details</h4>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Customer Name *"
-                  value={customerInfo.name}
-                  onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone Number *"
-                  value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
-                />
-                <input
-                  type="email"
-                  placeholder="Email (optional)"
-                  value={customerInfo.email}
-                  onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
-                />
-              </div>
-            </div>
-            {/* Cart Items */}
-            <div className="flex-1 overflow-y-auto mb-2 -mx-2 px-2 space-y-2">
-              {cart.length === 0 && !bookingData ? (
-                <div className="text-center py-2">
-                  <svg className="w-10 h-10 mx-auto text-gray-300 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
-                  </svg>
-                  <p className="text-gray-500 font-semibold text-xs">Your cart is empty</p>
-                  <p className="text-gray-400 text-xs mt-0.5">Add products or services to get started</p>
-                </div>
-              ) : (
-                <>
-                  {/* Service from booking */}
-                  {bookingData && (
-                    <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center mb-1">
-                            <span className="text-lg mr-2">📅</span>
-                            <h4 className="font-semibold text-sm text-blue-900 truncate">{bookingData.service_names ? bookingData.service_names.join(', ') : bookingData.service_name || 'N/A'}</h4>
-                          </div>
-                          <p className="text-xs text-blue-600 font-medium">Booking: {bookingData.booking_number}</p>
-                        </div>
-                        <div className="ml-3 text-right">
-                          <p className="text-sm font-bold text-blue-900">₦{formatPrice(bookingData.service_price || 0)}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                
-                  {/* Regular cart items */}
-                  {cart.map(item => (
-                    <div key={`${item.type}-${item.id}`} className="p-2 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition">
-                      <div className="flex items-start justify-between mb-1">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center mb-1">
-                            <span className="text-sm mr-2">{item.type === 'service' ? '🔧' : '📦'}</span>
-                            <h4 className="font-semibold text-sm text-gray-900 truncate">
-                              {item.name} {item.size ? `(Size: ${item.size})` : ''}
-                            </h4>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <p className="text-xs text-gray-500">₦{formatPrice(item.price)} each</p>
-                            {item.type === 'service' && (
-                              <button 
-                                onClick={() => {
-                                  const newPrice = prompt("Enter new price:", item.price);
-                                  if (newPrice !== null) {
-                                    updateItemPrice(item.cartItemId || item.id, newPrice, item.type);
-                                  }
-                                }}
-                                className="text-blue-500 hover:text-blue-700 p-1"
-                                title="Edit Price"
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                          {item.type === 'service' && (
-                            <p className="text-xs text-purple-600 font-medium">{item.duration} minutes</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => removeFromCart(item.cartItemId || item.id, item.type)}
-                          className="ml-2 w-6 h-6 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition flex-shrink-0"
-                        >
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                          </svg>
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center bg-white border border-gray-300 rounded-lg overflow-hidden">
-                          <button
-                            onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity - 1, item.type)}
-                            className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
-                            </svg>
-                          </button>
-                          <span className="w-8 text-center text-sm font-semibold text-gray-900">{item.quantity}</span>
-                          <button
-                            onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity + 1, item.type)}
-                            className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                            </svg>
-                          </button>
-                        </div>
-                        <p className="text-sm font-bold text-gray-900">₦{formatPrice(item.price * item.quantity)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-            {/* Coupon and Payment Section */}
-            <div className="space-y-3 flex-shrink-0 pt-2 border-t border-gray-100">
-              {/* Coupon Section */}
-              <div className="pb-3 border-b border-gray-200">
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter coupon code"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm disabled:bg-gray-100"
-                    disabled={!!appliedCoupon}
-                  />
-                  {appliedCoupon ? (
-                    <button
-                      onClick={removeCoupon}
-                      className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition font-medium text-sm"
-                    >
-                      Remove
-                    </button>
-                  ) : (
-                    <button
-                      onClick={applyCoupon}
-                      className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium text-sm"
-                    >
-                      Apply
-                    </button>
-                  )}
-                </div>
-                {appliedCoupon && (
-                  <div className="mt-1 flex items-center text-sm">
-                    <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-green-600 font-medium">Coupon "{appliedCoupon.code}" applied!</span>
-                  </div>
-                )}
-              </div>
-              {/* Total Section */}
-              <div className="space-y-4">
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-gray-600">
-                    <span>Subtotal</span>
-                    <span className="font-medium">₦{formatPrice(getSubtotal())}</span>
-                  </div>
-                  {appliedCoupon && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span className="font-medium">-₦{formatPrice(getDiscount())}</span>
-                    </div>
-                  )}
-                  {/* Tax section commented out per user request
-                  <div className="flex justify-between text-gray-600">
-                    <span>Tax (7.5%)</span>
-                    <span className="font-medium">₦{formatPrice(getTaxAmount())}</span>
-                  </div>
-                  */}
-                </div>
-              
-                <div className="pt-2 border-t-2 border-gray-200">
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-base font-bold text-gray-900">Total</span>
-                    <span className="text-xl font-bold text-blue-600">₦{formatPrice(getTotal())}</span>
-                  </div>
-                  {/* Payment Method Selection Removed for Simplicity */}
-                  {/* Payment Buttons - Restructured for clarity */}
-                  {(bookingData || cart.length > 0) && !paymentConfirmed && (
-                    <div className="space-y-3">
-                      {/* Paystack Online Payment (Primary) */}
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-gray-700">Online Payment</span>
-                        {apiOnline ? (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                            Paystack ready
-                          </span>
-                        ) : (
-                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                            Paystack unavailable
-                          </span>
-                        )}
-                      </div>
-                      <button
-                        onClick={handlePaystackPayment}
-                        disabled={processing || (cart.length === 0 && !bookingData) || !apiOnline}
-                        className="w-full bg-gradient-to-r from-green-600 to-green-700 text-white py-3 rounded-lg hover:from-green-700 hover:to-green-800 focus:outline-none focus:ring-4 focus:ring-green-300 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed transition-all font-semibold text-sm shadow-lg disabled:shadow-none flex items-center justify-center gap-2 text-center"
-                      >
-                        {processing ? (
-                          <span className="flex items-center gap-2">
-                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                            <span>Processing...</span>
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            Pay with Paystack (Online)
-                          </span>
-                        )}
-                      </button>
-                      
-                      {/* Alternative Payment Methods (Bank Transfer / Physical POS) */}
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-gray-300"></div>
-                        </div>
-                        <div className="relative flex justify-center text-sm">
-                          <span className="px-2 bg-white text-gray-500">or use when Paystack is down</span>
-                        </div>
-                      </div>
-                      
-                      {/* Bank Transfer / Physical POS Button */}
-                      <button
-                        onClick={handleCashPayment}
-                        disabled={processing || getTotal() <= 0}
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-2 border-blue-200"
-                      >
-                        {processing ? (
-                          <span className="flex items-center gap-2">
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                            </svg>
-                            Processing...
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-2">
-                            <span className="text-lg">🏦</span>
-                            Bank Transfer / Physical POS
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                  {/* Payment Confirmed Badge */}
-                  {paymentConfirmed && (
-                    <div className="bg-green-100 text-green-800 px-3 py-2 rounded-md font-medium flex items-center justify-center gap-2 mb-2">
-                      <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Payment Confirmed
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+         </div>
       </div>
-    {/* Size Selection Modal */}
+
+      {/* RIGHT PANEL: CART & CHECKOUT */}
+      <div className="w-[400px] min-w-[350px] bg-white shadow-2xl flex flex-col border-l border-gray-200 z-20 h-full">
+         {/* Customer Header */}
+         <div className="p-4 bg-gray-900 text-white shadow-md">
+            <h2 className="text-lg font-bold flex items-center gap-2 mb-3">
+               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+               Customer Details
+            </h2>
+            <div className="space-y-2">
+               <input 
+                 type="text" 
+                 placeholder="Customer Name *" 
+                 value={customerInfo.name} 
+                 onChange={e => setCustomerInfo({...customerInfo, name: e.target.value})} 
+                 className="w-full px-3 py-2 text-sm text-white placeholder-gray-400 rounded bg-gray-800 border border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+               />
+               <input 
+                 type="tel" 
+                 placeholder="Phone Number *" 
+                 value={customerInfo.phone} 
+                 onChange={e => setCustomerInfo({...customerInfo, phone: e.target.value})} 
+                 className="w-full px-3 py-2 text-sm text-white placeholder-gray-400 rounded bg-gray-800 border border-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition" 
+               />
+            </div>
+         </div>
+
+         {/* Cart Items List */}
+         <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-gray-50">
+            {cart.length === 0 && !bookingData ? (
+               <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
+                  <svg className="w-16 h-16 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+                  <p className="font-medium">Cart is empty</p>
+               </div>
+            ) : (
+               <>
+                 {/* Booking Item */}
+                 {bookingData && (
+                    <div className="p-3 bg-white border border-blue-200 rounded-lg shadow-sm relative overflow-hidden group">
+                       <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>
+                       <div className="flex justify-between items-start pl-2">
+                          <div>
+                             <h4 className="font-bold text-gray-800 text-sm">{bookingData.service_names ? bookingData.service_names.join(', ') : bookingData.service_name}</h4>
+                             <p className="text-xs text-blue-600 font-medium">Booking #{bookingData.booking_number}</p>
+                          </div>
+                          <span className="font-bold text-blue-700">₦{formatPrice(bookingData.service_price || 0)}</span>
+                       </div>
+                    </div>
+                 )}
+                 
+                 {/* Cart Items */}
+                 {cart.map((item, index) => (
+                    <div key={`${item.id}-${index}`} className="p-3 bg-white border border-gray-200 rounded-lg shadow-sm flex flex-col gap-2 group hover:border-gray-300 transition">
+                       <div className="flex justify-between items-start">
+                          <div>
+                             <h4 className="font-bold text-gray-800 text-sm line-clamp-1">{item.name}</h4>
+                             <p className="text-xs text-gray-500">{item.size ? `Size: ${item.size}` : item.type === 'service' ? 'Service' : 'Product'}</p>
+                          </div>
+                          <button onClick={() => removeFromCart(item.cartItemId || item.id, item.type)} className="text-gray-400 hover:text-red-500 transition">
+                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                          </button>
+                       </div>
+                       
+                       <div className="flex justify-between items-center pt-1 border-t border-gray-100 mt-1">
+                          <div className="flex items-center border border-gray-200 rounded-md bg-gray-50">
+                             <button onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity - 1, item.type)} className="px-2 py-0.5 hover:bg-gray-200 text-gray-600">-</button>
+                             <span className="px-2 text-sm font-medium text-gray-900 bg-white border-x border-gray-200">{item.quantity}</span>
+                             <button onClick={() => updateQuantity(item.cartItemId || item.id, item.quantity + 1, item.type)} className="px-2 py-0.5 hover:bg-gray-200 text-gray-600">+</button>
+                          </div>
+                          <span className="font-bold text-gray-900">₦{formatPrice(item.price * item.quantity)}</span>
+                       </div>
+                    </div>
+                 ))}
+               </>
+            )}
+         </div>
+
+         {/* Footer: Totals & Actions */}
+         <div className="p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-30">
+            {/* Coupon */}
+            <div className="flex gap-2 mb-4">
+               <input 
+                 type="text" 
+                 placeholder="Coupon Code" 
+                 value={couponCode}
+                 onChange={e => setCouponCode(e.target.value)}
+                 disabled={!!appliedCoupon}
+                 className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100" 
+               />
+               {appliedCoupon ? (
+                 <button onClick={removeCoupon} className="px-3 py-2 bg-red-100 text-red-700 text-xs font-bold rounded-md hover:bg-red-200">REMOVE</button>
+               ) : (
+                 <button onClick={applyCoupon} className="px-3 py-2 bg-gray-800 text-white text-xs font-bold rounded-md hover:bg-gray-700">APPLY</button>
+               )}
+            </div>
+            
+            {/* Totals */}
+            <div className="space-y-2 mb-4 text-sm">
+               <div className="flex justify-between text-gray-600"><span>Subtotal</span><span>₦{formatPrice(getSubtotal())}</span></div>
+               {appliedCoupon && (
+                 <div className="flex justify-between text-green-600"><span>Discount</span><span>-₦{formatPrice(getDiscount())}</span></div>
+               )}
+               <div className="flex justify-between font-bold text-xl text-gray-900 border-t border-dashed border-gray-300 pt-3 mt-2">
+                  <span>Total</span>
+                  <span>₦{formatPrice(getTotal())}</span>
+               </div>
+            </div>
+
+            {/* Actions */}
+            <div className="grid grid-cols-2 gap-3">
+               <button 
+                 onClick={handleCashPayment} 
+                 disabled={processing || getTotal() <= 0}
+                 className="col-span-1 bg-gray-100 hover:bg-gray-200 text-gray-800 border border-gray-300 py-3 rounded-lg font-bold text-sm transition-colors flex flex-col items-center justify-center disabled:opacity-50"
+               >
+                  <span>CASH / POS</span>
+                  <span className="text-[10px] font-normal text-gray-500">Offline Payment</span>
+               </button>
+               <button 
+                 onClick={handlePaystackPayment} 
+                 disabled={processing || getTotal() <= 0 || !apiOnline}
+                 className="col-span-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold text-sm transition-colors shadow-md flex flex-col items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+               >
+                  {processing ? (
+                     <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  ) : (
+                     <>
+                        <span>PAY ONLINE</span>
+                        <span className="text-[10px] font-normal opacity-80">Via Paystack</span>
+                     </>
+                  )}
+               </button>
+            </div>
+         </div>
+      </div>
+      
+      {/* Size Selection Modal */}
       {showSizeModal && selectedProductForSize && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-            <h3 className="text-lg font-bold text-gray-900 mb-4">Select Size for {selectedProductForSize.name}</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 animate-fadeInScale">
+            <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">Select Size</h3>
+            <p className="text-center text-gray-500 text-sm mb-6">{selectedProductForSize.name}</p>
             
             <div className="grid grid-cols-2 gap-3 mb-6">
               {Object.entries(selectedProductForSize.stock_by_size || {})
@@ -1669,25 +1375,23 @@ const POS = () => {
                     setShowSizeModal(false);
                     setSelectedProductForSize(null);
                   }}
-                  className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
+                  className="flex flex-col items-center justify-center p-4 border-2 border-gray-100 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all group"
                 >
-                  <span className="text-lg font-bold text-gray-800">{size}</span>
-                  <span className="text-xs text-gray-500">{stock} available</span>
+                  <span className="text-xl font-bold text-gray-800 group-hover:text-blue-700">{size}</span>
+                  <span className="text-xs text-gray-500 mt-1">{stock} left</span>
                 </button>
               ))}
             </div>
             
-            <div className="flex justify-end">
-              <button
-                onClick={() => {
-                  setShowSizeModal(false);
-                  setSelectedProductForSize(null);
-                }}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800"
-              >
-                Cancel
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setShowSizeModal(false);
+                setSelectedProductForSize(null);
+              }}
+              className="w-full py-3 text-gray-600 hover:text-gray-900 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
