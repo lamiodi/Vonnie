@@ -704,6 +704,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             )}
           </div>
         </div>
+      </div>
+
         {/* Date and Time Selection */}
         {!isWalkInMode && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
