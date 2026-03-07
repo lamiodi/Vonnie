@@ -30,12 +30,14 @@ router.post('/register', async (req, res) => {
       }
       // If no admin exists, proceed to create the FIRST and ONLY admin
     } else if (role === 'manager') {
-      // Check if ANY manager already exists
-      const managerCheck = await query('SELECT 1 FROM users WHERE role = $1', ['manager']);
-      if (managerCheck.rows.length > 0) {
+      // Check if manager limit reached (max 2)
+      const managerCheck = await query('SELECT count(*) as count FROM users WHERE role = $1', ['manager']);
+      const managerCount = parseInt(managerCheck.rows[0].count);
+      
+      if (managerCount >= 2) {
         return res.status(403).json(errorResponse(
-          'System already has a manager. Only one manager is allowed.',
-          'MANAGER_EXISTS',
+          'System already has the maximum number of managers (2).',
+          'MANAGER_LIMIT_REACHED',
           403
         ));
       }
