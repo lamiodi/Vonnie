@@ -22,6 +22,7 @@ import physicalPosPaymentRoutes from './routes/physical-pos-payments.js';
 import adminRoutes from './routes/admin.js';
 import queueRoutes from './routes/queue.js';
 import paymentWebhooks from './routes/payment-webhooks.js';
+import { scheduleWeeklyReport } from './cron/weeklyReport.js';
 
 
 
