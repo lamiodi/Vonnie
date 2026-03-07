@@ -148,26 +148,72 @@ router.get('/bookings/available-slots', async (req, res) => {
       });
     });
 
-    // Generate available slots (9 AM to 8:30 PM, 30-minute intervals)
-    // Last slot should start at 7:30 PM for a 1-hour service to finish by 8:30 PM
+    // Generate available slots based on day of week
     const availableSlots = [];
-    const startHour = 9;
-    const endHour = 20; // 8 PM
     const slotInterval = 30; // minutes
-    const closingTime = new Date(`${date}T20:30:00`); // 8:30 PM Closing Time
-
-    // Get current time for filtering past slots (Nigeria/WAT timezone - UTC+1)
-    const now = new Date();
-    const nigeriaTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // Add 1 hour for WAT
     
     // Create date objects for comparison (without time portion)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(`${date}T00:00:00`);
     
-    const isToday = today.getTime() === selectedDate.getTime();
+    // Check if Tuesday (Day 2) - Closed
+    if (selectedDate.getDay() === 2) {
+      return res.json([]); // Return empty array for Tuesdays
+    }
+
+    let startHour, endHour, closingTime;
+    
+    if (selectedDate.getDay() === 0) {
+      // Sunday: 1 PM to 7 PM
+      startHour = 13; // 1 PM
+      endHour = 19;   // 7 PM
+      closingTime = new Date(`${date}T19:00:00`);
+    } else {
+      // Mon, Wed-Sat: 8 AM to 8:30 PM
+      startHour = 8;  // 8 AM
+      endHour = 20;   // 8 PM (for loop limit)
+      closingTime = new Date(`${date}T20:30:00`);
+    }
+
+    // Get current time in Lagos (WAT) using Intl to avoid server timezone issues
+    const now = new Date();
+    const lagosOptions = { 
+      timeZone: 'Africa/Lagos', 
+      hour12: false, 
+      year: 'numeric', 
+      month: 'numeric', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric'
+    };
+    const formatter = new Intl.DateTimeFormat('en-US', lagosOptions);
+    const parts = formatter.formatToParts(now);
+    
+    const getPart = (type) => parseInt(parts.find(p => p.type === type).value);
+    const lYear = getPart('year');
+    const lMonth = getPart('month');
+    const lDay = getPart('day');
+    const lHour = getPart('hour');
+    const lMinute = getPart('minute');
+
+    // Parse selected date string (YYYY-MM-DD) directly to avoid timezone shifts
+    const [selYear, selMonth, selDay] = date.split('-').map(Number);
+    
+    const isToday = (selYear === lYear && selMonth === lMonth && selDay === lDay);
 
     const pad = (n) => String(n).padStart(2, '0');
+    
+    // Helper to format time as 12-hour AM/PM string
+    const formatTimeSlot = (dateObj) => {
+      let hours = dateObj.getHours();
+      const minutes = dateObj.getMinutes();
+      const ampm = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12;
+      hours = hours ? hours : 12; // the hour '0' should be '12'
+      return `${hours}:${pad(minutes)} ${ampm}`;
+    };
+
     const overlaps = (slotStart, slotDuration, bookedStart, bookedDuration) => {
       const slotEnd = new Date(slotStart.getTime() + slotDuration * 60000);
       const bookedEnd = new Date(bookedStart.getTime() + bookedDuration * 60000);
@@ -176,17 +222,23 @@ router.get('/bookings/available-slots', async (req, res) => {
 
     for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
-        // Skip 8:30 PM and later slots entirely
-        if (hour === 20 && minute >= 30) continue;
+        // Special closing logic for regular days (close at 8:30 PM)
+        if (selectedDate.getDay() !== 0 && hour === 20 && minute >= 30) continue;
+        
+        // Special closing logic for Sundays (close at 7:00 PM)
+        if (selectedDate.getDay() === 0 && hour === 19 && minute > 0) continue;
         
         const slotTime = new Date(`${date}T${pad(hour)}:${pad(minute)}:00`);
         
-        // Skip past times for current day - only show future times (using Nigeria time)
-        if (isToday && slotTime < nigeriaTime) {
-          continue;
+        // Skip past times if it is today in Lagos
+        if (isToday) {
+          // Compare "Face Value" of hours/minutes
+          if (hour < lHour || (hour === lHour && minute < lMinute)) {
+            continue;
+          }
         }
         
-        // Check if the service finishes before closing time (8:30 PM)
+        // Check if the service finishes before closing time
         const slotEndForBusinessHours = new Date(slotTime.getTime() + totalDuration * 60000);
         
         if (slotEndForBusinessHours > closingTime) {
@@ -205,7 +257,13 @@ router.get('/bookings/available-slots', async (req, res) => {
         }
 
         if (isAvailable) {
-          availableSlots.push(slotTime.toISOString());
+          // Return both ISO string (for logic) and formatted string (for display)
+          // Ideally frontend should format, but user asked for backend to send format
+          // To maintain compatibility, we'll return formatted string if requested, or handle in frontend
+          // For now, let's keep ISO but update frontend to format, OR return object
+          // The current frontend expects array of strings. 
+          // Let's return the formatted time directly as the string since the frontend seems to display it directly.
+          availableSlots.push(formatTimeSlot(slotTime));
         }
       }
     }
