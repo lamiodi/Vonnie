@@ -10,7 +10,7 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   try {
     const result = await query(
-      'SELECT id, name, description, price, duration, category FROM services ORDER BY name'
+      'SELECT id, name, description, price, duration, category FROM services WHERE is_active = true ORDER BY name'
     );
     res.json(result.rows);
   } catch (error) {

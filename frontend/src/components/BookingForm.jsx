@@ -14,6 +14,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     updateBooking: updateBookingEndpoint = '/api/bookings'
   } = endpoints;
   const [services, setServices] = useState(propServices || []);
+  const [filteredServices, setFilteredServices] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [workers, setWorkers] = useState(propWorkers || []);
   const [servicesLoading, setServicesLoading] = useState(!propServices || propServices.length === 0);
   const [workersLoading, setWorkersLoading] = useState(!propWorkers || propWorkers.length === 0);
@@ -79,6 +83,26 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       fetchAvailableSlots();
     }
   }, [formData.workers, formData.booking_date, formData.service_ids]);
+  useEffect(() => {
+    let result = services;
+    
+    // Filter by category
+    if (selectedCategory !== 'All') {
+      result = result.filter(s => (s.category || 'Other') === selectedCategory);
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(s => 
+        s.name.toLowerCase().includes(query) || 
+        (s.description && s.description.toLowerCase().includes(query))
+      );
+    }
+    
+    setFilteredServices(result);
+  }, [selectedCategory, searchQuery, services]);
+
   const fetchServices = async () => {
     try {
       setServicesLoading(true);
@@ -87,6 +111,9 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       const servicesData = Array.isArray(response.data) ? response.data : 
                           (response.data && Array.isArray(response.data.services) ? response.data.services : []);
       setServices(servicesData);
+      setFilteredServices(servicesData);
+      const uniqueCategories = ['All', ...new Set(servicesData.map(s => s.category || 'Other'))];
+      setCategories(uniqueCategories);
     } catch (error) {
       handleError('Failed to load services', error);
       setServices([]); // Ensure services is always an array on error
@@ -569,9 +596,14 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                   </div>
                 </div>
               ))}
-            </div>
-          )}
-          {touched.service_ids && errors.service_ids && (
+              {filteredServices.length === 0 && (
+                <div className="text-center py-4 text-gray-500 text-sm">
+                  No services found matching your criteria
+                </div>
+              )}
+              </div>
+            )}
+            {touched.service_ids && errors.service_ids && (
               <p id="service-error" className="mt-1 text-sm text-red-600" role="alert">
                 {errors.service_ids}
               </p>

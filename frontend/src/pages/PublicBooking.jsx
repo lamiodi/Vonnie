@@ -12,6 +12,10 @@ import '@fontsource/unifrakturcook';
 const PublicBooking = () => {
   const navigate = useNavigate();
   const [services, setServices] = useState([]);
+  const [filteredServices, setFilteredServices] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedServices, setSelectedServices] = useState([]);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -318,12 +322,38 @@ const PublicBooking = () => {
   const fetchServices = async () => {
     try {
       const response = await axios.get(endpoints.services);
-      setServices(response.data);
+      const allServices = response.data;
+      setServices(allServices);
+      setFilteredServices(allServices);
+      
+      // Extract unique categories
+      const uniqueCategories = ['All', ...new Set(allServices.map(s => s.category || 'Other'))];
+      setCategories(uniqueCategories);
     } catch (error) {
       console.error('Error fetching services:', error);
       handleError(error, 'Failed to fetch services. Please try again.');
     }
   };
+
+  useEffect(() => {
+    let result = services;
+    
+    // Filter by category
+    if (selectedCategory !== 'All') {
+      result = result.filter(s => (s.category || 'Other') === selectedCategory);
+    }
+    
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(s => 
+        s.name.toLowerCase().includes(query) || 
+        (s.description && s.description.toLowerCase().includes(query))
+      );
+    }
+    
+    setFilteredServices(result);
+  }, [selectedCategory, searchQuery, services]);
 
   // Unified function to normalize time slots to HH:mm format
   const normalizeTimeSlot = (slot) => {
@@ -788,7 +818,54 @@ const handlePaymentClose = () => {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {services.map(service => {
+                {/* Category Tabs & Search */}
+                <div className="col-span-full mb-6">
+                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      {categories.map(category => (
+                        <button
+                          key={category}
+                          onClick={() => setSelectedCategory(category)}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                            selectedCategory === category
+                              ? 'bg-purple-600 text-white shadow-md'
+                              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+                          }`}
+                        >
+                          {category}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="w-full md:w-64">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="Search services..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {filteredServices.length === 0 ? (
+                  <div className="col-span-full text-center py-12">
+                    <div className="text-gray-400 mb-2 text-4xl">🔍</div>
+                    <p className="text-gray-500">No services found matching your criteria.</p>
+                    <button 
+                      onClick={() => {setSelectedCategory('All'); setSearchQuery('');}}
+                      className="mt-4 text-purple-600 hover:underline"
+                    >
+                      Clear filters
+                    </button>
+                  </div>
+                ) : (
+                  filteredServices.map(service => {
                   const isSelected = selectedServices.find(s => s.id === service.id);
                   return (
                     <div
@@ -835,7 +912,7 @@ const handlePaymentClose = () => {
                       </div>
                     </div>
                   );
-                })}
+                }))}
               </div>
               
               {selectedServices.length > 0 && (
@@ -870,18 +947,17 @@ const handlePaymentClose = () => {
                       <span className="font-bold text-purple-600">₦{totalPrice.toLocaleString()}</span>
                     </div>
                   </div>
+                  <div className="flex justify-end mt-8">
+                    <button
+                      onClick={nextStep}
+                      disabled={!canProceedToStep2}
+                      className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
+                    >
+                      Continue to Date Selection →
+                    </button>
+                  </div>
                 </div>
               )}
-              
-              <div className="flex justify-end mt-8">
-                <button
-                  onClick={nextStep}
-                  disabled={!canProceedToStep2}
-                  className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Continue to Date Selection →
-                </button>
-              </div>
             </div>
           )}
 
