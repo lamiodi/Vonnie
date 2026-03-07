@@ -342,7 +342,7 @@ export const sendContactFormResponse = async (email, name, message, replyMessage
 
 export const sendPasswordResetEmail = async (email, resetToken) => {
   const subject = '🔒 Password Reset Request - Vonne X2X';
-  const resetLink = \`https://vonneex2x.store/reset-password?token=\${resetToken}\`;
+  const resetLink = `https://vonneex2x.store/reset-password?token=${resetToken}`;
   
   const content = `
       <!-- Header -->
@@ -358,7 +358,7 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
         </p>
         
         <div style="text-align: center; margin: 32px 0;">
-          <a href="\${resetLink}" style="display: inline-block; background: #e11d48; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.2); transition: transform 0.2s;">
+          <a href="${resetLink}" style="display: inline-block; background: #e11d48; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.2); transition: transform 0.2s;">
             Reset Password
           </a>
         </div>
@@ -371,7 +371,7 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
         
         <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
           <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px;">Or copy and paste this link into your browser:</p>
-          <p style="margin: 0; font-size: 12px; color: #4b5563; word-break: break-all; font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px;">\${resetLink}</p>
+          <p style="margin: 0; font-size: 12px; color: #4b5563; word-break: break-all; font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px;">${resetLink}</p>
         </div>
       </div>
   `;
