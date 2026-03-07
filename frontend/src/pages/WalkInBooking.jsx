@@ -1,73 +1,82 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
-import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
-import { createNigeriaISOString } from '../utils/formatters';
-import { isValidCustomerType } from '../utils/bookingUtils';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
 
 const WalkInBooking = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [services, setServices] = useState([]);
-  const [filteredServices, setFilteredServices] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedServices, setSelectedServices] = useState([]);
+
+  // Form State
   const [formData, setFormData] = useState({
     customer_name: '',
     customer_phone: '',
     customer_email: '',
+    instagram_handle: '',
+    booking_date: new Date(),
+    booking_time: '',
     notes: ''
   });
 
-  // Fetch services on component mount
-  useEffect(() => {
-    fetchServices();
-  }, []);
+  // UI State
+  const [loading, setLoading] = useState(false);
+  const [availableSlots, setAvailableSlots] = useState([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsError, setSlotsError] = useState(null);
+  const [validationErrors, setValidationErrors] = useState({});
+  const slotsControllerRef = useRef(null);
 
-  useEffect(() => {
-    if (searchQuery.trim() === '') {
-      setFilteredServices(services);
-    } else {
-      const lowerQuery = searchQuery.toLowerCase();
-      const filtered = services.filter(service => 
-        service.name.toLowerCase().includes(lowerQuery) || 
-        (service.description && service.description.toLowerCase().includes(lowerQuery))
-      );
-      setFilteredServices(filtered);
-    }
-  }, [searchQuery, services]);
-
-  const fetchServices = async () => {
-    try {
-      const data = await apiGet(API_ENDPOINTS.SERVICES);
-      const fetchedServices = Array.isArray(data) ? data : (data.data || []);
-      setServices(fetchedServices);
-      setFilteredServices(fetchedServices);
-    } catch (error) {
-      try {
-        // Fallback to public endpoint if authenticated endpoint fails
-        const fallback = await apiGet(API_ENDPOINTS.PUBLIC_SERVICES);
-        const fetchedFallback = Array.isArray(fallback) ? fallback : (fallback.data || []);
-        setServices(fetchedFallback);
-        setFilteredServices(fetchedFallback);
-      } catch (fallbackError) {
-        console.error('Error fetching services:', fallbackError);
-        setServices([]);
-        setFilteredServices([]);
-      }
-    }
+  const endpoints = {
+    availableSlots: '/api/public/bookings/available-slots',
+    createBooking: '/api/public/bookings'
   };
 
+  // Fetch available slots when date changes
+  useEffect(() => {
+    if (formData.booking_date) {
+      fetchAvailableSlots();
+    }
+  }, [formData.booking_date]);
 
+  const fetchAvailableSlots = async () => {
+    if (slotsControllerRef.current) {
+      try { slotsControllerRef.current.abort(); } catch (e) {}
+    }
+    
+    setSlotsLoading(true);
+    setSlotsError(null);
+    setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
+    
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller) {
+      slotsControllerRef.current = controller;
+    }
 
-  const handleServiceToggle = (serviceId) => {
-    setSelectedServices(prev => 
-      prev.includes(serviceId) 
-        ? prev.filter(id => id !== serviceId)
-        : [...prev, serviceId]
-    );
+    try {
+      const dateStr = new Date(formData.booking_date).toISOString().split('T')[0];
+      // We don't send service_ids anymore, backend defaults to 60 mins duration
+      const url = `${endpoints.availableSlots}?date=${dateStr}`;
+      
+      const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
+      
+      let slots = [];
+      if (Array.isArray(response.data)) {
+        slots = response.data;
+      } else if (response.data && typeof response.data === 'object') {
+        slots = response.data.available_slots || response.data.slots || [];
+      }
+      
+      setAvailableSlots(slots);
+    } catch (error) {
+      if (axios.isCancel(error)) return;
+      console.error('Error fetching slots:', error);
+      setSlotsError('Could not load available times. Please try another date.');
+    } finally {
+      setSlotsLoading(false);
+    }
   };
 
   const handleInputChange = (e) => {
@@ -76,423 +85,306 @@ const WalkInBooking = () => {
       ...prev,
       [name]: value
     }));
+    
+    // Clear validation error when user types
+    if (validationErrors[name]) {
+      setValidationErrors(prev => ({ ...prev, [name]: null }));
+    }
   };
 
-  // Calculate total price based on selected services
-  const calculateTotalPrice = () => {
-    return selectedServices.reduce((total, serviceId) => {
-      const service = services.find(s => s.id === serviceId);
-      return total + (service ? parseFloat(service.price) : 0);
-    }, 0);
+  const handleDateChange = (date) => {
+    setFormData(prev => ({
+      ...prev,
+      booking_date: date
+    }));
   };
 
-  // Calculate total duration based on selected services
-  const calculateTotalDuration = () => {
-    return selectedServices.reduce((total, serviceId) => {
-      const service = services.find(s => s.id === serviceId);
-      return total + (service ? parseInt(service.duration) : 0);
-    }, 0);
+  const handleTimeSelect = (time) => {
+    setFormData(prev => ({
+      ...prev,
+      booking_time: time
+    }));
+    if (validationErrors.booking_time) {
+      setValidationErrors(prev => ({ ...prev, booking_time: null }));
+    }
+  };
+
+  const validateForm = () => {
+    const errors = {};
+    if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
+    if (!formData.customer_phone.trim()) errors.customer_phone = 'Phone number is required';
+    if (!formData.booking_date) errors.booking_date = 'Date is required';
+    if (!formData.booking_time) errors.booking_time = 'Time is required';
+    
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validation
-    if (!formData.customer_name.trim()) {
-      handleError(null, 'Customer name is required');
-      return;
-    }
-    
-    if (!formData.customer_phone.trim()) {
-      handleError(null, 'Customer phone number is required');
-      return;
-    }
-    
-    // Basic phone validation (Nigerian format)
-    const phoneRegex = /^[0-9\+\-\s\(\)]{10,15}$/;
-    if (!phoneRegex.test(formData.customer_phone.trim())) {
-      handleError(null, 'Please enter a valid phone number');
+    if (!validateForm()) {
+      handleError(null, 'Please fill in all required fields');
       return;
     }
 
-    // Customer type validation
-    const customerType = 'walk_in';
-    if (!isValidCustomerType(customerType)) {
-      handleError(null, 'Invalid customer type. Allowed: walk_in or pre_booked');
-      return;
-    }
-    
     setLoading(true);
 
     try {
-      // Prepare booking data
-      const bookingData = {
-        customer_name: formData.customer_name.trim(),
-        customer_phone: formData.customer_phone.trim(),
-        customer_email: formData.customer_email?.trim() || undefined,
-        notes: formData.notes?.trim() || undefined,
-        customer_type: customerType,
-        scheduled_time: createNigeriaISOString(), // Current time for walk-in (Nigeria timezone)
-        status: 'scheduled' // Explicitly set status
+      // Prepare booking payload
+      const payload = {
+        customer_name: formData.customer_name,
+        customer_phone: formData.customer_phone,
+        customer_email: formData.customer_email || undefined,
+        instagram_handle: formData.instagram_handle || undefined,
+        scheduled_time: `${new Date(formData.booking_date).toISOString().split('T')[0]}T${formData.booking_time}:00`,
+        notes: formData.notes,
+        customer_type: 'walk_in',
+        service_ids: [] // Walk-in doesn't select services upfront
       };
 
-      // Add services if selected
-      if (selectedServices.length > 0) {
-        bookingData.service_ids = selectedServices;
-      }
+      const response = await axios.post(endpoints.createBooking, payload);
       
-      // Create the booking with worker assignment
-      const response = await apiPost('/api/public/walk-in', bookingData);
+      handleSuccess('Booking created successfully!');
       
-      // Show success message with booking details
-      // The response.data contains the standardized API response, and response.data.data contains the actual booking
-      const bookingDataResponse = response.data?.data || response;
-      const bookingNumber = bookingDataResponse.booking_number || bookingDataResponse.id;
-      handleSuccess(`Walk-in booking created successfully! Booking #${bookingNumber}`);
-      
-      // Delay navigation slightly to allow user to see the success message
-      setTimeout(() => {
-        // Navigate to booking confirmation page
-        navigate('/booking-confirmation', {
-          state: {
-            bookingData: bookingDataResponse,
-            paymentCompleted: false // Walk-in typically pays at POS
-          }
-        });
-      }, 2000);
+      // Navigate to confirmation page
+      navigate('/booking-confirmation', { 
+        state: { 
+          bookingData: response.data.data || response.data 
+        } 
+      });
       
     } catch (error) {
-      console.error('Error creating walk-in booking:', error);
-      
-      // Enhanced error handling
-      let errorMessage = 'Error creating walk-in booking. Please try again.';
-      
-      if (error.response?.data?.error) {
-        errorMessage = error.response.data.error;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-      
-      handleError(error, errorMessage);
+      console.error('Booking error:', error);
+      handleError(error, 'Failed to create booking. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Service icons mapping
-  const serviceIcons = {
-    'Hair Styling': (
-      <svg className="w-full h-32 text-pink-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M8,8A2,2 0 0,0 6,10A2,2 0 0,0 8,12A2,2 0 0,0 10,10A2,2 0 0,0 8,8M16,8A2,2 0 0,0 14,10A2,2 0 0,0 16,12A2,2 0 0,0 18,10A2,2 0 0,0 16,8M8,14C9.11,14 10,14.45 10,15C10,15.55 9.11,16 8,16C6.89,16 6,15.55 6,15C6,14.45 6.89,14 8,14M16,14C17.11,14 18,14.45 18,15C18,15.55 17.11,16 16,16C14.89,16 14,15.55 14,15C14,14.45 14.89,14 16,14Z"/>
-      </svg>
-    ),
-    'Manicure': (
-      <svg className="w-full h-32 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M12,4A1,1 0 0,0 11,5V11A1,1 0 0,0 12,12A1,1 0 0,0 13,11V5A1,1 0 0,0 12,4M7,14A2,2 0 0,1 9,16V22H15V16A2,2 0 0,1 17,14H7Z"/>
-      </svg>
-    ),
-    'Facial Treatment': (
-      <svg className="w-full h-32 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M10,10A1,1 0 0,1 11,11A1,1 0 0,1 10,12A1,1 0 0,1 9,11A1,1 0 0,1 10,10M14,10A1,1 0 0,1 15,11A1,1 0 0,1 14,12A1,1 0 0,1 13,11A1,1 0 0,1 14,10M12,14C13.11,14 14,14.45 14,15C14,15.55 13.11,16 12,16C10.89,16 10,15.55 10,15C10,14.45 10.89,14 12,14Z"/>
-      </svg>
-    ),
-    'Massage': (
-      <svg className="w-full h-32 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M7,9V15H9V9H7M11,9V15H13V9H11M15,9V15H17V9H15Z"/>
-      </svg>
-    ),
-    'default': (
-      <svg className="w-full h-32 text-indigo-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,6V18L18,12"/>
-      </svg>
-    )
+  // Helper to get day class for calendar
+  const tileClassName = ({ date, view }) => {
+    if (view === 'month') {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (date < today) return 'opacity-50 cursor-not-allowed';
+      if (date.getDay() === 0) return 'text-red-500'; // Sunday styling
+    }
+    return '';
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f0f1f2' }}>
-      <div className="max-w-6xl mx-auto py-8 px-4">
-        <div className="mb-6">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center text-gray-600 hover:text-purple-600 transition-colors font-medium"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Home
-          </button>
-        </div>
-
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4" style={{ fontFamily: '"Patrick Hand", cursive' }}>
-            Walk-In Booking
-          </h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Quick booking for walk-in customers
-          </p>
-          <p className="text-sm text-gray-500">
-            Optional service selection • Professional beauty services • Instant confirmation
-          </p>
-        </div>
-
-        {/* Main Content */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          <form onSubmit={handleSubmit}>
-            {/* Customer Details Section */}
-          <div className="mb-8">
-            <div className="text-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                Customer Information
-              </h2>
-              <p className="text-gray-600">Fill in the customer details for the walk-in booking</p>
+    <div className="min-h-screen p-6" style={{ backgroundColor: '#f0f1f2', fontFamily: '"Patrick Hand", cursive' }}>
+      <style>
+        {`
+          @import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&family=UnifrakturCook:wght@700&display=swap');
+          
+          /* Custom Calendar Styles */
+          .react-calendar {
+            width: 100%;
+            border: none;
+            background: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+          }
+        `}
+      </style>
+      
+      <div className="max-w-6xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-gray-900">
+        <div className="grid grid-cols-1 lg:grid-cols-2">
+          
+          {/* Left Panel - Branding & Info */}
+          <div className="bg-gray-900 p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[400px] lg:min-h-full">
+            {/* Background Pattern */}
+            <div className="absolute inset-0 opacity-10" 
+                 style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '30px 30px' }}>
+            </div>
+            
+            <div className="relative z-10">
+              <div className="mb-6">
+                <button
+                  onClick={() => navigate('/')}
+                  className="flex items-center text-gray-400 hover:text-white transition-colors font-sans text-sm font-bold uppercase tracking-wider"
+                >
+                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back to Home
+                </button>
+              </div>
+              
+              <h1 className="text-5xl mb-4" style={{ fontFamily: '"UnifrakturCook", cursive', letterSpacing: '2px' }}>
+                Walk-In<br/>Booking
+              </h1>
+              <div className="w-20 h-1 bg-white mb-6"></div>
+              <p className="text-xl opacity-90 font-light">
+                Quick booking for walk-in customers.
+              </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Customer Name */}
-              <div>
-                <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-2">
-                  Customer Name *
-                </label>
-                <input
-                  type="text"
-                  id="customer_name"
-                  name="customer_name"
-                  value={formData.customer_name}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Enter customer's full name"
-                />
-              </div>
-
-              {/* Customer Phone */}
-              <div>
-                <label htmlFor="customer_phone" className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number *
-                </label>
-                <input
-                  type="tel"
-                  id="customer_phone"
-                  name="customer_phone"
-                  value={formData.customer_phone}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                  placeholder="08012345678"
-                />
-              </div>
-
-              {/* Customer Email */}
-              <div className="md:col-span-2">
-                <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-2">
-                  Email Address (for receipts)
-                </label>
-                <input
-                  type="email"
-                  id="customer_email"
-                  name="customer_email"
-                  value={formData.customer_email}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200"
-                  placeholder="Email for sending receipts (optional)"
-                />
+            <div className="relative z-10 mt-12">
+              <div className="space-y-4 font-sans">
+                <div className="flex items-center">
+                  <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center mr-3 border border-gray-700">1</span>
+                  <p>Enter Customer Details</p>
+                </div>
+                <div className="flex items-center">
+                  <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center mr-3 border border-gray-700">2</span>
+                  <p>Select Date & Time</p>
+                </div>
+                <div className="flex items-center">
+                  <span className="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center mr-3 border border-gray-700">3</span>
+                  <p>Confirm Booking</p>
+                </div>
               </div>
             </div>
           </div>
 
-            {/* Service Selection */}
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Select Services
-                </h2>
-                <p className="text-gray-600 mb-4">Choose beauty services for the walk-in customer (optional)</p>
+          {/* Right Panel - Booking Form */}
+          <div className="p-8 lg:p-12 bg-white">
+            <form onSubmit={handleSubmit} className="space-y-8">
+              
+              {/* Customer Details */}
+              <section>
+                <h3 className="text-2xl font-bold mb-6 flex items-center text-gray-800" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+                  <span className="w-8 h-8 rounded-full bg-black text-white text-sm flex items-center justify-center mr-3 font-sans">1</span>
+                  Customer Info
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 font-sans">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Name *</label>
+                    <input
+                      type="text"
+                      name="customer_name"
+                      value={formData.customer_name}
+                      onChange={handleInputChange}
+                      className={`w-full p-3 bg-gray-50 border ${validationErrors.customer_name ? 'border-red-500' : 'border-gray-200'} rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all`}
+                      placeholder="Jane Doe"
+                    />
+                    {validationErrors.customer_name && <p className="text-red-500 text-xs mt-1">{validationErrors.customer_name}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Phone *</label>
+                    <input
+                      type="tel"
+                      name="customer_phone"
+                      value={formData.customer_phone}
+                      onChange={handleInputChange}
+                      className={`w-full p-3 bg-gray-50 border ${validationErrors.customer_phone ? 'border-red-500' : 'border-gray-200'} rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all`}
+                      placeholder="08012345678"
+                    />
+                    {validationErrors.customer_phone && <p className="text-red-500 text-xs mt-1">{validationErrors.customer_phone}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</label>
+                    <input
+                      type="email"
+                      name="customer_email"
+                      value={formData.customer_email}
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                      placeholder="jane@example.com"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Instagram</label>
+                    <input
+                      type="text"
+                      name="instagram_handle"
+                      value={formData.instagram_handle}
+                      onChange={handleInputChange}
+                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                      placeholder="@janedoe"
+                    />
+                  </div>
+                </div>
+              </section>
+
+              {/* Date & Time Selection */}
+              <section>
+                <h3 className="text-2xl font-bold mb-6 flex items-center text-gray-800" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+                  <span className="w-8 h-8 rounded-full bg-black text-white text-sm flex items-center justify-center mr-3 font-sans">2</span>
+                  Date & Time
+                </h3>
                 
-                {/* Search Bar */}
-                <div className="max-w-md mx-auto relative">
-                  <input
-                    type="text"
-                    placeholder="Search services..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-full focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-200 shadow-sm"
-                  />
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <svg className="h-5 w-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                <div className="mb-6 font-sans">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Date *</label>
+                  <div className="border border-gray-200 rounded-xl overflow-hidden p-4 bg-gray-50">
+                    <Calendar
+                      onChange={handleDateChange}
+                      value={formData.booking_date}
+                      minDate={new Date()}
+                      tileClassName={tileClassName}
+                      className="w-full border-none bg-transparent"
+                    />
                   </div>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredServices.map(service => {
-                  const isSelected = selectedServices.includes(service.id);
-                  return (
-                    <div
-                      key={service.id}
-                      className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-                        isSelected
-                          ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-lg'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                      onClick={() => handleServiceToggle(service.id)}
-                    >
-                      <div className="p-6">
-                        <div className="mb-4 flex justify-center">
-                          {serviceIcons[service.name] || serviceIcons.default}
-                        </div>
-                        
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2 text-center">
-                          {service.name}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-3 text-center min-h-[40px]">
-                          {service.description || 'Professional beauty service'}
-                        </p>
-                        <div className="text-center space-y-1">
-                          <div>
-                            <span className="text-2xl font-bold text-purple-600">
-                              ₦{parseFloat(service.price || 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="text-gray-500 text-sm flex items-center justify-center gap-1">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                            </svg>
-                            {service.duration || 60} minutes
-                          </div>
-                        </div>
-                        
-                        {isSelected && (
-                          <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              
-              {services.length === 0 && (
-                <div className="text-center py-8">
-                  <div className="text-gray-500 text-lg">No services available</div>
-                  <p className="text-gray-400 text-sm mt-2">Services can be assigned later by the manager</p>
-                </div>
-              )}
-
-              {services.length > 0 && filteredServices.length === 0 && (
-                <div className="text-center py-8">
-                  <div className="text-gray-500 text-lg">No services found matching "{searchQuery}"</div>
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="text-purple-600 hover:text-purple-800 text-sm mt-2 font-medium"
-                  >
-                    Clear search
-                  </button>
-                </div>
-              )}
-              
-              <p className="text-xs text-gray-500 mt-6">
-                Select services if customer knows what they want, or leave empty for manager to assign later
-              </p>
-              
-              {/* Total Price Display */}
-              {selectedServices.length > 0 && (
-                <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                    <span>🛒</span>
-                    Selected Services ({selectedServices.length})
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedServices.map((serviceId, index) => {
-                      const service = services.find(s => s.id === serviceId);
-                      return (
-                        <div key={serviceId} className="flex justify-between items-center bg-white p-3 rounded-xl">
-                          <div className="flex items-center gap-3">
-                            <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                              {index + 1}
-                            </span>
-                            <div>
-                              <span className="text-gray-800 font-medium">{service?.name}</span>
-                              <span className="text-gray-500 text-sm ml-2">({service?.duration || 60} min)</span>
-                            </div>
-                          </div>
-                          <span className="font-semibold text-purple-600">₦{parseFloat(service?.price || 0).toLocaleString()}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                <div className="font-sans">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Time *</label>
                   
-                  <div className="mt-4 pt-4 border-t border-purple-200">
-                    <div className="flex justify-between items-center">
-                      <span className="text-gray-800 font-semibold">Total Amount:</span>
-                      <span className="text-xl font-bold text-purple-600">₦{calculateTotalPrice().toLocaleString()}</span>
+                  {slotsLoading ? (
+                    <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg">
+                      <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2"></div>
+                      <p>Loading slots...</p>
                     </div>
-                    <div className="flex justify-between items-center text-sm text-gray-600 mt-1">
-                      <span>Total Duration:</span>
-                      <span>{calculateTotalDuration()} minutes</span>
+                  ) : slotsError ? (
+                    <div className="p-4 bg-red-50 text-red-600 rounded-lg text-sm border border-red-100">
+                      {slotsError}
                     </div>
-                  </div>
+                  ) : availableSlots.length === 0 ? (
+                    <div className="p-4 bg-yellow-50 text-yellow-700 rounded-lg text-sm border border-yellow-100">
+                      No available slots for this date. Please select another day.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {availableSlots.map((time) => (
+                        <button
+                          key={time}
+                          type="button"
+                          onClick={() => handleTimeSelect(time)}
+                          className={`
+                            py-2 px-3 text-sm rounded-lg border transition-all duration-200
+                            ${formData.booking_time === time 
+                              ? 'bg-black text-white border-black shadow-lg transform scale-105' 
+                              : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                            }
+                          `}
+                        >
+                          {time}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {validationErrors.booking_time && <p className="text-red-500 text-xs mt-1">{validationErrors.booking_time}</p>}
                 </div>
-              )}
-            </div>
+              </section>
 
+              {/* Notes */}
+              <section>
+                <div className="font-sans">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Notes</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    rows="3"
+                    className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                    placeholder="Any special requests?"
+                  />
+                </div>
+              </section>
 
-
-            {/* Notes */}
-            <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-2">
-                Additional Notes
-              </label>
-              <textarea
-                id="notes"
-                name="notes"
-                value={formData.notes}
-                onChange={handleInputChange}
-                rows={3}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="Any special requests or notes for the manager..."
-              />
-            </div>
-
-            {/* Submit Button */}
-            <div className="pt-4">
+              {/* Submit Button */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-4 px-8 rounded-2xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                className="w-full bg-black text-white font-bold py-4 rounded-xl hover:bg-gray-800 transition-all transform hover:-translate-y-1 shadow-xl disabled:opacity-50 disabled:cursor-not-allowed font-sans uppercase tracking-widest text-lg"
               >
-                {loading ? (
-                  <div className="flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                    Creating Booking...
-                  </div>
-                ) : (
-                  'Create Walk-In Booking'
-                )}
+                {loading ? 'Creating Booking...' : 'Confirm Booking'}
               </button>
-            </div>
 
-            {/* Info Box */}
-            <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-6">
-              <div className="flex items-start gap-3">
-                <span className="text-purple-600 text-xl">💡</span>
-                <div>
-                  <h4 className="font-semibold text-purple-800 mb-1" style={{ fontFamily: '"UnifrakturCook", cursive' }}>How it works:</h4>
-                  <p className="text-purple-700 text-sm">
-                    This creates a walk-in booking. You can optionally select services now, 
-                    or the manager will assign services and workers later in the booking management page.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
       </div>
     </div>

@@ -148,12 +148,14 @@ router.get('/bookings/available-slots', async (req, res) => {
       });
     });
 
-    // Generate available slots (9 AM to 6 PM, 30-minute intervals)
+    // Generate available slots (9 AM to 8:30 PM, 30-minute intervals)
+    // Last slot should start at 7:30 PM for a 1-hour service to finish by 8:30 PM
     const availableSlots = [];
     const startHour = 9;
-    const endHour = 18;
+    const endHour = 20; // 8 PM
     const slotInterval = 30; // minutes
-    
+    const closingTime = new Date(`${date}T20:30:00`); // 8:30 PM Closing Time
+
     // Get current time for filtering past slots (Nigeria/WAT timezone - UTC+1)
     const now = new Date();
     const nigeriaTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // Add 1 hour for WAT
@@ -172,8 +174,11 @@ router.get('/bookings/available-slots', async (req, res) => {
       return (slotStart < bookedEnd && slotEnd > bookedStart);
     };
 
-    for (let hour = startHour; hour < endHour; hour++) {
+    for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
+        // Skip 8:30 PM and later slots entirely
+        if (hour === 20 && minute >= 30) continue;
+        
         const slotTime = new Date(`${date}T${pad(hour)}:${pad(minute)}:00`);
         
         // Skip past times for current day - only show future times (using Nigeria time)
@@ -181,8 +186,10 @@ router.get('/bookings/available-slots', async (req, res) => {
           continue;
         }
         
+        // Check if the service finishes before closing time (8:30 PM)
         const slotEndForBusinessHours = new Date(slotTime.getTime() + totalDuration * 60000);
-        if (slotEndForBusinessHours.getHours() > endHour || (slotEndForBusinessHours.getHours() === endHour && slotEndForBusinessHours.getMinutes() > 0)) {
+        
+        if (slotEndForBusinessHours > closingTime) {
           continue;
         }
 

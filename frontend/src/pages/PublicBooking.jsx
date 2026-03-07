@@ -11,8 +11,7 @@ import '@fontsource/unifrakturcook';
 const PublicBooking = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
-  const isInternal = location.pathname.includes('public-booking') && user;
+  const isInternal = location.pathname.includes('public-booking');
 
   // Form State
   const [formData, setFormData] = useState({
