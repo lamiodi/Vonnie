@@ -1041,15 +1041,15 @@ const POS = () => {
     );
   }
   return (
-    <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
+      <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
         {/* Main Content - Products/Services */}
-        <div className="flex-1 p-6 overflow-y-auto">
+        <div className="flex-1 p-4 lg:p-6 overflow-y-auto order-2 lg:order-1">
           <div className="max-w-7xl mx-auto space-y-4">
             {/* Header */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <h1 className="text-3xl font-bold text-gray-900">Point of Sale</h1>
-              <p className="text-gray-500 mt-1">Manage sales and transactions</p>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Point of Sale</h1>
+              <p className="text-gray-500 mt-1 text-sm lg:text-base">Manage sales and transactions</p>
             </div>
             {apiOnline === false && (
               <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">
@@ -1060,14 +1060,14 @@ const POS = () => {
               </div>
             )}
             {/* Booking Lookup */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 Booking Lookup
               </h3>
-              <div className="flex gap-3">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
                   placeholder="Enter booking number (e.g., BK-JOHN-123)"
@@ -1079,7 +1079,7 @@ const POS = () => {
                   <button
                     onClick={fetchBooking}
                     disabled={bookingLoading}
-                    className="px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm"
+                    className="flex-1 sm:flex-none px-6 py-2.5 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-sm whitespace-nowrap"
                   >
                     {bookingLoading ? 'Loading...' : 'Find Booking'}
                   </button>
@@ -1104,7 +1104,7 @@ const POS = () => {
                       Booking Details
                     </h4>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div className="flex items-center">
                       <span className="text-gray-600 font-medium">Customer:</span>
                       <span className="ml-2 text-gray-900">{bookingData.customer_name}</span>
@@ -1240,8 +1240,8 @@ const POS = () => {
             {activeTab === 'services' && (
               <div className="space-y-6">
                 {/* Services Search and Filter */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input
                       type="text"
                       placeholder="🔍 Search services..."
@@ -1263,7 +1263,7 @@ const POS = () => {
                   </div>
                 </div>
                 {/* Services Grid */}
-                <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredServices.map(service => (
                     <div
                       key={service.id}
@@ -1298,7 +1298,7 @@ const POS = () => {
             )}
             {/* Products Grid */}
             {activeTab === 'products' && (
-              <div className="grid grid-cols-3 xl:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {filteredProducts.map(product => (
                   <div
                     key={product.id}
@@ -1345,9 +1345,9 @@ const POS = () => {
           </div>
         </div>
         {/* Cart Sidebar - Desktop */}
-        <div className="w-[400px] bg-white border-l border-gray-200 flex-col shadow-xl">
-          <div className="p-4 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-4">
+        <div className="w-full lg:w-[400px] h-[300px] lg:h-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col shadow-xl order-1 lg:order-2 overflow-hidden">
+          <div className="p-4 flex flex-col h-full overflow-hidden">
+            <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h3 className="text-lg font-bold text-gray-900 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
@@ -1359,7 +1359,7 @@ const POS = () => {
               </span>
             </div>
             {/* Customer Info */}
-            <div className="mb-3">
+            <div className="mb-3 flex-shrink-0">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Customer Details</h4>
               <div className="space-y-2">
                 <input
@@ -1386,7 +1386,7 @@ const POS = () => {
               </div>
             </div>
             {/* Cart Items */}
-            <div className={`${cart.length === 0 && !bookingData ? 'flex-initial' : 'flex-1'} overflow-y-auto mb-2 -mx-2 px-2 space-y-2`}>
+            <div className="flex-1 overflow-y-auto mb-2 -mx-2 px-2 space-y-2">
               {cart.length === 0 && !bookingData ? (
                 <div className="text-center py-2">
                   <svg className="w-10 h-10 mx-auto text-gray-300 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1486,7 +1486,7 @@ const POS = () => {
               )}
             </div>
             {/* Coupon and Payment Section */}
-            <div className="space-y-3">
+            <div className="space-y-3 flex-shrink-0 pt-2 border-t border-gray-100">
               {/* Coupon Section */}
               <div className="pb-3 border-b border-gray-200">
                 <div className="flex gap-2">

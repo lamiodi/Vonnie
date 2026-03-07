@@ -2089,8 +2089,8 @@ const Bookings = () => {
         </div>
         <BookingsSummary bookings={filteredBookings} />
         {showForm && (
-          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-4xl w-full max-h-screen overflow-y-auto">
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
+            <div className="bg-white rounded-t-xl sm:rounded-lg w-full max-w-4xl max-h-[90vh] sm:max-h-screen overflow-y-auto animate-slide-up sm:animate-none">
               <BookingForm
                 booking={editingBooking}
                 services={services}

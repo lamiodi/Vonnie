@@ -77,9 +77,13 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     }
   }, [booking]);
   useEffect(() => {
-    const hasWorkers = Array.isArray(formData.workers) && formData.workers.length > 0;
-    const hasServices = Array.isArray(formData.service_ids) && formData.service_ids.length > 0;
-    if (hasWorkers && formData.booking_date && hasServices) {
+    // Only fetch if we have a date and either (services selected OR no services selected yet - simplified)
+    // Actually, backend now handles optional services/workers.
+    // But logically, we probably want to wait for services to calculate duration?
+    // Backend defaults to 60 mins.
+    // Let's allow fetching even if no services/workers, so user can see generic availability.
+    
+    if (formData.booking_date) {
       fetchAvailableSlots();
     }
   }, [formData.workers, formData.booking_date, formData.service_ids]);
@@ -147,7 +151,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         : [];
       setAvailableSlots(data);
     } catch (error) {
-      handleError('Failed to load available time slots', error);
+      handleError(error, 'Failed to load available time slots');
     }
   };
   const validateField = (name, value) => {
@@ -475,11 +479,12 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         </div>
       )}
      
-      <form onSubmit={handleSubmit} className="space-y-6" role="form" aria-labelledby="booking-form-title">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" role="form" aria-labelledby="booking-form-title">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Customer Information */}
-          <div>
-            <label htmlFor="customer-name" className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-4">
+            <div>
+            <label htmlFor="customer-name" className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Customer Name *
             </label>
             <input
@@ -505,8 +510,9 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
               </p>
             )}
           </div>
-          <div>
-            <label htmlFor="customer-email" className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="space-y-4">
+            <div>
+            <label htmlFor="customer-email" className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
               Customer Email *
             </label>
             <input
@@ -559,45 +565,47 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
               </p>
             )}
           </div>
-          {/* Services Selection */}
-          <div className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
-              <span>Select Services</span>
-              <span className="text-gray-400 cursor-help relative group">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                  You can select multiple services for a single appointment.
-                </div>
-              </span>
-            </label>
-            
-            <div className="flex flex-col md:flex-row gap-4 mb-4">
-              <div className="w-full md:w-1/3">
-                <select
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="All">All Categories</option>
-                  {categories.map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="w-full md:w-2/3">
-                <input
-                  type="text"
-                  placeholder="Search services..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
-            </div>
+        </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto p-2 border border-gray-200 rounded-md">
+        {/* Services Selection */}
+        <div className="space-y-4">
+          <label className="block text-sm font-medium text-gray-700 flex flex-wrap items-center gap-2">
+            <span>Select Services</span>
+            <span className="text-gray-400 cursor-help relative group">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                You can select multiple services for a single appointment.
+              </div>
+            </span>
+          </label>
+          
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="w-full sm:w-1/3">
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+              >
+                <option value="All">All Categories</option>
+                {categories.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
+              </select>
+            </div>
+            <div className="w-full sm:w-2/3">
+              <input
+                type="text"
+                placeholder="Search services..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
               {servicesLoading ? (
                 <div className="col-span-full text-center py-4 text-gray-500">Loading services...</div>
               ) : filteredServices.length === 0 ? (
@@ -641,7 +649,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 Loading workers...
               </div>
             ) : (
-            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
               {Array.isArray(workers) && workers.map(worker => {
                 const isSelected = Array.isArray(formData.workers) && formData.workers.some(w => w.worker_id === worker.id);
                 const statusColor = {
@@ -696,48 +704,51 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             )}
           </div>
         </div>
-        {/* Date Selection - Hidden for Walk-ins */}
+        {/* Date and Time Selection */}
         {!isWalkInMode && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" id="date-label">
-              Booking Date *
-            </label>
-            <div role="group" aria-labelledby="date-label" aria-describedby="date-description">
-              <span id="date-description" className="sr-only">Select a date for your booking. Use arrow keys to navigate the calendar.</span>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Date *
+              </label>
               <Calendar
                 onChange={handleDateChange}
                 value={formData.booking_date}
-                minDate={new Date()}
-                className="mx-auto"
-                aria-label="Select booking date"
+                className="w-full border rounded-md p-2 text-sm"
+                tileClassName={({ date, view }) => {
+                  if (view === 'month') {
+                    // Check if date has available slots (simplified check)
+                    return 'hover:bg-blue-50 cursor-pointer rounded-full';
+                  }
+                }}
               />
             </div>
-          </div>
-        )}
-        {/* Time Selection - Hidden for Walk-ins */}
-        {!isWalkInMode && availableSlots.length > 0 && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2" id="time-slots-label">
-              Available Time Slots *
-            </label>
-            <div className="grid grid-cols-3 gap-2" role="group" aria-labelledby="time-slots-label" aria-describedby="time-slots-description">
-              <span id="time-slots-description" className="sr-only">Select an available time slot for your booking</span>
-              {availableSlots.map(slot => (
-                <button
-                  key={slot}
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, booking_time: slot }))}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${
-                    formData.booking_time === slot
-                      ? 'bg-blue-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
-                  aria-pressed={formData.booking_time === slot}
-                  aria-label={`Select time slot ${slot}`}
-                >
-                  {slot}
-                </button>
-              ))}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Select Time *
+              </label>
+              {availableSlots.length > 0 ? (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
+                  {availableSlots.map((slot, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, booking_time: slot }))}
+                      className={`py-2 px-3 text-sm rounded-md border ${
+                        formData.booking_time === slot
+                          ? 'bg-blue-500 text-white border-blue-500'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {slot}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-gray-500 italic p-4 border border-gray-200 rounded-md bg-gray-50 text-center">
+                  {formData.booking_date ? 'No slots available for this date' : 'Select a date first'}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -759,23 +770,23 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           <span id="notes-description" className="sr-only">Optional field for any special requests or additional information</span>
         </div>
         {/* Form Buttons */}
-        <div className="flex space-x-4">
+        <div className="flex flex-col-reverse sm:flex-row gap-3 sm:space-x-4 pt-4 border-t border-gray-100">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="w-full sm:flex-1 bg-white text-gray-700 py-2.5 px-4 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500 font-medium transition-colors"
+            disabled={loading}
+          >
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={loading || (!isWalkInMode && !formData.booking_time)}
-            className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full sm:flex-1 bg-blue-600 text-white py-2.5 px-4 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm transition-colors"
             aria-describedby="submit-status"
           >
             {loading ? (isEditing ? 'Updating...' : 'Adding...') :
              (isEditing ? 'Update Booking' : 'Add Walk-in Customer')}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500"
-            disabled={loading}
-          >
-            Cancel
           </button>
         </div>
         <div id="submit-status" className="sr-only" role="status" aria-live="polite">

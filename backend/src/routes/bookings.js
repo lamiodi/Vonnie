@@ -856,40 +856,56 @@ router.get('/available-slots', authenticate, async (req, res) => {
   try {
     const { date, worker_id, service_ids } = req.query;
    
-    if (!date || !worker_id || !service_ids) {
-      return res.status(400).json(errorResponse('Date, worker_id, and service_ids are required', 'MISSING_REQUIRED_FIELDS', 400));
+    if (!date) {
+      return res.status(400).json(errorResponse('Date is required', 'MISSING_REQUIRED_FIELDS', 400));
     }
-    const ids = String(service_ids)
-      .split(',')
-      .map(id => id.trim())
-      .filter(id => id !== '');
-    if (ids.length === 0) {
-      return res.status(400).json(errorResponse('Invalid service_ids provided', 'INVALID_SERVICE_IDS', 400));
+
+    // Parse service IDs and calculate duration
+    let serviceDuration = 60; // Default 60 mins
+    if (service_ids) {
+      const ids = String(service_ids).split(',').map(id => id.trim()).filter(id => id !== '');
+      if (ids.length > 0) {
+        const serviceResult = await query(
+          'SELECT COALESCE(SUM(duration), 0) AS total_duration FROM services WHERE id = ANY($1)',
+          [ids]
+        );
+        const duration = parseInt(serviceResult.rows[0]?.total_duration || 0, 10);
+        if (duration > 0) serviceDuration = duration;
+      }
     }
-    // Get worker schedule for the specific day
-    const dayOfWeek = new Date(date).getDay(); // 0 = Sunday, 1 = Monday, etc.
-    const scheduleResult = await query(
-      'SELECT start_time, end_time FROM worker_schedules WHERE worker_id = $1 AND day_of_week = $2 AND is_available = true',
-      [worker_id, dayOfWeek]
+
+    // Determine target workers
+    let targetWorkerIds = [];
+    if (worker_id) {
+      targetWorkerIds = String(worker_id).split(',').map(id => id.trim()).filter(id => id !== '');
+    }
+
+    // If no specific workers requested, get all active staff/managers
+    if (targetWorkerIds.length === 0) {
+      const workersResult = await query("SELECT id FROM users WHERE role IN ('staff', 'manager') AND is_active = true");
+      targetWorkerIds = workersResult.rows.map(w => w.id);
+    }
+
+    if (targetWorkerIds.length === 0) {
+      return res.json([]); // No workers available in system
+    }
+
+    const dayOfWeek = new Date(date).getDay();
+    
+    // Get schedules for ALL target workers
+    const schedulesResult = await query(
+      'SELECT worker_id, start_time, end_time FROM worker_schedules WHERE worker_id = ANY($1) AND day_of_week = $2 AND is_available = true',
+      [targetWorkerIds, dayOfWeek]
     );
-    if (scheduleResult.rows.length === 0) {
-      return res.json([]); // No available slots if worker not scheduled
+
+    if (schedulesResult.rows.length === 0) {
+      return res.json([]); // No workers scheduled for this day
     }
-    const { start_time, end_time } = scheduleResult.rows[0];
-   
-    // Get total duration across selected services
-    const serviceResult = await query(
-      'SELECT COALESCE(SUM(duration), 0) AS total_duration FROM services WHERE id = ANY($1)',
-      [ids]
-    );
-    const serviceDuration = parseInt(serviceResult.rows[0]?.total_duration || 0, 10);
-    if (serviceDuration <= 0) {
-      return res.status(400).json(errorResponse('No valid services found for provided service_ids', 'NO_VALID_SERVICES', 400));
-    }
-   
-    // Get existing bookings for this worker on this date
+
+    // Get existing bookings for ALL target workers on this date
     const bookingsResult = await query(
       `SELECT
+         b.worker_id,
          b.scheduled_time,
          COALESCE(svc.total_duration, 0) AS duration
        FROM bookings b
@@ -899,18 +915,44 @@ router.get('/available-slots', authenticate, async (req, res) => {
          JOIN services s ON s.id = bs.service_id
          WHERE bs.booking_id = b.id
        ) svc ON TRUE
-       WHERE b.worker_id = $1
+       WHERE b.worker_id = ANY($1)
          AND DATE(b.scheduled_time) = $2
          AND b.status IN ('scheduled', 'in-progress')`,
-      [worker_id, date]
+      [targetWorkerIds, date]
     );
-    // Generate available time slots
-    const availableSlots = [];
-    const start = new Date(`${date}T${start_time}`);
-    const end = new Date(`${date}T${end_time}`);
+
+    // Group bookings by worker
+    const bookingsByWorker = {};
+    bookingsResult.rows.forEach(booking => {
+      if (!bookingsByWorker[booking.worker_id]) {
+        bookingsByWorker[booking.worker_id] = [];
+      }
+      bookingsByWorker[booking.worker_id].push(booking);
+    });
+
+    // Generate slots: Find Union of available slots across all workers
+    // (If user selected multiple workers, we assume they want to see if ANY of them is free)
+    // (If user selected NO workers, we definitely want to see if ANYONE is free)
+    
+    // We'll iterate through all possible 30-min slots for the day (e.g. 00:00 to 23:30)
+    // But practically, we can just take the min start_time and max end_time across all schedules to limit iteration
+    
+    let minStart = '23:59:59';
+    let maxEnd = '00:00:00';
+    
+    const workerSchedules = {}; // Map worker_id -> schedule
+    
+    schedulesResult.rows.forEach(sch => {
+      workerSchedules[sch.worker_id] = sch;
+      if (sch.start_time < minStart) minStart = sch.start_time;
+      if (sch.end_time > maxEnd) maxEnd = sch.end_time;
+    });
+
+    const availableSlots = new Set();
+    const start = new Date(`${date}T${minStart}`);
+    const end = new Date(`${date}T${maxEnd}`);
     const now = new Date();
     
-    // Create date objects for comparison (without time portion)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(date);
@@ -919,27 +961,49 @@ router.get('/available-slots', authenticate, async (req, res) => {
     let currentTime = new Date(start);
    
     while (currentTime < end) {
+      const slotStart = new Date(currentTime);
       const slotEnd = new Date(currentTime.getTime() + serviceDuration * 60000);
-     
-      // Skip past times for current day - only show future times
+      
+      // Basic validity checks
       const isToday = today.getTime() === selectedDate.getTime();
       const isPastTime = isToday && currentTime < now;
-     
-      if (slotEnd <= end && !isPastTime) {
-        // Check if this slot conflicts with existing bookings
-        const isAvailable = !bookingsResult.rows.some(booking => {
-          const bookingStart = new Date(booking.scheduled_time);
-          const bookingEnd = new Date(bookingStart.getTime() + booking.duration * 60000);
-         
-          return (currentTime < bookingEnd && slotEnd > bookingStart);
-        });
-       
-        if (isAvailable) {
-          availableSlots.push({
+
+      if (!isPastTime) {
+        // Check if AT LEAST ONE worker is available for this slot
+        let isAnyWorkerAvailable = false;
+
+        for (const workerId of targetWorkerIds) {
+          const schedule = workerSchedules[workerId];
+          if (!schedule) continue; // Worker not scheduled today
+
+          // Check if slot fits in worker's shift
+          const shiftStart = new Date(`${date}T${schedule.start_time}`);
+          const shiftEnd = new Date(`${date}T${schedule.end_time}`);
+          
+          if (slotStart >= shiftStart && slotEnd <= shiftEnd) {
+            // Check conflicts for this worker
+            const workerBookings = bookingsByWorker[workerId] || [];
+            const hasConflict = workerBookings.some(booking => {
+              const bookingStart = new Date(booking.scheduled_time);
+              const bookingEnd = new Date(bookingStart.getTime() + booking.duration * 60000);
+              return (slotStart < bookingEnd && slotEnd > bookingStart);
+            });
+
+            if (!hasConflict) {
+              isAnyWorkerAvailable = true;
+              break; // Found an available worker, so this slot is valid
+            }
+          }
+        }
+
+        if (isAnyWorkerAvailable) {
+          availableSlots.add(JSON.stringify({
             start_time: currentTime.toISOString(),
-            end_time: slotEnd.toISOString(),
+            // We use the same end time for all, based on service duration
+            // Note: If different workers have different speeds, this logic might need refinement, 
+            // but currently service duration is standardized per service.
             formatted_time: currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          });
+          }));
         }
       }
      
@@ -947,7 +1011,16 @@ router.get('/available-slots', authenticate, async (req, res) => {
       currentTime = new Date(currentTime.getTime() + 30 * 60000);
     }
    
-    res.json(availableSlots);
+    // Sort slots
+    const sortedSlots = Array.from(availableSlots)
+      .map(s => JSON.parse(s))
+      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
+      .map(s => ({
+        ...s,
+        end_time: new Date(new Date(s.start_time).getTime() + serviceDuration * 60000).toISOString()
+      }));
+
+    res.json(sortedSlots);
   } catch (error) {
     console.error('Get available slots error:', error);
     res.status(400).json(errorResponse(error.message, 'AVAILABLE_SLOTS_ERROR', 400));
