@@ -100,18 +100,22 @@ const POS = () => {
     return formattedPrice;
   };
 
+  // Memoize filtered products to improve performance
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+                           (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                           (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
   }, [products, searchTerm, selectedCategory]);
 
+  // Memoize filtered services to improve performance
   const filteredServices = useMemo(() => {
     return services.filter(service => {
-      const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
+      const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
+                           (service.description && service.description.toLowerCase().includes(serviceSearchTerm.toLowerCase()));
       const matchesCategory = selectedServiceCategory === '' || service.category === selectedServiceCategory;
       return matchesSearch && matchesCategory;
     });
@@ -316,25 +320,6 @@ const POS = () => {
     setCustomerInfo({ name: '', email: '', phone: '' });
     setPaymentConfirmed(false);
   }, []);
-  // Memoize filtered products to improve performance
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => {
-      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
-      const matchesCategory = !selectedCategory || product.category === selectedCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [products, searchTerm, selectedCategory]);
-  // Memoize filtered services to improve performance
-  const filteredServices = useMemo(() => {
-    return services.filter(service => {
-      const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
-                           service.description.toLowerCase().includes(serviceSearchTerm.toLowerCase());
-      const matchesCategory = !selectedServiceCategory || service.category === selectedServiceCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [services, serviceSearchTerm, selectedServiceCategory]);
   // ==========================================
   // CART MANAGEMENT LOGIC
   // ==========================================
