@@ -18,14 +18,15 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     worker_id,
     service_ids,
     notes,
+    instagram_handle,
     payment_status = 'pending'
   } = bookingData;
 
   // Validate required fields
-  if (!customer_name || !customer_email || !customer_phone || !scheduled_time || !service_ids || !Array.isArray(service_ids) || service_ids.length === 0) {
+  if (!customer_name || !customer_email || !customer_phone || !scheduled_time) {
     throw {
       success: false,
-      message: 'Missing required fields: customer_name, customer_email, customer_phone, scheduled_time, and service_ids are required',
+      message: 'Missing required fields: customer_name, customer_email, customer_phone, and scheduled_time are required',
       status: 400
     };
   }
@@ -56,60 +57,65 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     };
   }
 
-  // Validate services exist and calculate pricing
-  const servicesResult = await query(
-    'SELECT id, name, price, duration, max_duration FROM services WHERE id = ANY($1) AND is_active = true',
-    [service_ids]
-  );
-
-  if (servicesResult.rows.length !== service_ids.length) {
-    throw {
-      success: false,
-      message: 'One or more services not found or inactive',
-      status: 400
-    };
-  }
-
-  const services = servicesResult.rows;
-  const totalPrice = services.reduce((sum, service) => sum + parseFloat(service.price), 0);
-  
-  // Calculate total duration using max_duration if available to ensure sufficient time allocation
-  const totalDuration = services.reduce((sum, service) => {
-    const duration = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 0);
-    return sum + duration;
-  }, 0);
-
-  // Check product availability for selected services
-  const productRequirementsResult = await query(
-    `SELECT sp.service_id, sp.product_id, sp.quantity_required, p.name as product_name, p.stock_level
-     FROM service_products sp
-     JOIN products p ON sp.product_id = p.id
-     WHERE sp.service_id = ANY($1)`,
-    [service_ids]
-  );
-
+  let services = [];
+  let totalPrice = 0;
+  let totalDuration = 60; // Default duration 60 mins for no services
   const productUpdates = {}; // productId -> { name, required, current }
 
-  for (const req of productRequirementsResult.rows) {
-    if (!productUpdates[req.product_id]) {
-      productUpdates[req.product_id] = {
-        name: req.product_name,
-        required: 0,
-        current: req.stock_level
-      };
-    }
-    // Assume service_ids are unique as per validation above
-    productUpdates[req.product_id].required += parseFloat(req.quantity_required);
-  }
+  if (service_ids && Array.isArray(service_ids) && service_ids.length > 0) {
+    // Validate services exist and calculate pricing
+    const servicesResult = await query(
+      'SELECT id, name, price, duration, max_duration FROM services WHERE id = ANY($1) AND is_active = true',
+      [service_ids]
+    );
 
-  // Verify stock levels
-  for (const [productId, data] of Object.entries(productUpdates)) {
-    if (data.required > data.current) {
+    if (servicesResult.rows.length !== service_ids.length) {
       throw {
         success: false,
-        message: `Insufficient stock for ${data.name}. Required: ${data.required}, Available: ${data.current}`,
-        status: 409
+        message: 'One or more services not found or inactive',
+        status: 400
       };
+    }
+
+    services = servicesResult.rows;
+    totalPrice = services.reduce((sum, service) => sum + parseFloat(service.price), 0);
+    
+    // Calculate total duration using max_duration if available to ensure sufficient time allocation
+    totalDuration = services.reduce((sum, service) => {
+      const duration = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 0);
+      return sum + duration;
+    }, 0);
+
+    // Check product availability for selected services
+    const productRequirementsResult = await query(
+      `SELECT sp.service_id, sp.product_id, sp.quantity_required, p.name as product_name, p.stock_level
+       FROM service_products sp
+       JOIN products p ON sp.product_id = p.id
+       WHERE sp.service_id = ANY($1)`,
+      [service_ids]
+    );
+
+    for (const req of productRequirementsResult.rows) {
+      if (!productUpdates[req.product_id]) {
+        productUpdates[req.product_id] = {
+          name: req.product_name,
+          required: 0,
+          current: req.stock_level
+        };
+      }
+      // Assume service_ids are unique as per validation above
+      productUpdates[req.product_id].required += parseFloat(req.quantity_required);
+    }
+
+    // Verify stock levels
+    for (const [productId, data] of Object.entries(productUpdates)) {
+      if (data.required > data.current) {
+        throw {
+          success: false,
+          message: `Insufficient stock for ${data.name}. Required: ${data.required}, Available: ${data.current}`,
+          status: 409
+        };
+      }
     }
   }
 
@@ -160,8 +166,8 @@ export const createBooking = async (bookingData, skipNotification = false) => {
       `INSERT INTO bookings (
         booking_number, customer_name, customer_email, customer_phone, 
         customer_type, scheduled_time, worker_id, duration, total_amount, 
-        payment_status, status, notes, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        payment_status, status, notes, instagram_handle, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       RETURNING *`,
       [
         bookingNumber,
@@ -175,7 +181,8 @@ export const createBooking = async (bookingData, skipNotification = false) => {
         totalPrice,
         payment_status,
         worker_id ? 'scheduled' : 'pending_confirmation', // Auto-schedule if worker is assigned during creation
-        notes
+        notes,
+        instagram_handle
       ]
     );
 
@@ -309,11 +316,11 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
                   <div style="margin-top: 15px; padding: 10px; background: white; border-radius: 8px;">
                     <h4 style="margin: 0 0 10px 0; color: #9333ea; font-size: 14px; font-weight: 600; font-family: 'Patrick Hand', cursive;">Services:</h4>
                     <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                      ${services.map(service => `
+                      ${services.length > 0 ? services.map(service => `
                         <span style="background: #9333ea; color: white; padding: 4px 10px; border-radius: 15px; font-size: 12px; font-family: 'Patrick Hand', cursive;">
                           ${service.name}
                         </span>
-                      `).join('')}
+                      `).join('') : '<span style="color: #666; font-style: italic; font-family: \'Patrick Hand\', cursive;">To be discussed in-shop</span>'}
                     </div>
                   </div>
                 </div>

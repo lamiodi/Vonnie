@@ -73,33 +73,31 @@ router.get('/bookings/available-slots', async (req, res) => {
   try {
     const { worker_id, date, service_id, service_ids } = req.query;
     
-    if (!date || (!service_id && !service_ids)) {
-      return res.status(400).json(errorResponse('date and service_id or service_ids are required', 'MISSING_REQUIRED_FIELDS', 400));
+    if (!date) {
+      return res.status(400).json(errorResponse('date is required', 'MISSING_REQUIRED_FIELDS', 400));
     }
 
     // Determine service IDs to use
     let serviceIds = [];
+    let totalDuration = 60; // Default duration in minutes
+
     if (service_ids) {
       serviceIds = service_ids.split(',').map(id => id.trim()).filter(id => id !== '');
     } else if (service_id) {
       serviceIds = [service_id.trim()];
     }
 
-    if (serviceIds.length === 0) {
-      return res.status(400).json(errorResponse('At least one valid service_id is required', 'INVALID_SERVICE_IDS', 400));
+    if (serviceIds.length > 0) {
+      // Get total duration for all services (use max_duration if available to ensure sufficient slot size)
+      const serviceResult = await query(
+        'SELECT SUM(COALESCE(max_duration, duration)) as total_duration FROM services WHERE id = ANY($1)',
+        [serviceIds]
+      );
+      
+      if (serviceResult.rows[0].total_duration) {
+        totalDuration = parseInt(serviceResult.rows[0].total_duration);
+      }
     }
-
-    // Get total duration for all services (use max_duration if available to ensure sufficient slot size)
-    const serviceResult = await query(
-      'SELECT SUM(COALESCE(max_duration, duration)) as total_duration FROM services WHERE id = ANY($1)',
-      [serviceIds]
-    );
-    
-    if (!serviceResult.rows[0].total_duration) {
-      return res.status(404).json(errorResponse('No valid services found', 'NO_VALID_SERVICES', 404));
-    }
-
-    const totalDuration = parseInt(serviceResult.rows[0].total_duration);
 
     // Get existing bookings for the worker on the specified date
     // If worker_id is empty, get bookings for all workers to find slots where at least one worker is free

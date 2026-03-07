@@ -4,411 +4,52 @@ import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
-import { convertToNigeriaISOString } from '../utils/formatters';
-import PaystackPayment from '../components/PaystackPayment';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
 
 const PublicBooking = () => {
   const navigate = useNavigate();
-  const [services, setServices] = useState([]);
-  const [filteredServices, setFilteredServices] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedServices, setSelectedServices] = useState([]);
-  const [currentStep, setCurrentStep] = useState(1);
+  
+  // Form State
   const [formData, setFormData] = useState({
+    customer_name: '',
+    customer_phone: '',
+    customer_email: '',
+    instagram_handle: '',
     booking_date: new Date(),
     booking_time: '',
-    customer_name: '',
-    customer_email: '',
-    customer_phone: '',
     notes: ''
   });
-  const [validationErrors, setValidationErrors] = useState({});
+
+  // UI State
   const [loading, setLoading] = useState(false);
-  const [bookingCreating, setBookingCreating] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState(null);
-  const [totalPrice, setTotalPrice] = useState(0);
-  const [totalDuration, setTotalDuration] = useState(0);
-  const [minTotalDuration, setMinTotalDuration] = useState(0);
-  const [bookingResponse, setBookingResponse] = useState(null);
-  const [paymentCompleted, setPaymentCompleted] = useState(false);
-  const [paymentProcessing, setPaymentProcessing] = useState(false);
-  const hasNavigatedRef = useRef(false);
+  const [validationErrors, setValidationErrors] = useState({});
   const slotsControllerRef = useRef(null);
 
   const endpoints = {
-    services: '/api/public/services',
     availableSlots: '/api/public/bookings/available-slots',
     createBooking: '/api/public/bookings'
   };
 
-  const buildBookingInfo = (override = {}) => {
-    const baseServiceName = selectedServices.map(s => s.name).join(', ');
-    
-    // Enhanced date/time formatting with error handling
-    const formatDateForDisplay = (date) => {
-      if (!date) return null;
-      try {
-        const dateObj = new Date(date);
-        if (isNaN(dateObj.getTime())) {
-          console.warn('Invalid date provided to formatDateForDisplay:', date);
-          return typeof date === 'string' ? date : 'Invalid date';
-        }
-        return dateObj.toLocaleDateString('en-US', { 
-          weekday: 'long', 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        });
-      } catch (error) {
-        console.error('Error formatting date:', error);
-        return 'Date formatting error';
-      }
-    };
-    
-    const formatTimeForDisplay = (time) => {
-      if (!time) return null;
-      try {
-        if (typeof time === 'string') {
-          // Handle ISO timestamps
-          if (time.includes('T')) {
-            const date = new Date(time);
-            if (isNaN(date.getTime())) {
-              console.warn('Invalid ISO timestamp:', time);
-              return 'Invalid time';
-            }
-            return date.toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            });
-          }
-          
-          // Handle HH:mm format
-          if (/^\d{2}:\d{2}/.test(time)) {
-            const [hours, minutes] = time.split(':');
-            const hour = parseInt(hours);
-            if (isNaN(hour) || hour < 0 || hour > 23) {
-              console.warn('Invalid hour in time string:', time);
-              return 'Invalid time';
-            }
-            const period = hour >= 12 ? 'PM' : 'AM';
-            const displayHour = hour % 12 || 12;
-            return `${displayHour}:${minutes} ${period}`;
-          }
-        }
-        return time;
-      } catch (error) {
-        console.error('Error formatting time:', error);
-        return 'Time formatting error';
-      }
-    };
-    
-    // Enhanced base data with better validation
-    const base = {
-      booking_number: 'Pending...',
-      customer_name: formData.customer_name?.trim() || 'Customer',
-      customer_email: formData.customer_email?.trim() || '',
-      customer_phone: formData.customer_phone?.trim() || '',
-      service_name: baseServiceName || 'Service to be confirmed',
-      booking_date: formatDateForDisplay(formData.booking_date),
-      booking_time: formatTimeForDisplay(formData.booking_time),
-      duration: totalDuration || null,
-      total_amount: totalPrice || 0,
-      status: 'scheduled',
-      payment_status: 'pending',
-      notes: formData.notes?.trim() || '',
-      worker_id: null, // Explicitly set for consistency
-      worker_name: null // Explicitly set for consistency
-    };
-
-    let info = { ...base };
-
-    if (bookingResponse) {
-      // Enhanced server response handling with better validation
-      const scheduled = bookingResponse.scheduled_time || bookingResponse.booking_date || null;
-      const timeVal = bookingResponse.booking_time || scheduled || base.booking_time;
-      const srvName = bookingResponse.service_name || 
-        (Array.isArray(bookingResponse.services) ? 
-          bookingResponse.services.map(s => s.name || s.service_name || 'Unknown Service').join(', ') : 
-          base.service_name);
-      
-      // Safe numeric conversions
-      const amt = (() => {
-        const val = bookingResponse.total_amount;
-        if (typeof val === 'string') {
-          const parsed = parseFloat(val);
-          return isNaN(parsed) ? base.total_amount : parsed;
-        }
-        return typeof val === 'number' && !isNaN(val) ? val : base.total_amount;
-      })();
-      
-      const dur = (() => {
-        const val = bookingResponse.duration;
-        if (typeof val === 'string') {
-          const parsed = parseInt(val);
-          return isNaN(parsed) ? base.duration : parsed;
-        }
-        return typeof val === 'number' && !isNaN(val) ? val : base.duration;
-      })();
-      
-      info = {
-        ...info,
-        ...bookingResponse,
-        booking_number: bookingResponse.booking_number || info.booking_number,
-        service_name: srvName || info.service_name,
-        booking_date: scheduled ? formatDateForDisplay(scheduled) : info.booking_date,
-        booking_time: timeVal ? formatTimeForDisplay(timeVal) : info.booking_time,
-        total_amount: amt,
-        duration: dur,
-        status: bookingResponse.status || info.status,
-        customer_name: bookingResponse.customer_name?.trim() || info.customer_name,
-        customer_email: bookingResponse.customer_email?.trim() || info.customer_email,
-        customer_phone: bookingResponse.customer_phone?.trim() || info.customer_phone
-      };
-    }
-
-    if (override && typeof override === 'object') {
-      info = { ...info, ...override };
-    }
-
-    // Final validation and cleanup
-    if (!info.service_name || info.service_name === 'Unknown Service') {
-      info.service_name = base.service_name;
-    }
-    if (!info.total_amount || isNaN(Number(info.total_amount))) {
-      info.total_amount = base.total_amount;
-    }
-    if (!info.duration || isNaN(Number(info.duration))) {
-      info.duration = base.duration;
-    }
-    if (!info.status || info.status === 'NaN') {
-      info.status = 'scheduled';
-    }
-    if (override && override.payment_status === 'completed') {
-      info.payment_status = 'completed';
-    }
-
-    return info;
-  };
-
-  // Service images mapping
-  const serviceImages = {
-    'Hair Styling': (
-      <svg className="w-full h-32 text-pink-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2M21 9V7L15 1H9V3H7V1H5V4H7V6H9V7C9 8.1 9.9 9 11 9H13C14.1 9 15 8.1 15 7V6H17V4H19V1H17V3H15V1L21 7V9M7.5 12C7.5 13.38 8.62 14.5 10 14.5S12.5 13.38 12.5 12H7.5M16.5 12C16.5 13.38 17.62 14.5 19 14.5S21.5 13.38 21.5 12H16.5M12 16C8.69 16 6 18.69 6 22H18C18 18.69 15.31 16 12 16Z"/>
-      </svg>
-    ),
-    'Manicure': (
-      <svg className="w-full h-32 text-purple-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A3,3 0 0,1 15,5V11A3,3 0 0,1 12,14A3,3 0 0,1 9,11V5A3,3 0 0,1 12,2M12,4A1,1 0 0,0 11,5V11A1,1 0 0,0 12,12A1,1 0 0,0 13,11V5A1,1 0 0,0 12,4M7,14A2,2 0 0,1 9,16V22H15V16A2,2 0 0,1 17,14H7Z"/>
-      </svg>
-    ),
-    'Facial Treatment': (
-      <svg className="w-full h-32 text-green-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M10,10A1,1 0 0,1 11,11A1,1 0 0,1 10,12A1,1 0 0,1 9,11A1,1 0 0,1 10,10M14,10A1,1 0 0,1 15,11A1,1 0 0,1 14,12A1,1 0 0,1 13,11A1,1 0 0,1 14,10M12,14C13.11,14 14,14.45 14,15C14,15.55 13.11,16 12,16C10.89,16 10,15.55 10,15C10,14.45 10.89,14 12,14Z"/>
-      </svg>
-    ),
-    'Massage': (
-      <svg className="w-full h-32 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M7,9V15H9V9H7M11,9V15H13V9H11M15,9V15H17V9H15Z"/>
-      </svg>
-    ),
-    'default': (
-      <svg className="w-full h-32 text-indigo-400" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M11,6V18L18,12"/>
-      </svg>
-    )
-  };
-
+  // Fetch available slots when date changes
   useEffect(() => {
-    console.log('PublicBooking component mounted');
-    fetchServices();
-
-    // Listen for payment success messages from Paystack popup
-    const handleMessage = (event) => {
-      const origin = event.origin || '';
-      const raw = event.data;
-      console.log('Message received:', raw);
-      console.log('Event origin:', origin);
-      console.log('Message type:', raw?.type);
-      console.log('Payment processing state:', paymentProcessing);
-
-      // Prevent duplicate processing
-      if (hasNavigatedRef.current || paymentProcessing) {
-        console.log('Payment already processing or navigation completed, ignoring message');
-        return;
-      }
-
-      if (raw?.type === 'PAYMENT_SUCCESS' && event.source === window) {
-        setPaymentProcessing(true);
-        hasNavigatedRef.current = true;
-        const composed = buildBookingInfo({ ...(raw.bookingData || {}), payment_status: 'completed' });
-        try {
-          const bookingInfo = { bookingData: composed, paymentCompleted: true, timestamp: new Date().toISOString() };
-          localStorage.setItem('lastBooking', JSON.stringify(bookingInfo));
-          navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
-        } catch (error) {
-          console.error('Error processing payment success message:', error);
-          setPaymentProcessing(false);
-          hasNavigatedRef.current = false;
-        }
-        return;
-      }
-
-      // Case 2: Native Paystack messages from https://checkout.paystack.com
-      if (origin.includes('checkout.paystack.com')) {
-        let dataObj = null;
-        if (typeof raw === 'string') {
-          try {
-            dataObj = JSON.parse(raw);
-          } catch (e) {
-            // Non-JSON string like 'loaded:checkout' or 'loaded:transaction'
-            dataObj = { event: raw };
-          }
-        } else if (typeof raw === 'object' && raw !== null) {
-          dataObj = raw;
-        }
-
-        const isSuccess = !!(
-          (dataObj && (dataObj.event === 'success' || dataObj.status === 'success')) ||
-          (dataObj?.data && (dataObj.data.event === 'success' || dataObj.data.status === 'success'))
-        );
-
-        if (isSuccess) {
-          setPaymentProcessing(true);
-          hasNavigatedRef.current = true;
-          const composed = buildBookingInfo({ payment_status: 'completed' });
-          try {
-            const bookingInfo = { bookingData: composed, paymentCompleted: true, timestamp: new Date().toISOString() };
-            localStorage.setItem('lastBooking', JSON.stringify(bookingInfo));
-            navigate('/booking-confirmation', { state: { bookingData: composed, paymentCompleted: true } });
-          } catch (error) {
-            console.error('Error processing Paystack success message:', error);
-            setPaymentProcessing(false);
-            hasNavigatedRef.current = false;
-          }
-        }
-      }
-    };
-
-    window.addEventListener('message', handleMessage);
-    console.log('Added message event listener');
-
-    return () => {
-      console.log('PublicBooking component unmounting');
-      window.removeEventListener('message', handleMessage);
-      console.log('Removed message event listener');
-    };
-  }, [navigate]);
-
-  useEffect(() => {
-    if (formData.booking_date && selectedServices.length > 0) {
+    if (formData.booking_date) {
       fetchAvailableSlots();
     }
-  }, [formData.booking_date, selectedServices]);
-
-  useEffect(() => {
-    const total = selectedServices.reduce((sum, service) => sum + parseFloat(service.price || 0), 0);
-    const maxDur = selectedServices.reduce((sum, service) => {
-      const d = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 60);
-      return sum + d;
-    }, 0);
-    const minDur = selectedServices.reduce((sum, service) => sum + parseInt(service.duration || 60), 0);
-    
-    setTotalPrice(total);
-    setTotalDuration(maxDur);
-    setMinTotalDuration(minDur);
-  }, [selectedServices]);
-
-  const fetchServices = async () => {
-    try {
-      const response = await axios.get(endpoints.services);
-      const allServices = response.data;
-      setServices(allServices);
-      setFilteredServices(allServices);
-      
-      // Extract unique categories
-      const uniqueCategories = ['All', ...new Set(allServices.map(s => s.category || 'Other'))];
-      setCategories(uniqueCategories);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      handleError(error, 'Failed to fetch services. Please try again.');
-    }
-  };
-
-  useEffect(() => {
-    let result = services;
-    
-    // Filter by category
-    if (selectedCategory !== 'All') {
-      result = result.filter(s => (s.category || 'Other') === selectedCategory);
-    }
-    
-    // Filter by search query
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(s => 
-        s.name.toLowerCase().includes(query) || 
-        (s.description && s.description.toLowerCase().includes(query))
-      );
-    }
-    
-    setFilteredServices(result);
-  }, [selectedCategory, searchQuery, services]);
-
-  // Unified function to normalize time slots to HH:mm format
-  const normalizeTimeSlot = (slot) => {
-    try {
-      if (!slot) return null;
-      
-      // Handle string slots
-      if (typeof slot === 'string') {
-        // If it's already in HH:mm format, return as is
-        if (slot.match(/^\d{2}:\d{2}$/)) {
-          return slot;
-        }
-        
-        // If it's an ISO timestamp, extract time
-        if (slot.includes('T')) {
-          const timePart = slot.split('T')[1];
-          return timePart ? timePart.substring(0, 5) : null;
-        }
-        
-        // Try to parse as a date
-        const date = new Date(slot);
-        if (!isNaN(date.getTime())) {
-          return date.toTimeString().substring(0, 5);
-        }
-        
-        // Return null for unparseable strings
-        return null;
-      }
-      
-      // Handle object slots
-      if (slot && typeof slot === 'object') {
-        const timeValue = slot.formatted_time || slot.time || slot.start_time;
-        return timeValue ? normalizeTimeSlot(timeValue) : null;
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error normalizing time slot:', slot, error);
-      return null;
-    }
-  };
+  }, [formData.booking_date]);
 
   const fetchAvailableSlots = async () => {
     if (slotsControllerRef.current) {
       try { slotsControllerRef.current.abort(); } catch (e) {}
     }
+    
     setSlotsLoading(true);
     setSlotsError(null);
+    setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
+    
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     if (controller) {
       slotsControllerRef.current = controller;
@@ -416,114 +57,91 @@ const PublicBooking = () => {
 
     try {
       const dateStr = new Date(formData.booking_date).toISOString().split('T')[0];
-      const serviceIds = selectedServices.map(s => s.id);
-      const url = `${endpoints.availableSlots}?date=${dateStr}&service_ids=${serviceIds.join(',')}`;
+      // We don't send service_ids anymore, backend defaults to 60 mins duration
+      const url = `${endpoints.availableSlots}?date=${dateStr}`;
+      
       const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
-
-      console.log('Available slots API response:', response.data);
       
       let slots = [];
-      
-      // Handle different API response formats
       if (Array.isArray(response.data)) {
         slots = response.data;
       } else if (response.data && typeof response.data === 'object') {
-        // Try different possible property names
-        slots = response.data.available_slots || 
-                response.data.slots || 
-                response.data.times || 
-                [];
+        slots = response.data.available_slots || response.data.slots || [];
       }
       
-      // Normalize all slots to HH:mm format and filter out invalid ones
-      const normalizedSlots = slots
-        .map(slot => normalizeTimeSlot(slot))
-        .filter(slot => slot !== null)
-        .sort(); // Sort times chronologically
-      
-      console.log('Normalized slots:', normalizedSlots);
-      
-      setAvailableSlots(normalizedSlots);
-      
-      if (normalizedSlots.length === 0) {
-        setSlotsError('No available time slots for this date. Please try another date.');
-      }
+      setAvailableSlots(slots);
     } catch (error) {
-      console.error('Error fetching available slots:', error);
-      const errorMessage = error.response?.data?.error ||
-        error.response?.data?.message ||
-        'Failed to fetch available time slots. Please try again.';
-      handleError(error, errorMessage);
-      setSlotsError(errorMessage);
-      setAvailableSlots([]);
+      if (axios.isCancel(error)) return;
+      console.error('Error fetching slots:', error);
+      setSlotsError('Could not load available times. Please try another date.');
     } finally {
       setSlotsLoading(false);
-      slotsControllerRef.current = null;
     }
-  };
-
-  const handleServiceToggle = (service) => {
-    console.log('Service toggle requested:', service.name, 'ID:', service.id);
-    setSelectedServices(prev => {
-      const isSelected = prev.find(s => s.id === service.id);
-      const newSelection = isSelected 
-        ? prev.filter(s => s.id !== service.id)
-        : [...prev, service];
-      console.log('Updated service selection:', newSelection.map(s => s.name));
-      return newSelection;
-    });
-    setFormData(prev => ({ ...prev, booking_time: '' }));
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     
-    // Clear validation error when user starts typing
+    // Clear validation error when user types
     if (validationErrors[name]) {
-      setValidationErrors(prev => ({
-        ...prev,
-        [name]: ''
-      }));
+      setValidationErrors(prev => ({ ...prev, [name]: null }));
     }
   };
 
   const handleDateChange = (date) => {
-    // Ensure date is always a Date object
-    const dateObj = date instanceof Date ? date : new Date(date);
-    console.log('Date selected:', dateObj.toDateString());
     setFormData(prev => ({
       ...prev,
-      booking_date: dateObj,
+      booking_date: date,
       booking_time: ''
     }));
   };
 
-  const validateStep4 = () => {
+  const handleTimeSelect = (timeSlot) => {
+    // Extract HH:mm from ISO string or use directly if HH:mm
+    let timeStr = timeSlot;
+    if (timeSlot.includes('T')) {
+      const date = new Date(timeSlot);
+      const hours = date.getHours().toString().padStart(2, '0');
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      timeStr = `${hours}:${minutes}`;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      booking_time: timeStr
+    }));
+    
+    if (validationErrors.booking_time) {
+      setValidationErrors(prev => ({ ...prev, booking_time: null }));
+    }
+  };
+
+  const validateForm = () => {
     const errors = {};
     
-    if (!formData.customer_name?.trim()) {
-      errors.customer_name = 'Full name is required';
-    } else if (formData.customer_name.trim().length < 2) {
-      errors.customer_name = 'Name must be at least 2 characters';
-    }
+    if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
+    if (!formData.customer_phone.trim()) errors.customer_phone = 'Phone number is required';
     
-    if (!formData.customer_email?.trim()) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!formData.customer_email.trim()) {
       errors.customer_email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.customer_email)) {
+    } else if (!emailRegex.test(formData.customer_email)) {
       errors.customer_email = 'Please enter a valid email address';
     }
-    
-    if (!formData.customer_phone?.trim()) {
-      errors.customer_phone = 'Phone number is required';
-    } else if (!/^[\+]?[0-9][\d]{0,15}$/.test(formData.customer_phone.replace(/[\s\-\(\)]/g, ''))) {
-      errors.customer_phone = 'Please enter a valid phone number';
+
+    if (!formData.instagram_handle.trim()) {
+      errors.instagram_handle = 'Instagram handle is required';
+    } else if (!formData.instagram_handle.startsWith('@')) {
+      errors.instagram_handle = 'Handle must start with @ (e.g. @username)';
     }
-    
-    if (!formData.booking_time?.trim()) {
-      errors.booking_time = 'Please select a time slot for your booking';
-    }
-    
+
+    if (!formData.booking_date) errors.booking_date = 'Please select a date';
+    if (!formData.booking_time) errors.booking_time = 'Please select a time';
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -531,848 +149,266 @@ const PublicBooking = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // Validate form before submission
-    if (!validateStep4()) {
+    if (!validateForm()) {
+      // Scroll to first error
+      const firstError = document.querySelector('.error-message');
+      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
     
-    setBookingCreating(true);
+    setLoading(true);
 
     try {
-      const serviceIds = selectedServices.map(s => s.id);
-      
-      // Simplified date/time handling - booking_time is already in HH:mm format
       const bookingDate = new Date(formData.booking_date);
       const dateStr = bookingDate.toISOString().split('T')[0];
-      const timeStr = formData.booking_time; // Already in HH:mm format from time slot selection
-      
-      // Create ISO datetime string
-      const scheduledTime = `${dateStr}T${timeStr}:00`;
-      
-      console.log('Submitting booking with scheduled time:', scheduledTime);
+      const scheduledTime = `${dateStr}T${formData.booking_time}:00`;
       
       const bookingData = {
-        service_ids: serviceIds,
-        worker_id: null,
-        scheduled_time: scheduledTime,
-        duration: totalDuration,
         customer_name: formData.customer_name,
         customer_email: formData.customer_email,
         customer_phone: formData.customer_phone,
+        instagram_handle: formData.instagram_handle,
+        scheduled_time: scheduledTime,
         notes: formData.notes,
-        total_amount: totalPrice,
         payment_status: 'pending',
         customer_type: 'pre_booked',
-
+        // Explicitly no services
+        service_ids: []
       };
       
-      console.log('Sending booking data to backend:', JSON.stringify(bookingData, null, 2));
-
       const response = await axios.post(endpoints.createBooking, bookingData);
-        const apiResponse = response.data;
-        const serverBookingData = apiResponse && typeof apiResponse === 'object' && 'data' in apiResponse ? apiResponse.data : apiResponse;
-        console.log('Booking created successfully (unwrapped):', serverBookingData);
-        console.log('Server booking data structure:', {
-          booking_number: serverBookingData?.booking_number,
-          total_amount: serverBookingData?.total_amount,
-          customer_name: serverBookingData?.customer_name,
-          customer_email: serverBookingData?.customer_email,
-          customer_phone: serverBookingData?.customer_phone,
-          scheduled_time: serverBookingData?.scheduled_time,
-          status: serverBookingData?.status,
-          payment_status: serverBookingData?.payment_status,
-          services: serverBookingData?.services,
-          worker_id: serverBookingData?.worker_id,
-          worker_name: serverBookingData?.worker_name
-        });
+      const serverBookingData = response.data.data || response.data;
 
-      // Enhanced booking info with worker assignment state
-      const bookingInfo = {
-        ...serverBookingData,
-        service_name: serverBookingData?.services ? 
-          serverBookingData.services.map(s => s.name).join(', ') : 
-          selectedServices.map(s => s.name).join(', '),
-        duration: totalDuration,
-        has_worker_assigned: !!serverBookingData?.worker_id,
-        worker_assignment_status: serverBookingData?.worker_id ? 'assigned' : 'pending_assignment'
-      };
-
-      // Validate booking number from server
-      if (!bookingInfo.booking_number || bookingInfo.booking_number === 'Generating...') {
-        console.error('Invalid booking number received from server:', bookingInfo.booking_number);
-        // Generate a fallback booking number for client-side use
-        const timestamp = new Date().getTime();
-        const fallbackNumber = `TEMP-${timestamp}-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-        bookingInfo.booking_number = fallbackNumber;
-        console.warn('Using fallback booking number:', fallbackNumber);
-      }
-      
-      setBookingResponse(bookingInfo);
-      console.log('Enhanced booking data saved to state:', bookingInfo);
-
-      // Skip payment step and go directly to confirmation
-      const bookingInfoForConfirmation = {
-        ...bookingInfo,
-        payment_status: 'pending' // Explicitly set to pending for non-paid bookings
-      };
-      
-      // Navigate directly to booking confirmation
+      // Navigate to confirmation
       navigate('/booking-confirmation', {
-        state: { bookingData: bookingInfoForConfirmation, paymentCompleted: false }
+        state: { 
+          bookingData: {
+            ...serverBookingData,
+            service_name: 'To be discussed in-shop'
+          }, 
+          paymentCompleted: false 
+        }
       });
+      
     } catch (error) {
       console.error('Error creating booking:', error);
-      console.error('Full error response:', error.response?.data);
-      console.error('Error object structure:', error.response?.data?.error);
-      
-      // Extract the actual error message from the nested error object
-      let errorMessage = 'Error creating booking. Please try again.';
-      if (error.response?.data?.error) {
-        if (typeof error.response.data.error === 'string') {
-          errorMessage = error.response.data.error;
-        } else if (error.response.data.error.message) {
-          errorMessage = error.response.data.error.message;
-        } else if (error.response.data.error.error) {
-          errorMessage = error.response.data.error.error;
-        }
-      } else if (error.response?.data?.message) {
+      let errorMessage = 'Failed to create booking. Please try again.';
+      if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }
-      
       handleError(error, errorMessage);
     } finally {
-      setBookingCreating(false);
+      setLoading(false);
     }
   };
 
-  const handlePaymentSuccess = async (result) => {
-    // Prevent duplicate payment processing
-    if (hasNavigatedRef.current || paymentProcessing) {
-      console.log('Payment already processing, ignoring duplicate success call');
-      return;
-    }
-    
-    setPaymentProcessing(true);
-    setPaymentCompleted(true);
-    
-    const txRef = typeof result === 'string' ? result : (result && result.reference);
-    const override = result && typeof result === 'object' ? (result.bookingData || {}) : {};
-    const bookingInfo = buildBookingInfo({ ...override, payment_status: 'completed' });
-    
-    try {
-      // Verify payment with server
-      await axios.post('/api/public/payment/verify', { reference: txRef });
-      console.log('Payment verification successful');
-    } catch (verifyError) {
-      console.error('Payment verification failed:', verifyError);
-      // Continue with navigation even if verification fails - payment might still be valid
-    }
-    
-    hasNavigatedRef.current = true;
-    
-    try {
-      const persisted = { bookingData: bookingInfo, paymentCompleted: true, timestamp: new Date().toISOString() };
-      localStorage.setItem('lastBooking', JSON.stringify(persisted));
-      console.log('Payment success data saved to localStorage');
-    } catch (e) {
-      console.error('Failed to save payment data to localStorage:', e);
-    }
-    
-    navigate('/booking-confirmation', {
-      state: { bookingData: bookingInfo, paymentCompleted: true }
-    });
-  };
-
-const handlePaymentClose = () => {
-    // Prevent navigation if payment is already processing or completed
-    if (hasNavigatedRef.current || paymentProcessing) {
-      console.log('Payment already processed, ignoring close event');
-      return;
-    }
-    
-    handleError(null, 'Payment was cancelled. Your booking is pending payment.');
-    hasNavigatedRef.current = true;
-    const bookingInfo = buildBookingInfo({ payment_status: 'pending' });
-    navigate('/booking-confirmation', { state: { bookingData: bookingInfo } });
-  };
-
-  const nextStep = () => {
-    if (currentStep < 4) setCurrentStep(currentStep + 1);
-  };
-
-  const prevStep = () => {
-    if (currentStep > 1) setCurrentStep(currentStep - 1);
-  };
-
-  const canProceedToStep2 = selectedServices.length > 0;
-  const canProceedToStep3 = formData.booking_date;
-  const canProceedToStep4 = formData.booking_time && !slotsLoading && !slotsError;
-
-  const formatDuration = (minutes) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (hours > 0 && mins > 0) return `${hours}h ${mins}m`;
-    if (hours > 0) return `${hours}h`;
-    return `${mins}m`;
-  };
-
-  const formatTimeSlot = (timeString) => {
-    try {
-      if (typeof timeString === 'string' && /^\d{2}:\d{2}$/.test(timeString)) {
-        const [hours, minutes] = timeString.split(':');
-        const h = parseInt(hours, 10);
-        const period = h >= 12 ? 'PM' : 'AM';
-        const displayHour = h % 12 || 12;
-        return `${displayHour}:${minutes} ${period}`;
-      }
-      
-      // If it's a full ISO timestamp, format it nicely
-      const date = new Date(timeString);
-      return date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-    } catch (error) {
-      return timeString;
-    }
+  // Helper to format time for display
+  const formatTimeDisplay = (isoString) => {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
   };
 
   return (
-    <div className="min-h-screen" style={{ backgroundColor: '#f0f1f2' }}>
-      <div className="max-w-6xl mx-auto py-8 px-4">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-4xl mx-auto">
+        
         {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4" style={{ fontFamily: '"Patrick Hand", cursive' }}>
-            Book Your Beauty Experience
+        <div className="text-center mb-10">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+            Book Your Appointment
           </h1>
-          <p className="text-lg text-gray-600 mb-2">
-            Select your preferred services, date, and time
-          </p>
-          <p className="text-sm text-gray-500">
-            Professional beauty services • Instant confirmation • Easy booking
-          </p>
-        </div>
-
-        {/* Progress Steps */}
-        <div className="flex justify-center mb-8">
-          <div className="flex items-center space-x-4">
-            {[
-              { num: 1, icon: 'Select Services' },
-              { num: 2, icon: 'Choose Date' },
-              { num: 3, icon: 'Pick Time Slot' },
-              { num: 4, icon: 'Your Details' },
-              { num: 5, icon: 'Payment' }
-            ].map(({ num, icon }) => (
-              <div key={num} className="flex items-center">
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-medium transition-all duration-300 ${
-                  currentStep >= num 
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg scale-110' 
-                    : 'bg-gray-200 text-gray-600'
-                }`}>
-                  {currentStep > num ? '✓' : num}
-                </div>
-                {num < 5 && (
-                  <div className={`w-16 h-1 mx-2 transition-all duration-300 ${
-                    currentStep > num ? 'bg-gradient-to-r from-purple-500 to-pink-500' : 'bg-gray-200'
-                  }`} />
-                )}
-              </div>
-            ))}
+          <div className="bg-purple-100 border-l-4 border-purple-500 text-purple-700 p-4 rounded-r shadow-sm max-w-2xl mx-auto text-left">
+            <p className="font-medium flex items-start gap-2">
+              <span className="text-xl">ℹ️</span>
+              <span>
+                Select your preferred time below. <strong>Service selection and worker assignment will be handled in-shop</strong> by our manager during your visit.
+              </span>
+            </p>
           </div>
         </div>
 
-        {/* Step Labels */}
-        <div className="flex justify-center mb-8">
-          <div className="grid grid-cols-5 gap-6 text-center text-sm">
-            <span className={currentStep >= 1 ? 'text-purple-600 font-semibold' : 'text-gray-500'}>
-              Select Services
-            </span>
-            <span className={currentStep >= 2 ? 'text-purple-600 font-semibold' : 'text-gray-500'}>
-              Choose Date
-            </span>
-            <span className={currentStep >= 3 ? 'text-purple-600 font-semibold' : 'text-gray-500'}>
-              Pick Time Slot
-            </span>
-            <span className={currentStep >= 4 ? 'text-purple-600 font-semibold' : 'text-gray-500'}>
-              Your Details
-            </span>
-            <span className={currentStep >= 5 ? 'text-purple-600 font-semibold' : 'text-gray-500'}>
-              Payment
-            </span>
-          </div>
-        </div>
-
-        {/* Main Content */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8">
-          {/* Step 1: Service Selection */}
-          {currentStep === 1 && (
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Select Your Services
-                </h2>
-                <p className="text-gray-600">Choose the beauty services you'd like to book</p>
-              </div>
-
-              {selectedServices.length > 0 && (
-                <div className="mb-6 p-4 bg-purple-50 border-2 border-purple-200 rounded-xl flex items-center justify-center gap-3">
-                  <span className="text-2xl">ℹ️</span>
-                  <span className="text-purple-800 font-medium">
-                    {selectedServices.length} service{selectedServices.length > 1 ? 's' : ''} selected • You can select multiple services
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Category Tabs & Search */}
-                <div className="col-span-full mb-6">
-                  <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      {categories.map(category => (
-                        <button
-                          key={category}
-                          onClick={() => setSelectedCategory(category)}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                            selectedCategory === category
-                              ? 'bg-purple-600 text-white shadow-md'
-                              : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
-                          }`}
-                        >
-                          {category}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="w-full md:w-64">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          placeholder="Search services..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-                        />
-                        <svg className="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                        </svg>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {filteredServices.length === 0 ? (
-                  <div className="col-span-full text-center py-12">
-                    <div className="text-gray-400 mb-2 text-4xl">🔍</div>
-                    <p className="text-gray-500">No services found matching your criteria.</p>
-                    <button 
-                      onClick={() => {setSelectedCategory('All'); setSearchQuery('');}}
-                      className="mt-4 text-purple-600 hover:underline"
-                    >
-                      Clear filters
-                    </button>
-                  </div>
-                ) : (
-                  filteredServices.map(service => {
-                  const isSelected = selectedServices.find(s => s.id === service.id);
-                  const requiredProducts = service.required_products || [];
-                  return (
-                    <div
-                      key={service.id}
-                      className={`relative cursor-pointer rounded-2xl border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 ${
-                        isSelected
-                          ? 'border-purple-500 bg-gradient-to-br from-purple-50 to-pink-50 shadow-lg'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                      onClick={() => handleServiceToggle(service)}
-                    >
-                      <div className="p-6">
-                        <div className="mb-4 flex justify-center">
-                          {serviceImages[service.name] || serviceImages.default}
-                        </div>
-                        
-                        <h3 className="text-lg font-semibold text-gray-800 mb-2 text-center">
-                          {service.name}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-3 text-center min-h-[40px]">
-                          {service.description || 'Professional beauty service'}
-                        </p>
-
-                        {requiredProducts.length > 0 && (
-                          <div className="mb-3 p-2 bg-blue-50 rounded-lg border border-blue-100">
-                            <p className="text-xs font-bold text-blue-800 mb-1 text-center uppercase tracking-wide">Includes</p>
-                            <ul className="space-y-1">
-                              {requiredProducts.map((prod, idx) => (
-                                <li key={idx} className="text-xs text-blue-700 flex justify-between px-2">
-                                  <span>{prod.product_name}</span>
-                                  <span className="font-semibold">x{prod.quantity_required}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                        
-                        <div className="text-center space-y-1">
-                          <div>
-                            <span className="text-2xl font-bold text-purple-600">
-                              ₦{parseFloat(service.price || 0).toLocaleString()}
-                            </span>
-                          </div>
-                          <div className="text-gray-500 text-sm flex items-center justify-center gap-1">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                            </svg>
-                            {service.duration || 60}{service.max_duration ? `-${service.max_duration}` : ''} minutes
-                          </div>
-                        </div>
-                        
-                        {isSelected && (
-                          <div className="absolute top-4 right-4 w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center shadow-lg animate-bounce">
-                            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }))}
-              </div>
+        <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+          
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
+            
+            {/* Left Column: Contact Details */}
+            <div className="p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-gray-100">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+                <span className="text-purple-600">1.</span> Your Details
+              </h2>
               
-              {selectedServices.length > 0 && (
-                <div className="mt-8 p-6 bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl border-2 border-purple-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                    <span>🛒</span>
-                    Your Selected Services ({selectedServices.length})
-                  </h3>
-                  <div className="space-y-3">
-                    {selectedServices.map((service, index) => (
-                      <div key={service.id} className="flex justify-between items-center bg-white p-3 rounded-xl">
-                        <div className="flex items-center gap-3">
-                          <span className="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs font-bold">
-                            {index + 1}
-                          </span>
-                          <div>
-                            <span className="text-gray-800 font-medium">{service.name}</span>
-                            <span className="text-gray-500 text-sm ml-2">({service.duration || 60} min)</span>
-                          </div>
-                        </div>
-                        <span className="font-semibold text-purple-600">₦{parseFloat(service.price || 0).toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="border-t-2 border-purple-200 mt-4 pt-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-gray-700 font-medium">Total Duration:</span>
-                      <span className="font-bold text-gray-800">
-                        {minTotalDuration !== totalDuration 
-                          ? `${formatDuration(minTotalDuration)} - ${formatDuration(totalDuration)}` 
-                          : formatDuration(totalDuration)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-xl">
-                      <span className="text-gray-800 font-bold">Total Price:</span>
-                      <span className="font-bold text-purple-600">₦{totalPrice.toLocaleString()}</span>
-                    </div>
-                  </div>
-                  <div className="flex justify-end mt-8">
-                    <button
-                      onClick={nextStep}
-                      disabled={!canProceedToStep2}
-                      className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
-                    >
-                      Continue to Date Selection →
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Step 2: Date Selection */}
-          {currentStep === 2 && (
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Choose Your Date
-                </h2>
-                <p className="text-gray-600 mb-2">Select your preferred appointment date</p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-md mx-auto">
-                  <p className="text-sm text-blue-800 flex items-center gap-2">
-                    <span>ℹ️</span>
-                    <span>Professional staff will be assigned to you upon arrival</span>
-                  </p>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-5">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-4 flex items-center gap-2">
-                    <span>📅</span>
-                    Booking Date
-                  </label>
-                  <div className="flex justify-center">
-                    <Calendar
-                      onChange={handleDateChange}
-                      value={formData.booking_date}
-                      minDate={new Date()}
-                      className="border-0 shadow-lg rounded-xl"
-                    />
-                  </div>
-                  <div className="mt-4 p-4 bg-blue-50 rounded-xl text-center">
-                    <p className="text-sm text-blue-800">
-                      <span className="font-semibold">Selected: </span>
-                      {formData.booking_date.toLocaleDateString('en-US', { 
-                        weekday: 'long', 
-                        year: 'numeric', 
-                        month: 'long', 
-                        day: 'numeric' 
-                      })}
-                    </p>
-                  </div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <input
+                    type="text"
+                    name="customer_name"
+                    value={formData.customer_name}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 rounded-xl border-2 focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors ${validationErrors.customer_name ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-purple-500'}`}
+                    placeholder="Jane Doe"
+                  />
+                  {validationErrors.customer_name && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.customer_name}</p>}
                 </div>
-              </div>
-              
-              <div className="flex justify-between mt-8">
-                <button
-                  onClick={prevStep}
-                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:border-gray-400 transition-all duration-300"
-                >
-                  ← Back to Services
-                </button>
-                <button
-                  onClick={nextStep}
-                  disabled={!canProceedToStep3}
-                  className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Continue to Time Selection →
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Step 3: Time Selection */}
-          {currentStep === 3 && (
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Select Your Time Slot
-                </h2>
-                <p className="text-gray-600 mb-2">
-                  Choose your preferred appointment time
-                </p>
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 max-w-md mx-auto">
-                  <p className="text-sm text-blue-800 flex items-center gap-2">
-                    <span>ℹ️</span>
-                    <span>Professional staff will be assigned to you upon arrival</span>
-                  </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+                  <input
+                    type="tel"
+                    name="customer_phone"
+                    value={formData.customer_phone}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 rounded-xl border-2 focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors ${validationErrors.customer_phone ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-purple-500'}`}
+                    placeholder="08012345678"
+                  />
+                  {validationErrors.customer_phone && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.customer_phone}</p>}
                 </div>
-              </div>
-              
-              {slotsLoading ? (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-gradient-to-r from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
-                    <svg className="w-10 h-10 text-purple-400" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">Loading available time slots...</h3>
-                  <p className="text-sm text-gray-500">This may take a moment</p>
-                  <div className="mt-4 w-48 h-2 bg-gray-200 rounded-full mx-auto overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-pulse" style={{width: '60%'}}></div>
-                  </div>
-                </div>
-              ) : slotsError ? (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 112 0v4a1 1 0 11-2 0V7zm1 6a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">{slotsError}</h3>
-                  <div className="flex justify-center mt-4">
-                    <button
-                      onClick={fetchAvailableSlots}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                      </svg>
-                      Refresh Times
-                    </button>
-                  </div>
-                </div>
-              ) : availableSlots.length > 0 ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {availableSlots.map(slot => (
-                      <button
-                        key={slot}
-                        onClick={() => {
-                          console.log('Selected time slot:', slot);
-                          setFormData(prev => ({ ...prev, booking_time: slot }));
-                        }}
-                        className={`p-4 rounded-xl text-center font-medium transition-all duration-300 transform hover:scale-105 ${
-                          formData.booking_time === slot
-                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg ring-2 ring-purple-300 ring-opacity-50'
-                            : 'bg-white text-gray-700 hover:bg-purple-50 hover:text-purple-700 border-2 border-gray-200 hover:border-purple-300 shadow-md'
-                        }`}
-                      >
-                        <div className="text-lg font-semibold">{formatTimeSlot(slot)}</div>
-                        <div className="text-xs text-gray-500 mt-1">Available</div>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex justify-center">
-                    <button
-                      onClick={fetchAvailableSlots}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                      </svg>
-                      Refresh Times
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <svg className="w-10 h-10 text-yellow-500" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10A8 8 0 11.002 10 8 8 0 0118 10zm-8-3a1 1 0 011 1v2a1 1 0 01-2 0V8a1 1 0 011-1zm1 7a1 1 0 10-2 0 1 1 0 002 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">No available time slots for this date</h3>
-                  <p className="text-sm text-gray-500">Try selecting another date or different services</p>
-                  <div className="flex justify-center mt-4">
-                    <button
-                      onClick={fetchAvailableSlots}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
-                      </svg>
-                      Refresh Times
-                    </button>
-                  </div>
-                </div>
-              )}
-              
-              {formData.booking_time && (
-                <div className="mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl text-center">
-                  <p className="text-green-800 font-medium">
-                    Selected time: <span className="font-bold">{formatTimeSlot(formData.booking_time)}</span>
-                  </p>
-                </div>
-              )}
-              
-              <div className="flex justify-between mt-8">
-                <button
-                  onClick={prevStep}
-                  className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:border-gray-400 transition-all duration-300"
-                >
-                  ← Back
-                </button>
-                <button
-                  onClick={nextStep}
-                  disabled={!canProceedToStep4}
-                  className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl"
-                >
-                  Continue to Details →
-                </button>
-              </div>
-            </div>
-          )}
 
-          {/* Step 4: Customer Details */}
-          {currentStep === 4 && (
-            <div>
-              <div className="text-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-800 mb-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                  Your Details
-                </h2>
-                <p className="text-gray-600">Please provide your contact information</p>
-                <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-800">
-                    💳 Payment will be processed at the salon during your visit
-                  </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <input
+                    type="email"
+                    name="customer_email"
+                    value={formData.customer_email}
+                    onChange={handleInputChange}
+                    className={`w-full px-4 py-3 rounded-xl border-2 focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors ${validationErrors.customer_email ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-purple-500'}`}
+                    placeholder="jane@example.com"
+                  />
+                  {validationErrors.customer_email && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.customer_email}</p>}
                 </div>
-              </div>
-              
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <span>👤</span>
-                      Full Name *
-                    </label>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instagram Handle</label>
+                  <div className="relative">
                     <input
                       type="text"
-                      name="customer_name"
-                      value={formData.customer_name}
+                      name="instagram_handle"
+                      value={formData.instagram_handle}
                       onChange={handleInputChange}
-                      required
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                        validationErrors.customer_name 
-                          ? 'border-red-500 bg-red-50' 
-                          : 'border-gray-300 focus:border-purple-500'
-                      }`}
-                      placeholder="Enter your full name"
-                    />
-                    {validationErrors.customer_name && (
-                      <p className="text-red-500 text-sm mt-1">{validationErrors.customer_name}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <span>📧</span>
-                      Email Address *
-                    </label>
-                    <input
-                      type="email"
-                      name="customer_email"
-                      value={formData.customer_email}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                        validationErrors.customer_email 
-                          ? 'border-red-500 bg-red-50' 
-                          : 'border-gray-300 focus:border-purple-500'
-                      }`}
-                      placeholder="your.email@example.com"
-                    />
-                    {validationErrors.customer_email && (
-                      <p className="text-red-500 text-sm mt-1">{validationErrors.customer_email}</p>
-                    )}
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <span>📱</span>
-                      Phone Number *
-                    </label>
-                    <input
-                      type="tel"
-                      name="customer_phone"
-                      value={formData.customer_phone}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-4 py-3 border-2 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 transition-all ${
-                        validationErrors.customer_phone 
-                          ? 'border-red-500 bg-red-50' 
-                          : 'border-gray-300 focus:border-purple-500'
-                      }`}
-                      placeholder="+1234567890"
-                    />
-                    {validationErrors.customer_phone && (
-                      <p className="text-red-500 text-sm mt-1">{validationErrors.customer_phone}</p>
-                    )}
-                    <p className="text-xs text-gray-500 mt-1">
-                      Your booking number will use your first name and last 3 digits (e.g., BK-SARAH-123)
-                    </p>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                      <span>📝</span>
-                      Additional Notes (Optional)
-                    </label>
-                    <textarea
-                      name="notes"
-                      value={formData.notes}
-                      onChange={handleInputChange}
-                      rows={4}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
-                      placeholder="Any special requests or preferences..."
+                      className={`w-full px-4 py-3 rounded-xl border-2 focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors ${validationErrors.instagram_handle ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-purple-500'}`}
+                      placeholder="@username"
                     />
                   </div>
+                  {validationErrors.instagram_handle && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.instagram_handle}</p>}
+                  <p className="mt-1 text-xs text-gray-500">We use this to identify you and tag your look!</p>
                 </div>
 
-                <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 mt-8 border-2 border-purple-100">
-                  <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
-                    <span>📋</span>
-                    Booking Summary
-                  </h3>
-                  <div className="space-y-3 bg-white rounded-xl p-4">
-                    <div className="flex justify-between items-start">
-                      <span className="text-gray-600 font-medium">Services:</span>
-                      <div className="text-right">
-                        {selectedServices.map((s, i) => (
-                          <div key={s.id} className="text-gray-800">
-                            {i + 1}. {s.name}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 font-medium">Date:</span>
-                      <span className="font-medium text-gray-800">
-                        {formData.booking_date.toLocaleDateString('en-US', { 
-                          weekday: 'short', 
-                          month: 'short', 
-                          day: 'numeric',
-                          year: 'numeric'
-                        })}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 font-medium">Time:</span>
-                      <span className="font-medium text-gray-800">{formatTimeSlot(formData.booking_time)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 font-medium">Duration:</span>
-                      <span className="font-medium text-gray-800">{formatDuration(totalDuration)}</span>
-                    </div>
-                    <div className="border-t-2 border-purple-200 pt-3 mt-3">
-                      <div className="flex justify-between text-xl">
-                        <span className="text-gray-800 font-bold">Total Amount:</span>
-                        <span className="font-bold text-purple-600">₦{totalPrice.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Special Requests (Optional)</label>
+                  <textarea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    rows="3"
+                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none transition-colors"
+                    placeholder="Any specific preferences..."
+                  />
                 </div>
-
-                <div className="flex justify-between mt-8">
-                  <button
-                    type="button"
-                    onClick={prevStep}
-                    className="px-8 py-3 border-2 border-gray-300 text-gray-700 rounded-xl font-medium hover:border-gray-400 transition-all duration-300"
-                  >
-                    ← Back
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white rounded-xl font-medium hover:from-purple-600 hover:to-pink-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl flex items-center gap-2"
-                  >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
-                        </svg>
-                        Creating Booking...
-                      </>
-                    ) : (
-                      <>
-                        <span>✓</span>
-                        Complete Booking
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
+              </div>
             </div>
-          )}
 
+            {/* Right Column: Date & Time */}
+            <div className="p-8 lg:p-10 bg-gray-50">
+              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+                <span className="text-purple-600">2.</span> Date & Time
+              </h2>
 
-        </div>
+              <div className="mb-6">
+                <Calendar
+                  onChange={handleDateChange}
+                  value={formData.booking_date}
+                  className="w-full border-0 rounded-xl shadow-sm p-4 !font-sans"
+                  minDate={new Date()}
+                  tileClassName={({ date, view }) => {
+                    if (view === 'month') {
+                      const isSelected = date.toDateString() === new Date(formData.booking_date).toDateString();
+                      return isSelected ? '!bg-purple-600 !text-white rounded-lg' : 'hover:bg-purple-50 rounded-lg';
+                    }
+                  }}
+                />
+                {validationErrors.booking_date && <p className="mt-2 text-sm text-red-500 text-center">{validationErrors.booking_date}</p>}
+              </div>
 
-        <div className="mt-8 text-center text-sm text-gray-600 space-y-2">
-          <p>Your information is secure and will only be used for booking purposes</p>
-          <p>You'll receive a confirmation email with your unique booking number</p>
-          <p>Need help? Contact us at support@beautyapp.com</p>
-        </div>
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Available Slots for {new Date(formData.booking_date).toLocaleDateString()}</h3>
+                
+                {slotsLoading ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                  </div>
+                ) : slotsError ? (
+                  <div className="text-center py-8 text-red-500 bg-red-50 rounded-xl border border-red-100">
+                    {slotsError}
+                  </div>
+                ) : availableSlots.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 bg-white rounded-xl border border-gray-200">
+                    No slots available for this date.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                    {availableSlots.map((slot, index) => {
+                      const timeStr = slot.includes('T') 
+                        ? slot.split('T')[1].substring(0, 5) 
+                        : slot.substring(0, 5);
+                      
+                      const isSelected = formData.booking_time === timeStr;
+                      
+                      return (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => handleTimeSelect(slot)}
+                          className={`
+                            py-2 px-1 text-sm rounded-lg border transition-all duration-200
+                            ${isSelected 
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105' 
+                              : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50'}
+                          `}
+                        >
+                          {formatTimeDisplay(slot)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {validationErrors.booking_time && <p className="mt-2 text-sm text-red-500 text-center">{validationErrors.booking_time}</p>}
+              </div>
+            </div>
+          </div>
+
+          {/* Footer / Submit */}
+          <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p className="text-sm text-gray-500 text-center sm:text-left">
+              By booking, you agree to our terms. <br/>
+              Confirmation will be sent to your email.
+            </p>
+            
+            <button
+              type="submit"
+              disabled={loading}
+              className={`
+                px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 flex items-center gap-2
+                ${loading ? 'opacity-70 cursor-wait' : 'hover:from-purple-700 hover:to-pink-700'}
+              `}
+            >
+              {loading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                  </svg>
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <span>Confirm Booking</span>
+                  <span>→</span>
+                </>
+              )}
+            </button>
+          </div>
+
+        </form>
       </div>
     </div>
   );
