@@ -2,7 +2,7 @@
 import express from 'express';
 import { query, getClient } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { sendEmail, sendUnifiedBookingConfirmation, sendPaymentConfirmation } from '../services/email.js';
+import { sendEmail, sendBookingConfirmation, sendPaymentConfirmation } from '../services/email.js';
 import { createBooking } from '../services/bookingService.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { validateBookingData, validateBookingTimeConflict, validateWorkerAvailability, validateWorkerAvailabilityWithLocking } from '../services/validationService.js';
@@ -561,7 +561,7 @@ Thank you for your understanding.`;
     // Send status update notification
     if (status === 'scheduled') {
       // Use unified booking confirmation for new confirmations
-      await sendUnifiedBookingConfirmation(
+      await sendBookingConfirmation(
         booking.customer_email,
         {
           bookingNumber: booking.booking_number,
@@ -1092,7 +1092,7 @@ router.post('/:id/approve', authenticate, authorize(['admin', 'manager']), async
     const serviceNames = booking.service_names?.filter(name => name).join(', ') || 'Service';
     
     // Send confirmation email using unified function
-    await sendUnifiedBookingConfirmation(
+    await sendBookingConfirmation(
       booking.customer_email,
       {
         bookingNumber: booking.booking_number,
