@@ -11,7 +11,12 @@ export const handleError = (error, customMessage = null) => {
   if (!message) {
     // Extract error message from different error types
     if (error.response?.data?.error) {
-      message = error.response.data.error;
+      // Handle standard API error objects
+      if (typeof error.response.data.error === 'object') {
+        message = error.response.data.error.message || 'An error occurred';
+      } else {
+        message = error.response.data.error;
+      }
     } else if (error.response?.data?.message) {
       message = error.response.data.message;
     } else if (error.message) {
@@ -19,28 +24,31 @@ export const handleError = (error, customMessage = null) => {
     } else if (error.response?.status) {
       switch (error.response.status) {
         case 400:
-          message = 'Bad request. Please check your input and try again.';
+          message = 'The information provided is invalid. Please check your input and try again.';
           break;
         case 401:
-          message = 'Unauthorized. Please login again.';
+          message = 'Your session has expired. Please log in again to continue.';
           break;
         case 403:
-          message = 'Access denied. You don\'t have permission to perform this action.';
+          message = 'You do not have permission to access this resource.';
           break;
         case 404:
-          message = 'Resource not found.';
+          message = 'The requested resource was not found.';
           break;
         case 409:
-          message = 'Conflict. This action cannot be completed due to a conflict.';
+          message = 'This action conflicts with the current state. Please refresh and try again.';
+          break;
+        case 429:
+          message = 'Too many requests. Please wait a moment before trying again.';
           break;
         case 500:
-          message = 'Server error. Please try again later.';
+          message = 'A server error occurred. Our team has been notified. Please try again later.';
           break;
         default:
           message = 'An unexpected error occurred. Please try again.';
       }
     } else {
-      message = 'An unexpected error occurred. Please try again.';
+      message = 'Unable to connect to the server. Please check your internet connection.';
     }
   }
   

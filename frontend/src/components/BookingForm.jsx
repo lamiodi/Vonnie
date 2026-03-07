@@ -559,58 +559,76 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
               </p>
             )}
           </div>
-          {/* Service Selection */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Services *
+          {/* Services Selection */}
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-gray-700 flex items-center gap-2">
+              <span>Select Services</span>
+              <span className="text-gray-400 cursor-help relative group">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  You can select multiple services for a single appointment.
+                </div>
+              </span>
             </label>
-            {servicesLoading ? (
-              <div className="text-center py-4 text-gray-500">
-                <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500 mr-2"></div>
-                Loading services...
-              </div>
-            ) : (
-            <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-              {Array.isArray(services) && services.map(service => (
-                <div
-                  key={service.id}
-                  onClick={() => handleServiceSelection(service.id)}
-                  className={`p-3 rounded-md border cursor-pointer transition-all ${
-                    formData.service_ids.includes(service.id)
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
+            
+            <div className="flex flex-col md:flex-row gap-4 mb-4">
+              <div className="w-full md:w-1/3">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="font-medium text-gray-900">{service.name}</div>
-                      <div className="text-sm text-gray-600">
-                        {service.duration} min • ₦{service.price}
-                      </div>
-                    </div>
-                    {formData.service_ids.includes(service.id) && (
-                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Selected
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {filteredServices.length === 0 && (
-                <div className="text-center py-4 text-gray-500 text-sm">
-                  No services found matching your criteria
-                </div>
-              )}
+                  <option value="All">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
-            )}
-            {touched.service_ids && errors.service_ids && (
-              <p id="service-error" className="mt-1 text-sm text-red-600" role="alert">
-                {errors.service_ids}
-              </p>
-            )}
-            {!servicesLoading && Array.isArray(services) && services.length === 0 && (
-              <p className="mt-1 text-sm text-gray-500">No services available</p>
-            )}
+              <div className="w-full md:w-2/3">
+                <input
+                  type="text"
+                  placeholder="Search services..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto p-2 border border-gray-200 rounded-md">
+              {servicesLoading ? (
+                <div className="col-span-full text-center py-4 text-gray-500">Loading services...</div>
+              ) : filteredServices.length === 0 ? (
+                <div className="col-span-full text-center py-4 text-gray-500">No services found</div>
+              ) : (
+                filteredServices.map(service => (
+                  <div 
+                    key={service.id}
+                    onClick={() => handleServiceSelection(service.id)}
+                    className={`cursor-pointer p-3 border rounded-md transition-all ${
+                      formData.service_ids.includes(service.id)
+                        ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
+                        : 'border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <h4 className="font-medium text-sm text-gray-900">{service.name}</h4>
+                      <span className="text-xs font-semibold text-blue-600">₦{parseFloat(service.price).toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 line-clamp-2">{service.description}</p>
+                    <div className="mt-2 text-xs text-gray-400 flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {service.duration} mins
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {errors.service_ids && <p className="text-red-500 text-xs mt-1">{errors.service_ids}</p>}
           </div>
           {/* Worker Selection */}
           <div>
