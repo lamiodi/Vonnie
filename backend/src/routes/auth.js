@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { query } from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimiter.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendPasswordResetEmail } from '../services/email.js';
 import { successResponse, errorResponse } from '../utils/apiResponse.js';
 import { validateEmail, validateStringLength, validatePhone } from '../utils/inputValidation.js';
 
@@ -273,6 +273,39 @@ router.post('/login', loginLimiter, async (req, res) => {
     console.error('Login error:', error);
     console.error('Error stack:', error.stack);
     res.status(400).json(errorResponse('Invalid credentials', 'LOGIN_ERROR', 400));
+  }
+});
+
+// Forgot Password
+router.post('/forgot-password', loginLimiter, async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json(errorResponse('Email is required', 'MISSING_EMAIL', 400));
+    }
+
+    const userResult = await query('SELECT * FROM users WHERE LOWER(email) = $1', [email.toLowerCase()]);
+    if (userResult.rows.length === 0) {
+      return res.status(200).json(successResponse(null, 'If your email is registered, you will receive a password reset link.'));
+    }
+
+    const user = userResult.rows[0];
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const resetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    await query(
+      'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3',
+      [resetTokenHash, resetExpires, user.id]
+    );
+
+    // Send email
+    await sendPasswordResetEmail(email, resetToken);
+
+    res.status(200).json(successResponse(null, 'If your email is registered, you will receive a password reset link.'));
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json(errorResponse('Internal server error', 'SERVER_ERROR', 500));
   }
 });
 

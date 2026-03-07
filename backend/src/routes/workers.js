@@ -5,7 +5,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { validateEmail, validatePhone, validateStringLength } from '../utils/inputValidation.js';
 import { generateSecurePassword } from '../utils/passwordUtils.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendWorkerCredentials } from '../services/email.js';
 
 const router = express.Router();
 
@@ -192,25 +192,9 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
       [name, email, phone || null, normalizedRole, hashedPassword, 'available']
     );
     
-    // Send welcome email with password
-    const welcomeSubject = 'Welcome to Vonne X2X - Your Account Details';
-    const welcomeHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #9333ea;">Welcome to Vonne X2X!</h2>
-        <p>Hello <strong>${name}</strong>,</p>
-        <p>Your staff account has been created successfully. Here are your login details:</p>
-        <div style="background-color: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Email:</strong> ${email}</p>
-          <p><strong>Temporary Password:</strong> <code style="background: #e5e7eb; padding: 2px 6px; border-radius: 4px;">${generatedPassword}</code></p>
-        </div>
-        <p>Please log in and change your password immediately.</p>
-        <p>Best regards,<br>Vonne X2X Team</p>
-      </div>
-    `;
-    
     // Try to send email, but don't fail if it errors (admin will see password in response)
     try {
-      await sendEmail(email, welcomeSubject, `Welcome! Your password is: ${generatedPassword}`, welcomeHtml);
+      await sendWorkerCredentials(email, name, generatedPassword);
     } catch (emailError) {
       console.error('Failed to send welcome email:', emailError);
     }

@@ -1,6 +1,6 @@
 import cron from 'node-cron';
 import { generateWeeklyReport } from '../services/reportService.js';
-import { sendEmail } from '../services/email.js';
+import { sendWeeklyReportEmail } from '../services/email.js';
 import { query } from '../config/db.js';
 
 export const scheduleWeeklyReport = () => {
@@ -37,22 +37,6 @@ export const scheduleWeeklyReport = () => {
 
       console.log(`📧 Sending report to ${admins.length} recipients: ${admins.join(', ')}`);
 
-      // Send Email
-      const subject = `Weekly Activity Report (${lastMonday.toLocaleDateString()} - ${lastSunday.toLocaleDateString()})`;
-      const text = `Please find attached the weekly activity report for the period ${lastMonday.toDateString()} to ${lastSunday.toDateString()}.`;
-      const html = `
-        <div style="font-family: 'Manrope', Arial, sans-serif; padding: 20px;">
-          <h2 style="color: #333;">Weekly Activity Report</h2>
-          <p>Please find attached the weekly activity report for the period <strong>${lastMonday.toDateString()}</strong> to <strong>${lastSunday.toDateString()}</strong>.</p>
-          <p><strong>Summary:</strong></p>
-          <ul>
-            <li>Generated on: ${new Date().toLocaleString()}</li>
-            <li>Status: Automated Delivery</li>
-          </ul>
-          <p>Best regards,<br>Vonne X2X System</p>
-        </div>
-      `;
-
       const attachments = [
         {
           filename: `Weekly_Report_${lastMonday.toISOString().split('T')[0]}.pdf`,
@@ -61,7 +45,14 @@ export const scheduleWeeklyReport = () => {
       ];
 
       for (const email of admins) {
-        await sendEmail(email, subject, text, html, attachments);
+        await sendWeeklyReportEmail(
+          email, 
+          {
+            start: lastMonday.toLocaleDateString(),
+            end: lastSunday.toLocaleDateString()
+          }, 
+          attachments
+        );
       }
 
       console.log('✅ Weekly report job completed successfully.');

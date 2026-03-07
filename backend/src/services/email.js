@@ -298,6 +298,89 @@ export const sendPaymentConfirmation = async (email, bookingDetails, paymentCont
   return await sendEmail(email, subject, '', html);
 };
 
+export const sendContactFormResponse = async (email, name, message, replyMessage) => {
+  const subject = 'Re: Your Inquiry - Vonne X2X';
+  
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 800;">Message Received</h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95;">We've received your inquiry</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          Hello <strong style="color: #1e293b;">${name}</strong>,
+        </p>
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          Thank you for contacting us. ${replyMessage ? 'Here is our response to your message:' : 'We have received your message and will get back to you shortly.'}
+        </p>
+        
+        ${replyMessage ? `
+        <div style="background: #f0fdfa; border: 1px solid #ccfbf1; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: #0f766e; margin: 0 0 12px 0; font-size: 16px; font-weight: 700;">💬 Our Response</h3>
+          <p style="margin: 0; color: #115e59; line-height: 1.6; font-size: 15px;">${replyMessage}</p>
+        </div>
+        ` : ''}
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: #64748b; margin: 0 0 12px 0; font-size: 14px; font-weight: 700; text-transform: uppercase;">Original Message</h3>
+          <p style="margin: 0; color: #475569; line-height: 1.6; font-style: italic; font-size: 14px;">"${message}"</p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 32px;">
+          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 14px;">Need further assistance?</p>
+          <a href="mailto:support@vonneex2x.store" style="color: #4f46e5; text-decoration: none; font-weight: 600; font-size: 14px;">Reply to this email</a>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(email, subject, '', html);
+};
+
+export const sendPasswordResetEmail = async (email, resetToken) => {
+  const subject = '🔒 Password Reset Request - Vonne X2X';
+  const resetLink = \`https://vonneex2x.store/reset-password?token=\${resetToken}\`;
+  
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #f43f5e 0%, #e11d48 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 800;">Password Reset</h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95;">Secure Account Recovery</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          We received a request to reset your password. If you didn't make this request, you can safely ignore this email.
+        </p>
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="\${resetLink}" style="display: inline-block; background: #e11d48; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 700; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(225, 29, 72, 0.2); transition: transform 0.2s;">
+            Reset Password
+          </a>
+        </div>
+        
+        <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+          <p style="margin: 0; color: #9f1239; font-size: 13px; text-align: center;">
+            This link will expire in 1 hour for security reasons.
+          </p>
+        </div>
+        
+        <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px;">Or copy and paste this link into your browser:</p>
+          <p style="margin: 0; font-size: 12px; color: #4b5563; word-break: break-all; font-family: monospace; background: #f3f4f6; padding: 8px; border-radius: 4px;">\${resetLink}</p>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(email, subject, '', html);
+};
+
+
 export const sendWebhookAlert = async (alertType, errorDetails, webhookData = null) => {
   const subject = `🚨 Vonne X2X Webhook Alert - ${alertType}`;
   
@@ -484,3 +567,90 @@ export const sendPOSTransactionEmail = async (email, transactionDetails) => {
   const html = getEmailWrapper(content);
   return await sendEmail(email, subject, '', html);
 };
+
+export const sendWeeklyReportEmail = async (email, period, attachments = []) => {
+  const subject = `Weekly Activity Report (${period.start} - ${period.end})`;
+  const text = `Please find attached the weekly activity report for the period ${period.start} to ${period.end}.`;
+  
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 800;">📊 Weekly Report</h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95;">${period.start} - ${period.end}</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          Please find attached the weekly activity report for the period <strong>${period.start}</strong> to <strong>${period.end}</strong>.
+        </p>
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+          <h3 style="color: #1e293b; margin: 0 0 16px 0; font-size: 16px; font-weight: 700;">📑 Report Summary</h3>
+          <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.6;">
+            <li><strong>Generated on:</strong> ${new Date().toLocaleString()}</li>
+            <li><strong>Status:</strong> Automated Delivery</li>
+            <li><strong>Attachments:</strong> ${attachments.length} file(s)</li>
+          </ul>
+        </div>
+        
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="mailto:support@vonneex2x.store" style="color: #4f46e5; text-decoration: none; font-weight: 600; font-size: 14px;">System Support</a>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(email, subject, text, html, attachments);
+};
+
+export const sendWorkerCredentials = async (email, workerName, password) => {
+  const subject = '🔐 Your Vonne X2X Account Credentials';
+  
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%); padding: 32px 24px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 24px; font-weight: 800;">Welcome Aboard!</h1>
+        <p style="margin: 8px 0 0 0; font-size: 16px; opacity: 0.95;">Account Created Successfully</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 32px 24px;">
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          Hello <strong style="color: #0f172a;">${workerName}</strong>,
+        </p>
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">
+          Your account for Vonne X2X Management System has been created. You can now log in to access your dashboard and schedule.
+        </p>
+        
+        <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 12px; padding: 24px; margin-bottom: 24px;">
+          <h3 style="color: #0369a1; margin: 0 0 16px 0; font-size: 16px; font-weight: 700;">🔐 Login Credentials</h3>
+          
+          <div style="margin-bottom: 12px;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Email</p>
+            <p style="margin: 0; font-size: 16px; color: #0f172a; font-family: monospace; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">${email}</p>
+          </div>
+          
+          <div>
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600;">Password</p>
+            <p style="margin: 0; font-size: 16px; color: #0f172a; font-family: monospace; background: white; padding: 8px 12px; border-radius: 6px; border: 1px solid #e2e8f0;">${password}</p>
+          </div>
+        </div>
+        
+        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 16px;">
+          <h3 style="color: #b45309; margin: 0 0 8px 0; font-size: 15px; font-weight: 700;">⚠️ Important</h3>
+          <p style="margin: 0; color: #92400e; line-height: 1.5; font-size: 14px;">
+            Please change your password immediately after your first login for security purposes.
+          </p>
+        </div>
+        
+        <div style="text-align: center; margin-top: 32px;">
+          <a href="https://vonneex2x.store/login" style="display: inline-block; background: #0ea5e9; color: white; text-decoration: none; padding: 12px 32px; border-radius: 8px; font-weight: 600; font-size: 16px; box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.2);">Login to Dashboard</a>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(email, subject, '', html);
+};
+

@@ -1,6 +1,6 @@
 import express from 'express';
 import { query } from '../config/db.js';
-import { sendEmail } from '../services/email.js';
+import { sendEmail, sendContactFormResponse } from '../services/email.js';
 import axios from 'axios';
 import crypto from 'crypto';
 import { createBooking, getBookingByNumber } from '../services/bookingService.js';
@@ -598,6 +598,47 @@ router.get('/signup-status', async (req, res) => {
       is_enabled: true, 
       message: 'Signups are currently enabled.'
     });
+  }
+});
+
+// Contact form submission (public)
+router.post('/contact', async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body;
+
+    if (!name || !email || !message) {
+      return res.status(400).json(errorResponse('Name, email, and message are required', 'MISSING_FIELDS', 400));
+    }
+
+    // Send notification to admin
+    const adminSubject = `New Contact Form Submission from ${name}`;
+    const adminHtml = `
+      <div style="font-family: Arial, sans-serif; padding: 20px;">
+        <h2>New Contact Form Submission</h2>
+        <p><strong>Name:</strong> ${name}</p>
+        <p><strong>Email:</strong> ${email}</p>
+        <p><strong>Subject:</strong> ${subject || 'No Subject'}</p>
+        <p><strong>Message:</strong></p>
+        <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
+          ${message}
+        </div>
+      </div>
+    `;
+    
+    const adminEmail = process.env.ADMIN_EMAIL || 'support@vonneex2x.store';
+    await sendEmail(adminEmail, adminSubject, `New message from ${name}: ${message}`, adminHtml);
+    
+    // Auto-reply to user
+    try {
+      await sendContactFormResponse(email, name, message);
+    } catch (e) {
+      console.error('Failed to send auto-reply', e);
+    }
+
+    res.json(successResponse(null, 'Message sent successfully'));
+  } catch (error) {
+    console.error('Contact form error:', error);
+    res.status(500).json(errorResponse('Failed to send message', 'CONTACT_ERROR', 500));
   }
 });
 
