@@ -197,6 +197,15 @@ export const createBooking = async (bookingData, skipNotification = false) => {
       );
     }
 
+    // Assign worker if provided (Sync with booking_workers table for availability checks)
+    if (worker_id) {
+      await client.query(
+        `INSERT INTO booking_workers (booking_id, worker_id, assigned_by, role, status)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [booking.id, worker_id, null, 'primary', 'active']
+      );
+    }
+
     // Deduct stock for linked products
     for (const [productId, data] of Object.entries(productUpdates)) {
       await client.query(

@@ -87,9 +87,10 @@ const POS = () => {
   useEffect(() => {
     localStorage.setItem('pos_customer_info', JSON.stringify(customerInfo));
   }, [customerInfo]);
+
   const [activeTab, setActiveTab] = useState('products');
   const [searchParams, setSearchParams] = useSearchParams();
-  // Receipt modal removed per request; provide success via toasts and inline messages instead
+
   // Helper function to format prices without showing .00
   const formatPrice = (price) => {
     const formattedPrice = parseFloat(price).toFixed(2);
@@ -98,6 +99,23 @@ const POS = () => {
     }
     return formattedPrice;
   };
+
+  const filteredProducts = useMemo(() => {
+    return products.filter(product => {
+      const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [products, searchTerm, selectedCategory]);
+
+  const filteredServices = useMemo(() => {
+    return services.filter(service => {
+      const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase());
+      const matchesCategory = selectedServiceCategory === '' || service.category === selectedServiceCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [services, serviceSearchTerm, selectedServiceCategory]);
   const categories = [
     { value: '', label: 'All Categories' },
     { value: 'hair_products', label: 'Hair Products' },
