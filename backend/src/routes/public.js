@@ -200,19 +200,39 @@ router.get('/bookings/available-slots', async (req, res) => {
     // Parse selected date string (YYYY-MM-DD) directly to avoid timezone shifts
     const [selYear, selMonth, selDay] = date.split('-').map(Number);
     
+    // Create a UTC date to strictly determine the day of the week for the given date string
+    const utcDate = new Date(Date.UTC(selYear, selMonth - 1, selDay));
+    const dayOfWeek = utcDate.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+
     const isToday = (selYear === lYear && selMonth === lMonth && selDay === lDay);
 
     const pad = (n) => String(n).padStart(2, '0');
     
-    // Helper to format time as 12-hour AM/PM string
-    const formatTimeSlot = (dateObj) => {
-      let hours = dateObj.getHours();
-      const minutes = dateObj.getMinutes();
-      const ampm = hours >= 12 ? 'PM' : 'AM';
-      hours = hours % 12;
-      hours = hours ? hours : 12; // the hour '0' should be '12'
-      return `${hours}:${pad(minutes)} ${ampm}`;
+    // Helper to format time as 12-hour am/pm string (lowercase, no space)
+    // Example: 7:00pm, 12:30pm
+    const formatTimeSlot = (h, m) => {
+      const ampm = h >= 12 ? 'pm' : 'am';
+      const hours = h % 12 || 12; // the hour '0' should be '12'
+      return `${hours}:${pad(m)}${ampm}`;
     };
+
+    // Check if Tuesday (Day 2) - Closed
+    if (dayOfWeek === 2) {
+      return res.json([]); // Return empty array for Tuesdays
+    }
+
+    let startHour, endHour;
+    // Closing time logic needs to be handled inside the loop or via specific hour checks
+    
+    if (dayOfWeek === 0) {
+      // Sunday: 1 PM to 7 PM
+      startHour = 13; // 1 PM
+      endHour = 19;   // 7 PM
+    } else {
+      // Mon, Wed-Sat: 8 AM to 8:30 PM
+      startHour = 8;  // 8 AM
+      endHour = 20;   // 8 PM (for loop limit)
+    }
 
     const overlaps = (slotStart, slotDuration, bookedStart, bookedDuration) => {
       const slotEnd = new Date(slotStart.getTime() + slotDuration * 60000);
@@ -223,12 +243,10 @@ router.get('/bookings/available-slots', async (req, res) => {
     for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
         // Special closing logic for regular days (close at 8:30 PM)
-        if (selectedDate.getDay() !== 0 && hour === 20 && minute >= 30) continue;
+        if (dayOfWeek !== 0 && hour === 20 && minute >= 30) continue;
         
         // Special closing logic for Sundays (close at 7:00 PM)
-        if (selectedDate.getDay() === 0 && hour === 19 && minute > 0) continue;
-        
-        const slotTime = new Date(`${date}T${pad(hour)}:${pad(minute)}:00`);
+        if (dayOfWeek === 0 && hour === 19 && minute > 0) continue;
         
         // Skip past times if it is today in Lagos
         if (isToday) {
@@ -237,6 +255,23 @@ router.get('/bookings/available-slots', async (req, res) => {
             continue;
           }
         }
+
+        // Construct slotTime as a UTC Date object that corresponds to the Lagos time
+        // Lagos is UTC+1. So 8:00 AM Lagos = 7:00 AM UTC.
+        // We subtract 1 hour from the loop 'hour' to get the UTC equivalent.
+        const utcHour = hour - 1;
+        const slotTime = new Date(Date.UTC(selYear, selMonth - 1, selDay, utcHour, minute));
+        
+        // Construct Closing Time for this specific day in UTC
+        // This ensures comparison is apples-to-apples (UTC Date vs UTC Date)
+        let closingHourLagos, closingMinuteLagos;
+        if (dayOfWeek === 0) { // Sunday 7:00 PM
+             closingHourLagos = 19; closingMinuteLagos = 0;
+        } else { // Others 8:30 PM
+             closingHourLagos = 20; closingMinuteLagos = 30;
+        }
+        
+        const closingTime = new Date(Date.UTC(selYear, selMonth - 1, selDay, closingHourLagos - 1, closingMinuteLagos));
         
         // Check if the service finishes before closing time
         const slotEndForBusinessHours = new Date(slotTime.getTime() + totalDuration * 60000);
@@ -257,13 +292,9 @@ router.get('/bookings/available-slots', async (req, res) => {
         }
 
         if (isAvailable) {
-          // Return both ISO string (for logic) and formatted string (for display)
-          // Ideally frontend should format, but user asked for backend to send format
-          // To maintain compatibility, we'll return formatted string if requested, or handle in frontend
-          // For now, let's keep ISO but update frontend to format, OR return object
-          // The current frontend expects array of strings. 
-          // Let's return the formatted time directly as the string since the frontend seems to display it directly.
-          availableSlots.push(formatTimeSlot(slotTime));
+          // Return formatted string for display (e.g. "7:00pm")
+          // Use the original Lagos 'hour' and 'minute' for display
+          availableSlots.push(formatTimeSlot(hour, minute));
         }
       }
     }
