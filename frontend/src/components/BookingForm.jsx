@@ -21,6 +21,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   const [workers, setWorkers] = useState(propWorkers || []);
   const [servicesLoading, setServicesLoading] = useState(!propServices || propServices.length === 0);
   const [workersLoading, setWorkersLoading] = useState(!propWorkers || propWorkers.length === 0);
+  
+  // New UI State for Simplification
+  const [useExistingCustomer, setUseExistingCustomer] = useState(false);
+  
   const [formData, setFormData] = useState({
     service_ids: [],
     workers: [], // Add workers array for multi-worker support
@@ -483,89 +487,114 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Customer Information */}
           <div className="space-y-4">
-            <div>
-            <label htmlFor="customer-name" className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Customer Name *
-            </label>
-            <input
-              id="customer-name"
-              type="text"
-              name="customer_name"
-              value={formData.customer_name}
-              onChange={handleInputChange}
-              onBlur={handleBlur}
-              required
-              aria-required="true"
-              aria-invalid={touched.customer_name && errors.customer_name ? 'true' : 'false'}
-              aria-describedby={touched.customer_name && errors.customer_name ? 'customer-name-error' : undefined}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                touched.customer_name && errors.customer_name
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
-            />
-            {touched.customer_name && errors.customer_name && (
-              <p id="customer-name-error" className="mt-1 text-sm text-red-600" role="alert">
-                {errors.customer_name}
-              </p>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-700">Customer Details</h3>
+              <button
+                type="button"
+                onClick={() => setUseExistingCustomer(!useExistingCustomer)}
+                className="text-xs text-blue-600 hover:text-blue-800 underline"
+              >
+                {useExistingCustomer ? 'Switch to New Customer' : 'Search Existing Customer'}
+              </button>
+            </div>
+
+            {useExistingCustomer ? (
+              <div className="bg-blue-50 p-4 rounded-md border border-blue-100">
+                <label className="block text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">
+                  Search Customer
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    placeholder="Type name or phone to search..."
+                    className="w-full px-3 py-2 border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    onChange={(e) => {
+                      // Simulating search - In real app, this would query API
+                      handleInputChange(e);
+                    }}
+                  />
+                  <div className="absolute right-2 top-2 text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-xs text-blue-600 mt-2">
+                  ℹ️ Start typing to find customers. (Functionality placeholder)
+                </p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="customer-name" className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
+                    Customer Name *
+                  </label>
+                  <input
+                    id="customer-name"
+                    type="text"
+                    name="customer_name"
+                    value={formData.customer_name}
+                    onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
+                    aria-required="true"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      touched.customer_name && errors.customer_name
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                  />
+                  {touched.customer_name && errors.customer_name && (
+                    <p className="mt-1 text-sm text-red-600">{errors.customer_name}</p>
+                  )}
+                </div>
+                
+                <div>
+                  <label htmlFor="customer-phone" className="block text-sm font-medium text-gray-700 mb-2">
+                    Customer Phone *
+                  </label>
+                  <input
+                    id="customer-phone"
+                    type="tel"
+                    name="customer_phone"
+                    value={formData.customer_phone}
+                    onChange={handleInputChange}
+                    onBlur={handleBlur}
+                    required
+                    aria-required="true"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
+                      touched.customer_phone && errors.customer_phone
+                        ? 'border-red-500 focus:ring-red-500'
+                        : 'border-gray-300 focus:ring-blue-500'
+                    }`}
+                  />
+                  {touched.customer_phone && errors.customer_phone && (
+                    <p className="mt-1 text-sm text-red-600">{errors.customer_phone}</p>
+                  )}
+                </div>
+
+                {/* Email is now optional and collapsible for speed */}
+                <details className="group">
+                  <summary className="text-xs text-gray-500 cursor-pointer hover:text-blue-600 mb-2 list-none flex items-center">
+                    <span className="mr-1">▶</span> Add Email (Optional)
+                  </summary>
+                  <div className="pl-4 border-l-2 border-gray-100">
+                    <label htmlFor="customer-email" className="block text-sm font-medium text-gray-700 mb-1">
+                      Customer Email
+                    </label>
+                    <input
+                      id="customer-email"
+                      type="email"
+                      name="customer_email"
+                      value={formData.customer_email}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </details>
+              </>
             )}
           </div>
-          <div className="space-y-4">
-            <div>
-            <label htmlFor="customer-email" className="block text-sm font-medium text-gray-700 mb-1 sm:mb-2">
-              Customer Email *
-            </label>
-            <input
-              id="customer-email"
-              type="email"
-              name="customer_email"
-              value={formData.customer_email}
-              onChange={handleInputChange}
-              onBlur={handleBlur}
-              required
-              aria-required="true"
-              aria-invalid={touched.customer_email && errors.customer_email ? 'true' : 'false'}
-              aria-describedby={touched.customer_email && errors.customer_email ? 'customer-email-error' : undefined}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                touched.customer_email && errors.customer_email
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
-            />
-            {touched.customer_email && errors.customer_email && (
-              <p id="customer-email-error" className="mt-1 text-sm text-red-600" role="alert">
-                {errors.customer_email}
-              </p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="customer-phone" className="block text-sm font-medium text-gray-700 mb-2">
-              Customer Phone *
-            </label>
-            <input
-              id="customer-phone"
-              type="tel"
-              name="customer_phone"
-              value={formData.customer_phone}
-              onChange={handleInputChange}
-              onBlur={handleBlur}
-              required
-              aria-required="true"
-              aria-invalid={touched.customer_phone && errors.customer_phone ? 'true' : 'false'}
-              aria-describedby={touched.customer_phone && errors.customer_phone ? 'customer-phone-error' : undefined}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                touched.customer_phone && errors.customer_phone
-                  ? 'border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              }`}
-            />
-            {touched.customer_phone && errors.customer_phone && (
-              <p id="customer-phone-error" className="mt-1 text-sm text-red-600" role="alert">
-                {errors.customer_phone}
-              </p>
-            )}
-          </div>
-        </div>
 
         {/* Services Selection */}
         <div className="space-y-4">

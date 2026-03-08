@@ -450,12 +450,25 @@ router.patch('/:id', authenticate, async (req, res) => {
       }
     }
 
+    // Calculate estimated duration from services if not provided
+    let estimatedDuration = req.body.estimated_duration;
+    if (!estimatedDuration && req.body.services && req.body.services.length > 0) {
+      const serviceIds = req.body.services.map(s => s.id || s);
+      const durationResult = await query(
+        'SELECT SUM(duration) as total_duration FROM services WHERE id = ANY($1)',
+        [serviceIds]
+      );
+      estimatedDuration = parseInt(durationResult.rows[0].total_duration) || 60;
+    } else if (!estimatedDuration) {
+      estimatedDuration = 60; // Default fallback
+    }
+
     // Validate worker availability if workers are being updated
     if (worker_ids && worker_ids.length > 0) {
       const workerAvailabilityValidation = await validateWorkerAvailability(
         worker_ids,
         scheduled_time || booking.scheduled_time,
-        60
+        estimatedDuration
       );
       
       if (!workerAvailabilityValidation.isValid) {

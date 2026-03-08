@@ -23,6 +23,7 @@ const WalkInBooking = () => {
 
   // UI State
   const [loading, setLoading] = useState(false);
+  const [showOptionalFields, setShowOptionalFields] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState(null);
@@ -274,28 +275,46 @@ const WalkInBooking = () => {
                     />
                     {validationErrors.customer_phone && <p className="text-red-500 text-xs mt-1">{validationErrors.customer_phone}</p>}
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email</label>
-                    <input
-                      type="email"
-                      name="customer_email"
-                      value={formData.customer_email}
-                      onChange={handleInputChange}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                      placeholder="jane@example.com"
-                    />
+                  
+                  <div className="col-span-1 md:col-span-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowOptionalFields(!showOptionalFields)}
+                      className="text-sm text-gray-500 underline hover:text-black transition-colors flex items-center"
+                    >
+                      {showOptionalFields ? 'Hide Optional Details' : 'Add Email or Instagram (Optional)'}
+                      <svg className={`w-4 h-4 ml-1 transform transition-transform ${showOptionalFields ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Instagram</label>
-                    <input
-                      type="text"
-                      name="instagram_handle"
-                      value={formData.instagram_handle}
-                      onChange={handleInputChange}
-                      className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
-                      placeholder="@janedoe"
-                    />
-                  </div>
+
+                  {showOptionalFields && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Email <span className="font-normal text-gray-400">(Optional)</span></label>
+                        <input
+                          type="email"
+                          name="customer_email"
+                          value={formData.customer_email}
+                          onChange={handleInputChange}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                          placeholder="jane@example.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Instagram <span className="font-normal text-gray-400">(Optional)</span></label>
+                        <input
+                          type="text"
+                          name="instagram_handle"
+                          value={formData.instagram_handle}
+                          onChange={handleInputChange}
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-black focus:border-transparent transition-all"
+                          placeholder="@janedoe"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </section>
 

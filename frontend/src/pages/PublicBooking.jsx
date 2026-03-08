@@ -129,16 +129,14 @@ const PublicBooking = () => {
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
     if (!formData.customer_phone.trim()) errors.customer_phone = 'Phone number is required';
     
+    // Email is now optional
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!formData.customer_email.trim()) {
-      errors.customer_email = 'Email is required';
-    } else if (!emailRegex.test(formData.customer_email)) {
+    if (formData.customer_email.trim() && !emailRegex.test(formData.customer_email)) {
       errors.customer_email = 'Please enter a valid email address';
     }
 
-    if (!formData.instagram_handle.trim()) {
-      errors.instagram_handle = 'Instagram handle is required';
-    } else if (!formData.instagram_handle.startsWith('@')) {
+    // Instagram is now optional
+    if (formData.instagram_handle.trim() && !formData.instagram_handle.startsWith('@')) {
       errors.instagram_handle = 'Handle must start with @ (e.g. @username)';
     }
 
@@ -250,9 +248,12 @@ const PublicBooking = () => {
             
             {/* Left Column: Contact Details */}
             <div className="p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-gray-100">
-              <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+              <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                 <span className="text-purple-600">1.</span> Your Details
               </h2>
+              <p className="text-sm text-gray-500 mb-6 bg-purple-50 p-2 rounded-lg border border-purple-100">
+                🔒 Your privacy matters. We only use your contact info to send booking confirmations.
+              </p>
               
               <div className="space-y-5">
                 <div>
@@ -282,7 +283,7 @@ const PublicBooking = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email Address <span className="text-gray-400 font-normal">(Optional)</span></label>
                   <input
                     type="email"
                     name="customer_email"
@@ -295,7 +296,7 @@ const PublicBooking = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Instagram Handle</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Instagram Handle <span className="text-gray-400 font-normal">(Optional)</span></label>
                   <div className="relative">
                     <input
                       type="text"
@@ -307,7 +308,7 @@ const PublicBooking = () => {
                     />
                   </div>
                   {validationErrors.instagram_handle && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.instagram_handle}</p>}
-                  <p className="mt-1 text-xs text-gray-500">We use this to identify you and tag your look!</p>
+                  <p className="mt-1 text-xs text-gray-500">Only if you'd like us to tag your look!</p>
                 </div>
 
                 <div>

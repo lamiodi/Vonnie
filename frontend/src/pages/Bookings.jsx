@@ -629,151 +629,154 @@ const BookingsTable = ({
         </div>
       )}
       
-      <div className="w-full overflow-x-auto min-w-full border border-gray-200 rounded-lg relative">
-        <table className="min-w-max w-full divide-y divide-gray-200 table-auto text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <th scope="col" className="sticky left-0 z-20 w-12 px-4 py-3 text-left bg-gray-50 border-b border-gray-200">
-                <input
-                  type="checkbox"
-                  checked={selectAll}
-                  onChange={handleSelectAll}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-              </th>
-              <th scope="col" className="sticky left-12 z-20 w-24 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                Booking #
-              </th>
-              {showQueueOrder && (
-                <th scope="col" className="w-20 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Queue #
-              </th>
-              )}
-              <th scope="col" className="w-48 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Customer
-              </th>
-              <th scope="col" className="w-48 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Service
-              </th>
-              <th scope="col" className="w-40 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Scheduled Time
-              </th>
-              <th scope="col" className="w-40 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Worker
-              </th>
-              <th scope="col" className="w-20 px-4 py-3 text-center font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Note
-              </th>
-              <th scope="col" className="w-32 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Type
-              </th>
-              <th scope="col" className="w-32 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Status
-              </th>
-              <th scope="col" className="w-32 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Payment
-              </th>
-              <th scope="col" className="w-32 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
-                Amount
-              </th>
-              <th scope="col" className="sticky right-0 z-20 w-48 px-4 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
-                Actions
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {bookings.map((booking) => {
-              const customerData = getCustomerDisplayData(booking);
-              const queuePosition = getQueuePosition(booking, bookings);
-              const hasWorkers = booking.workers && booking.workers.length > 0;
-              
-              return (
-                <tr key={booking.id} className="hover:bg-gray-50">
-                  <td className="sticky left-0 z-10 w-12 px-4 py-4 whitespace-nowrap bg-white border-r border-transparent hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={selectedBookings.has(booking.id)}
-                      onChange={() => handleSelectBooking(booking.id)}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                  </td>
-                  <td className="sticky left-12 z-10 w-24 px-4 py-4 whitespace-nowrap font-medium text-gray-900 bg-white shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50">
-                    #{booking.booking_number}
-                  </td>
-                  {showQueueOrder && (
-                    <td className="w-20 px-4 py-4 whitespace-nowrap">
-                      {queuePosition ? (
-                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border ${
-                          queuePosition === 1 ? 'bg-green-100 text-green-800 border-green-300 shadow-sm' :
-                          queuePosition <= 3 ? 'bg-blue-100 text-blue-800 border-blue-300' :
-                          'bg-gray-100 text-gray-800 border-gray-300'
-                        }`}>
-                          #{queuePosition}
-                        </span>
+      <div className="w-full border border-gray-200 rounded-lg relative">
+        <div className="overflow-x-auto w-full">
+          <table className="w-full divide-y divide-gray-200 table-auto text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th scope="col" className="sticky left-0 z-20 w-10 px-3 py-3 text-left bg-gray-50 border-b border-gray-200">
+                  <input
+                    type="checkbox"
+                    checked={selectAll}
+                    onChange={handleSelectAll}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                </th>
+                <th scope="col" className="sticky left-10 z-20 w-24 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)]">
+                  Booking #
+                </th>
+                {showQueueOrder && (
+                  <th scope="col" className="w-16 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Queue #
+                </th>
+                )}
+                <th scope="col" className="min-w-[140px] px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Customer
+                </th>
+                <th scope="col" className="min-w-[140px] px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Service
+                </th>
+                <th scope="col" className="min-w-[120px] px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Scheduled Time
+                </th>
+                <th scope="col" className="min-w-[120px] px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Worker
+                </th>
+                <th scope="col" className="w-16 px-2 py-3 text-center font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Note
+                </th>
+                <th scope="col" className="w-24 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Type
+                </th>
+                <th scope="col" className="w-28 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Status
+                </th>
+                <th scope="col" className="w-24 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Payment
+                </th>
+                <th scope="col" className="w-24 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+                  Amount
+                </th>
+                <th scope="col" className="sticky right-0 z-20 w-40 px-3 py-3 text-left font-medium text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200 shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)]">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {bookings.map((booking) => {
+                const customerData = getCustomerDisplayData(booking);
+                const queuePosition = getQueuePosition(booking, bookings);
+                const hasWorkers = booking.workers && booking.workers.length > 0;
+                
+                return (
+                  <tr key={booking.id} className="hover:bg-gray-50">
+                    <td className="sticky left-0 z-10 w-10 px-3 py-4 whitespace-nowrap bg-white border-r border-transparent hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={selectedBookings.has(booking.id)}
+                        onChange={() => handleSelectBooking(booking.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </td>
+                    <td className="sticky left-10 z-10 w-24 px-3 py-4 whitespace-nowrap font-medium text-gray-900 bg-white shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50">
+                      #{booking.booking_number}
+                    </td>
+                    {showQueueOrder && (
+                      <td className="w-16 px-3 py-4 whitespace-nowrap">
+                        {queuePosition ? (
+                          <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold border ${
+                            queuePosition === 1 ? 'bg-green-100 text-green-800 border-green-300 shadow-sm' :
+                            queuePosition <= 3 ? 'bg-blue-100 text-blue-800 border-blue-300' :
+                            'bg-gray-100 text-gray-800 border-gray-300'
+                          }`}>
+                            #{queuePosition}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 pl-2">-</span>
+                        )}
+                      </td>
+                    )}
+                    <td className="px-3 py-4 whitespace-nowrap">
+                      <div className="text-sm font-medium text-gray-900 truncate max-w-[140px]" title={customerData.name}>{customerData.name}</div>
+                      <div className="text-xs text-gray-500 truncate max-w-[140px]">{customerData.phone}</div>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap text-gray-900">
+                      <div className="truncate max-w-[140px]" title={booking.service_names ? booking.service_names.join(', ') : booking.service_name || 'N/A'}>
+                        {booking.service_names ? booking.service_names.join(', ') : booking.service_name || 'N/A'}
+                      </div>
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap text-gray-900 text-xs">
+                      {formatDateTime(booking.scheduled_time)}
+                    </td>
+                    <td className="px-3 py-4 whitespace-nowrap">
+                      {hasWorkers ? (
+                        <div>
+                          <div className="font-medium text-gray-900 text-sm truncate max-w-[120px]" title={booking.workers[0].worker_name}>
+                            {booking.workers[0].worker_name}
+                            {booking.workers.length > 1 && (
+                              <span className="text-xs text-gray-500 ml-1">
+                                +{booking.workers.length - 1}
+                              </span>
+                            )}
+                          </div>
+                        </div>
                       ) : (
-                        <span className="text-gray-400 pl-2">-</span>
+                        <span className="text-gray-400 italic text-sm">Unassigned</span>
                       )}
                     </td>
-                  )}
-                  <td className="w-48 px-4 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-gray-900">{customerData.name}</div>
-                    <div className="text-xs text-gray-500">{customerData.phone}</div>
-                  </td>
-                  <td className="w-48 px-4 py-4 whitespace-nowrap text-gray-900">
-                    {booking.service_names ? booking.service_names.join(', ') : booking.service_name || 'N/A'}
-                  </td>
-                  <td className="w-40 px-4 py-4 whitespace-nowrap text-gray-900">
-                    {formatDateTime(booking.scheduled_time)}
-                  </td>
-                  <td className="w-40 px-4 py-4 whitespace-nowrap">
-                    {hasWorkers ? (
-                      <div>
-                        <div className="font-medium text-gray-900 text-sm">
-                          {booking.workers[0].worker_name}
-                          {booking.workers.length > 1 && (
-                            <span className="text-xs text-gray-500 ml-1">
-                              +{booking.workers.length - 1} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400 italic text-sm">Unassigned</span>
-                    )}
-                  </td>
-                  <td className="w-20 px-4 py-4 whitespace-nowrap text-center">
-                    {booking.notes ? (
-                      <button
-                        onClick={() => onViewNote(booking.notes)}
-                        className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
-                        title="View Note"
-                      >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <span className="text-gray-300">-</span>
-                    )}
-                  </td>
-                  <td className="w-32 px-4 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getCustomerTypeColor(normalizeCustomerType(booking.customer_type))}`}>
-                      {getCustomerTypeLabel(normalizeCustomerType(booking.customer_type))}
-                    </span>
-                  </td>
-                  <td className="w-32 px-4 py-4 whitespace-nowrap">
-                    <BookingStatusBadge status={booking.status} />
-                  </td>
-                  <td className="w-32 px-4 py-4 whitespace-nowrap">
-                    <PaymentStatusBadge status={booking.payment_status} />
-                  </td>
-                  <td className="w-32 px-4 py-4 whitespace-nowrap font-medium text-gray-900">
-                    {formatCurrency(booking.total_amount)}
-                  </td>
-                  <td className="sticky right-0 z-10 w-48 px-4 py-4 whitespace-nowrap bg-white shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50">
-                    <div className="flex flex-col gap-2">
-                      {/* Primary Actions - Payment & Service Flow */}
-                      <div className="flex flex-wrap gap-1">
+                    <td className="w-16 px-2 py-4 whitespace-nowrap text-center">
+                      {booking.notes ? (
+                        <button
+                          onClick={() => onViewNote(booking.notes)}
+                          className="text-gray-400 hover:text-blue-600 transition-colors p-1 rounded-full hover:bg-blue-50"
+                          title="View Note"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <span className="text-gray-300">-</span>
+                      )}
+                    </td>
+                    <td className="w-24 px-3 py-4 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getCustomerTypeColor(normalizeCustomerType(booking.customer_type))}`}>
+                        {getCustomerTypeLabel(normalizeCustomerType(booking.customer_type))}
+                      </span>
+                    </td>
+                    <td className="w-28 px-3 py-4 whitespace-nowrap">
+                      <BookingStatusBadge status={booking.status} />
+                    </td>
+                    <td className="w-24 px-3 py-4 whitespace-nowrap">
+                      <PaymentStatusBadge status={booking.payment_status} />
+                    </td>
+                    <td className="w-24 px-3 py-4 whitespace-nowrap font-medium text-gray-900">
+                      {formatCurrency(booking.total_amount)}
+                    </td>
+                    <td className="sticky right-0 z-10 w-40 px-3 py-4 whitespace-nowrap bg-white shadow-[-4px_0_8px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50">
+                      <div className="flex flex-col gap-2">
+                        {/* Primary Actions - Payment & Service Flow */}
+                        <div className="flex flex-wrap gap-1 justify-end">
                         {/* Process Payment - Primary Action */}
                         {booking.payment_status !== 'completed' && (
                           <button
