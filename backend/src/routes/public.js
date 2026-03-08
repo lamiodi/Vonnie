@@ -221,7 +221,6 @@ router.get('/bookings/available-slots', async (req, res) => {
       return res.json([]); // Return empty array for Tuesdays
     }
 
-    let startHour, endHour;
     // Closing time logic needs to be handled inside the loop or via specific hour checks
     
     if (dayOfWeek === 0) {
