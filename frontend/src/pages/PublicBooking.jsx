@@ -1,12 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import { handleError, handleSuccess } from '../utils/errorHandler';
-import { useAuth } from '../contexts/AuthContext';
+import { handleError } from '../utils/errorHandler';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
+
+const endpoints = {
+  availableSlots: '/api/public/bookings/available-slots',
+  createBooking: '/api/public/bookings'
+};
 
 const PublicBooking = () => {
   const navigate = useNavigate();
@@ -32,13 +36,46 @@ const PublicBooking = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const slotsControllerRef = useRef(null);
 
-  const endpoints = {
-    availableSlots: '/api/public/bookings/available-slots',
-    createBooking: '/api/public/bookings'
-  };
-
   // Fetch available slots when date changes
   useEffect(() => {
+    const fetchAvailableSlots = async () => {
+      if (slotsControllerRef.current) {
+        try { slotsControllerRef.current.abort(); } catch (e) { /* ignore */ }
+      }
+
+      setSlotsLoading(true);
+      setSlotsError(null);
+      setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      if (controller) {
+        slotsControllerRef.current = controller;
+      }
+
+      try {
+        const dateStr = formData.booking_date.toLocaleDateString('en-CA');
+        // We don't send service_ids anymore, backend defaults to 60 mins duration
+        const url = `${endpoints.availableSlots}?date=${dateStr}`;
+
+        const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
+
+        let slots = [];
+        if (Array.isArray(response.data)) {
+          slots = response.data;
+        } else if (response.data && typeof response.data === 'object') {
+          slots = response.data.available_slots || response.data.slots || [];
+        }
+
+        setAvailableSlots(slots);
+        setSlotsLoading(false);
+      } catch (error) {
+        if (axios.isCancel(error)) return;
+        console.error('Error fetching slots:', error);
+        setSlotsError('Could not load available times. Please try another date.');
+        setSlotsLoading(false);
+      }
+    };
+
     if (formData.booking_date) {
       fetchAvailableSlots();
     }
@@ -48,44 +85,6 @@ const PublicBooking = () => {
       }
     };
   }, [formData.booking_date]);
-
-  const fetchAvailableSlots = async () => {
-    if (slotsControllerRef.current) {
-      try { slotsControllerRef.current.abort(); } catch (e) { }
-    }
-
-    setSlotsLoading(true);
-    setSlotsError(null);
-    setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
-
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    if (controller) {
-      slotsControllerRef.current = controller;
-    }
-
-    try {
-      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
-      // We don't send service_ids anymore, backend defaults to 60 mins duration
-      const url = `${endpoints.availableSlots}?date=${dateStr}`;
-
-      const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
-
-      let slots = [];
-      if (Array.isArray(response.data)) {
-        slots = response.data;
-      } else if (response.data && typeof response.data === 'object') {
-        slots = response.data.available_slots || response.data.slots || [];
-      }
-
-      setAvailableSlots(slots);
-      setSlotsLoading(false);
-    } catch (error) {
-      if (axios.isCancel(error)) return;
-      console.error('Error fetching slots:', error);
-      setSlotsError('Could not load available times. Please try another date.');
-      setSlotsLoading(false);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -201,12 +200,6 @@ const PublicBooking = () => {
     }
   };
 
-  // Helper to format time for display
-  const formatTimeDisplay = (isoString) => {
-    const date = new Date(isoString);
-    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto">
@@ -306,7 +299,7 @@ const PublicBooking = () => {
                     />
                   </div>
                   {validationErrors.instagram_handle && <p className="mt-1 text-sm text-red-500 error-message">{validationErrors.instagram_handle}</p>}
-                  <p className="mt-1 text-xs text-gray-500">Only if you'd like us to tag your look!</p>
+                  <p className="mt-1 text-xs text-gray-500">Only if you&apos;d like us to tag your look!</p>
                 </div>
 
                 <div>
@@ -363,16 +356,29 @@ const PublicBooking = () => {
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                     {availableSlots.map((slot, index) => {
-                      // Ensure slot is an object and has required properties
-                      let time = typeof slot === 'string' ? slot : slot?.time;
-                      let label = typeof slot === 'string' ? slot : slot?.label;
-                      
-                      // Fallback if label is missing or invalid
+                      // Robust slot parsing
+                      let time, label;
+
+                      if (typeof slot === 'string') {
+                        time = slot;
+                        label = slot;
+                      } else if (typeof slot === 'object' && slot !== null) {
+                        time = slot.time;
+                        label = slot.label;
+                        
+                        if (typeof time === 'object' && time !== null) {
+                            label = time.label || label;
+                            time = time.time;
+                        }
+                      }
+
+                      // Ensure time is a valid string
+                      if (typeof time !== 'string' || !time) return null;
+
+                      // Ensure label is a valid string/number
                       if (typeof label !== 'string' && typeof label !== 'number') {
                         label = time;
                       }
-
-                      if (!time) return null;
 
                       const isSelected = formData.booking_time === time;
 
@@ -380,7 +386,7 @@ const PublicBooking = () => {
                         <button
                           key={`${time}-${index}`}
                           type="button"
-                          onClick={() => handleTimeSelect(typeof slot === 'string' ? { time: slot, label: slot } : slot)}
+                          onClick={() => handleTimeSelect({ time, label })}
                           className={`
                             py-2 px-1 text-sm rounded-lg border transition-all duration-200
                             ${isSelected

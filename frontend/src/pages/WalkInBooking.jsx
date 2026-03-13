@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Calendar from 'react-calendar';
@@ -6,6 +6,11 @@ import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
+
+const endpoints = {
+  availableSlots: '/api/public/bookings/available-slots',
+  createBooking: '/api/public/bookings'
+};
 
 const WalkInBooking = () => {
   const navigate = useNavigate();
@@ -30,13 +35,46 @@ const WalkInBooking = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const slotsControllerRef = useRef(null);
 
-  const endpoints = {
-    availableSlots: '/api/public/bookings/available-slots',
-    createBooking: '/api/public/bookings'
-  };
-
   // Fetch available slots when date changes
   useEffect(() => {
+    const fetchAvailableSlots = async () => {
+      if (slotsControllerRef.current) {
+        try { slotsControllerRef.current.abort(); } catch (e) { /* ignore */ }
+      }
+
+      setSlotsLoading(true);
+      setSlotsError(null);
+      setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
+
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      if (controller) {
+        slotsControllerRef.current = controller;
+      }
+
+      try {
+        const dateStr = formData.booking_date.toLocaleDateString('en-CA');
+        // We don't send service_ids anymore, backend defaults to 60 mins duration
+        const url = `${endpoints.availableSlots}?date=${dateStr}`;
+
+        const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
+
+        let slots = [];
+        if (Array.isArray(response.data)) {
+          slots = response.data;
+        } else if (response.data && typeof response.data === 'object') {
+          slots = response.data.available_slots || response.data.slots || [];
+        }
+
+        setAvailableSlots(slots);
+        setSlotsLoading(false);
+      } catch (error) {
+        if (axios.isCancel(error)) return;
+        console.error('Error fetching slots:', error);
+        setSlotsError('Could not load available times. Please try another date.');
+        setSlotsLoading(false);
+      }
+    };
+
     if (formData.booking_date) {
       fetchAvailableSlots();
     }
@@ -46,44 +84,6 @@ const WalkInBooking = () => {
       }
     };
   }, [formData.booking_date]);
-
-  const fetchAvailableSlots = async () => {
-    if (slotsControllerRef.current) {
-      try { slotsControllerRef.current.abort(); } catch (e) { }
-    }
-
-    setSlotsLoading(true);
-    setSlotsError(null);
-    setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
-
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    if (controller) {
-      slotsControllerRef.current = controller;
-    }
-
-    try {
-      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
-      // We don't send service_ids anymore, backend defaults to 60 mins duration
-      const url = `${endpoints.availableSlots}?date=${dateStr}`;
-
-      const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
-
-      let slots = [];
-      if (Array.isArray(response.data)) {
-        slots = response.data;
-      } else if (response.data && typeof response.data === 'object') {
-        slots = response.data.available_slots || response.data.slots || [];
-      }
-
-      setAvailableSlots(slots);
-      setSlotsLoading(false);
-    } catch (error) {
-      if (axios.isCancel(error)) return;
-      console.error('Error fetching slots:', error);
-      setSlotsError('Could not load available times. Please try another date.');
-      setSlotsLoading(false);
-    }
-  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -376,22 +376,37 @@ const WalkInBooking = () => {
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {availableSlots.map((slot, index) => {
-                        // Ensure slot is an object and has required properties
-                        let time = typeof slot === 'string' ? slot : slot?.time;
-                        let label = typeof slot === 'string' ? slot : slot?.label;
-                        
-                        // Fallback if label is missing or invalid
+                        // Robust slot parsing
+                        let time, label;
+
+                        if (typeof slot === 'string') {
+                          time = slot;
+                          label = slot;
+                        } else if (typeof slot === 'object' && slot !== null) {
+                          // Handle simple object { time: '...', label: '...' }
+                          time = slot.time;
+                          label = slot.label;
+
+                          // Handle nested object edge case if API returns weird structure
+                          if (typeof time === 'object' && time !== null) {
+                            label = time.label || label;
+                            time = time.time;
+                          }
+                        }
+
+                        // Ensure time is a valid string
+                        if (typeof time !== 'string' || !time) return null;
+
+                        // Ensure label is a valid string/number
                         if (typeof label !== 'string' && typeof label !== 'number') {
                           label = time;
                         }
-
-                        if (!time) return null;
 
                         return (
                           <button
                             key={`${time}-${index}`}
                             type="button"
-                            onClick={() => handleTimeSelect(typeof slot === 'string' ? { time: slot, label: slot } : slot)}
+                            onClick={() => handleTimeSelect({ time, label })}
                             className={`
                               py-2 px-3 text-sm rounded-lg border transition-all duration-200
                               ${formData.booking_time === time 
