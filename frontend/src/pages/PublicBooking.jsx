@@ -42,42 +42,47 @@ const PublicBooking = () => {
     if (formData.booking_date) {
       fetchAvailableSlots();
     }
+    return () => {
+      if (slotsControllerRef.current) {
+        slotsControllerRef.current.abort();
+      }
+    };
   }, [formData.booking_date]);
 
   const fetchAvailableSlots = async () => {
     if (slotsControllerRef.current) {
-      try { slotsControllerRef.current.abort(); } catch (e) {}
+      try { slotsControllerRef.current.abort(); } catch (e) { }
     }
-    
+
     setSlotsLoading(true);
     setSlotsError(null);
     setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
-    
+
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     if (controller) {
       slotsControllerRef.current = controller;
     }
 
     try {
-      const dateStr = new Date(formData.booking_date).toISOString().split('T')[0];
+      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
       // We don't send service_ids anymore, backend defaults to 60 mins duration
       const url = `${endpoints.availableSlots}?date=${dateStr}`;
-      
+
       const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
-      
+
       let slots = [];
       if (Array.isArray(response.data)) {
         slots = response.data;
       } else if (response.data && typeof response.data === 'object') {
         slots = response.data.available_slots || response.data.slots || [];
       }
-      
+
       setAvailableSlots(slots);
+      setSlotsLoading(false);
     } catch (error) {
       if (axios.isCancel(error)) return;
       console.error('Error fetching slots:', error);
       setSlotsError('Could not load available times. Please try another date.');
-    } finally {
       setSlotsLoading(false);
     }
   };
@@ -88,7 +93,7 @@ const PublicBooking = () => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear validation error when user types
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: null }));
@@ -103,19 +108,10 @@ const PublicBooking = () => {
     }));
   };
 
-  const handleTimeSelect = (timeSlot) => {
-    // Extract HH:mm from ISO string or use directly if HH:mm
-    let timeStr = timeSlot;
-    if (timeSlot.includes('T')) {
-      const date = new Date(timeSlot);
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      timeStr = `${hours}:${minutes}`;
-    }
-    
+  const handleTimeSelect = (slot) => {
     setFormData(prev => ({
       ...prev,
-      booking_time: timeStr
+      booking_time: slot.time
     }));
     
     if (validationErrors.booking_time) {
@@ -125,23 +121,26 @@ const PublicBooking = () => {
 
   const validateForm = () => {
     const errors = {};
-    
+
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
-    if (!formData.customer_phone.trim()) errors.customer_phone = 'Phone number is required';
-    
-    // Email is now optional
+    if (!formData.customer_phone.trim()) {
+      errors.customer_phone = 'Phone number is required';
+    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(formData.customer_phone.trim())) {
+      errors.customer_phone = 'Please enter a valid Nigerian phone number';
+    }
+
+    // Email is now optional, so we don't return an error if it's empty
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (formData.customer_email.trim() && !emailRegex.test(formData.customer_email)) {
       errors.customer_email = 'Please enter a valid email address';
     }
-
     // Instagram is now optional
     if (formData.instagram_handle.trim() && !formData.instagram_handle.startsWith('@')) {
       errors.instagram_handle = 'Handle must start with @ (e.g. @username)';
     }
 
-    if (!formData.booking_date) errors.booking_date = 'Please select a date';
-    if (!formData.booking_time) errors.booking_time = 'Please select a time';
+    if (!formData.booking_date) errors.booking_date = 'Date is required';
+    if (!formData.booking_time) errors.booking_time = 'Time is required';
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -149,21 +148,20 @@ const PublicBooking = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       // Scroll to first error
       const firstError = document.querySelector('.error-message');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
     }
-    
+
     setLoading(true);
 
     try {
-      const bookingDate = new Date(formData.booking_date);
-      const dateStr = bookingDate.toISOString().split('T')[0];
+      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
       const scheduledTime = `${dateStr}T${formData.booking_time}:00`;
-      
+
       const bookingData = {
         customer_name: formData.customer_name,
         customer_email: formData.customer_email,
@@ -176,21 +174,21 @@ const PublicBooking = () => {
         // Explicitly no services
         service_ids: []
       };
-      
+
       const response = await axios.post(endpoints.createBooking, bookingData);
       const serverBookingData = response.data.data || response.data;
 
       // Navigate to confirmation
       navigate('/booking-confirmation', {
-        state: { 
+        state: {
           bookingData: {
             ...serverBookingData,
             service_name: 'To be discussed in-shop'
-          }, 
-          paymentCompleted: false 
+          },
+          paymentCompleted: false
         }
       });
-      
+
     } catch (error) {
       console.error('Error creating booking:', error);
       let errorMessage = 'Failed to create booking. Please try again.';
@@ -212,7 +210,7 @@ const PublicBooking = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-pink-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-4xl mx-auto">
-        
+
         {isInternal && (
           <div className="mb-6">
             <button
@@ -243,9 +241,9 @@ const PublicBooking = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
-          
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
-            
+
             {/* Left Column: Contact Details */}
             <div className="p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-gray-100">
               <h2 className="text-2xl font-bold text-gray-800 mb-2 flex items-center gap-2" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
@@ -254,7 +252,7 @@ const PublicBooking = () => {
               <p className="text-sm text-gray-500 mb-6 bg-purple-50 p-2 rounded-lg border border-purple-100">
                 🔒 Your privacy matters. We only use your contact info to send booking confirmations.
               </p>
-              
+
               <div className="space-y-5">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
@@ -349,7 +347,7 @@ const PublicBooking = () => {
 
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Available Slots for {new Date(formData.booking_date).toLocaleDateString()}</h3>
-                
+
                 {slotsLoading ? (
                   <div className="flex justify-center py-8">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
@@ -365,12 +363,8 @@ const PublicBooking = () => {
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                     {availableSlots.map((slot, index) => {
-                      const timeStr = slot.includes('T') 
-                        ? slot.split('T')[1].substring(0, 5) 
-                        : slot.substring(0, 5);
-                      
-                      const isSelected = formData.booking_time === timeStr;
-                      
+                      const isSelected = formData.booking_time === slot.time;
+
                       return (
                         <button
                           key={index}
@@ -378,12 +372,12 @@ const PublicBooking = () => {
                           onClick={() => handleTimeSelect(slot)}
                           className={`
                             py-2 px-1 text-sm rounded-lg border transition-all duration-200
-                            ${isSelected 
-                              ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105' 
+                            ${isSelected
+                              ? 'bg-purple-600 text-white border-purple-600 shadow-md transform scale-105'
                               : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50'}
                           `}
                         >
-                          {formatTimeDisplay(slot)}
+                          {slot.label}
                         </button>
                       );
                     })}
@@ -397,10 +391,10 @@ const PublicBooking = () => {
           {/* Footer / Submit */}
           <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col sm:flex-row justify-between items-center gap-4">
             <p className="text-sm text-gray-500 text-center sm:text-left">
-              By booking, you agree to our terms. <br/>
+              By booking, you agree to our terms. <br />
               Confirmation will be sent to your email.
             </p>
-            
+
             <button
               type="submit"
               disabled={loading}
@@ -412,8 +406,8 @@ const PublicBooking = () => {
               {loading ? (
                 <>
                   <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
                   Processing...
                 </>

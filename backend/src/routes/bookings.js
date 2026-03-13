@@ -522,6 +522,12 @@ router.patch('/:id', authenticate, async (req, res) => {
       ));
     }
    
+    // Restore stock if transitioning to cancelled
+    if (status === 'cancelled' && currentStatus !== 'cancelled') {
+      const { restoreStockForBooking } = await import('../services/bookingService.js');
+      await restoreStockForBooking(id);
+    }
+
     // Update booking status with manager approval tracking
     const result = await query(
       `WITH updated AS (
@@ -930,7 +936,7 @@ router.get('/available-slots', authenticate, async (req, res) => {
        ) svc ON TRUE
        WHERE b.worker_id = ANY($1)
          AND DATE(b.scheduled_time) = $2
-         AND b.status IN ('scheduled', 'in-progress')`,
+         AND b.status IN ('scheduled', 'in-progress', 'confirmed')`,
       [targetWorkerIds, date]
     );
 
@@ -1010,12 +1016,15 @@ router.get('/available-slots', authenticate, async (req, res) => {
         }
 
         if (isAnyWorkerAvailable) {
+          const hours = currentTime.getHours().toString().padStart(2, '0');
+          const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+          const ampm = currentTime.getHours() >= 12 ? 'pm' : 'am';
+          const h12 = currentTime.getHours() % 12 || 12;
+          
           availableSlots.add(JSON.stringify({
-            start_time: currentTime.toISOString(),
-            // We use the same end time for all, based on service duration
-            // Note: If different workers have different speeds, this logic might need refinement, 
-            // but currently service duration is standardized per service.
-            formatted_time: currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            time: `${hours}:${minutes}`,
+            label: `${h12}:${minutes}${ampm}`,
+            start_time: currentTime.toISOString()
           }));
         }
       }

@@ -22,11 +22,11 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     payment_status = 'pending'
   } = bookingData;
 
-  // Validate required fields
-  if (!customer_name || !customer_email || !customer_phone || !scheduled_time) {
+  // Validate required fields (email is now optional)
+  if (!customer_name || !customer_phone || !scheduled_time) {
     throw {
       success: false,
-      message: 'Missing required fields: customer_name, customer_email, customer_phone, and scheduled_time are required',
+      message: 'Missing required fields: customer_name, customer_phone, and scheduled_time are required',
       status: 400
     };
   }
@@ -79,7 +79,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
 
     services = servicesResult.rows;
     totalPrice = services.reduce((sum, service) => sum + parseFloat(service.price), 0);
-    
+
     // Calculate total duration using max_duration if available to ensure sufficient time allocation
     totalDuration = services.reduce((sum, service) => {
       const duration = service.max_duration ? parseInt(service.max_duration) : parseInt(service.duration || 0);
@@ -157,7 +157,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
 
   // Begin transaction
   const client = await getClient();
-  
+
   try {
     await client.query('BEGIN');
 
@@ -360,7 +360,7 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
             </div>
           `;
         }
-        
+
         await sendEmail(
           customer_email,
           '✨ Booking Confirmed - Vonne X2X',
@@ -458,6 +458,47 @@ export const getBookingByNumber = async (bookingNumber) => {
 };
 
 /**
+ * Restore stock levels for products linked to a booking's services
+ * @param {string} bookingId - Booking UUID
+ */
+export const restoreStockForBooking = async (bookingId) => {
+  try {
+    // Get service_ids for this booking
+    const servicesResult = await query(
+      'SELECT service_id FROM booking_services WHERE booking_id = $1',
+      [bookingId]
+    );
+    
+    if (servicesResult.rows.length === 0) return;
+    
+    const serviceIds = servicesResult.rows.map(r => r.service_id);
+    
+    // Get product requirements for these services
+    const productRequirementsResult = await query(
+      `SELECT sp.product_id, sp.quantity_required
+       FROM service_products sp
+       WHERE sp.service_id = ANY($1)`,
+      [serviceIds]
+    );
+    
+    if (productRequirementsResult.rows.length === 0) return;
+    
+    // Restore stock
+    for (const req of productRequirementsResult.rows) {
+      await query(
+        'UPDATE products SET stock_level = stock_level + $1 WHERE id = $2',
+        [req.quantity_required, req.product_id]
+      );
+    }
+    
+    console.log(`📦 Restored stock for booking ${bookingId}`);
+  } catch (error) {
+    console.error('Error restoring stock for booking:', error);
+    // Don't throw, just log
+  }
+};
+
+/**
  * Update booking status
  * @param {number} bookingId - Booking ID
  * @param {string} status - New status
@@ -480,6 +521,12 @@ export const updateBookingStatus = async (bookingId, status, user) => {
   }
 
   const booking = currentBooking.rows[0];
+  const oldStatus = booking.status;
+  
+  // Restore stock if transitioning to cancelled
+  if (status === 'cancelled' && oldStatus !== 'cancelled') {
+    await restoreStockForBooking(bookingId);
+  }
   
   // Update status
   const result = await query(
@@ -495,11 +542,11 @@ export const updateBookingStatus = async (bookingId, status, user) => {
       // Professional status update email matching PublicBooking.jsx design
       const statusIcon = status === 'scheduled' ? '✅' : '❌';
       const statusColor = status === 'scheduled' ? '#10b981' : '#ef4444';
-      const statusGradient = status === 'scheduled' 
-        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)' 
+      const statusGradient = status === 'scheduled'
+        ? 'linear-gradient(135deg, #10b981 0%, #059669 100%)'
         : 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)';
       const statusText = status === 'scheduled' ? 'Confirmed' : 'Cancelled';
-      
+
       const statusUpdateHtml = `
         <div style="font-family: 'Patrick Hand', cursive, Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1);">
           <!-- Header with status-specific gradient -->
@@ -612,7 +659,7 @@ export const updateBookingStatus = async (bookingId, status, user) => {
           </div>
         </div>
       `;
-      
+
       await sendEmail(
         booking.customer_email,
         `${statusIcon} Booking ${statusText} - Vonne X2X`,
@@ -673,7 +720,7 @@ export const getBookings = async (filters = {}) => {
     ) svc ON TRUE
     WHERE 1=1
   `;
-  
+
   const params = [];
   let paramCount = 0;
 
@@ -682,33 +729,33 @@ export const getBookings = async (filters = {}) => {
     sql += ` AND b.booking_number = $${paramCount}`;
     params.push(booking_number);
   }
-  
+
   if (worker_id) {
     paramCount++;
     sql += ` AND b.worker_id = $${paramCount}`;
     params.push(worker_id);
   }
-  
+
   if (date) {
     paramCount++;
     sql += ` AND b.scheduled_time >= $${paramCount}`;
     params.push(`${date}T00:00:00`);
-    
+
     paramCount++;
     sql += ` AND b.scheduled_time < $${paramCount}`;
     params.push(`${date}T23:59:59`);
   }
-  
+
   if (unassigned === 'true') {
     sql += ` AND b.worker_id IS NULL`;
   }
-  
+
   if (status) {
     paramCount++;
     sql += ` AND b.status = $${paramCount}`;
     params.push(status);
   }
-  
+
   if (customer_type) {
     paramCount++;
     sql += ` AND b.customer_type = $${paramCount}`;

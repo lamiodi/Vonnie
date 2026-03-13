@@ -21,10 +21,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   const [workers, setWorkers] = useState(propWorkers || []);
   const [servicesLoading, setServicesLoading] = useState(!propServices || propServices.length === 0);
   const [workersLoading, setWorkersLoading] = useState(!propWorkers || propWorkers.length === 0);
-  
+
   // New UI State for Simplification
   const [useExistingCustomer, setUseExistingCustomer] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     service_ids: [],
     workers: [], // Add workers array for multi-worker support
@@ -57,16 +57,16 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       setWorkers(propWorkers);
       setWorkersLoading(false);
     }
-   
+
     // If booking prop is provided, populate form for editing
     if (booking) {
       setIsEditing(true);
       setPaymentStatus(booking.payment_status || 'pending');
-     
+
       // Parse the scheduled_time to extract date and time
       const scheduledDate = new Date(booking.scheduled_time);
       const timeString = scheduledDate.toTimeString().slice(0, 5); // HH:MM format
-     
+
       setFormData({
         service_ids: booking.service_ids || (booking.service_id ? [booking.service_id] : []),
         workers: booking.workers || (booking.worker_id ? [{ worker_id: booking.worker_id }] : []),
@@ -86,28 +86,28 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     // But logically, we probably want to wait for services to calculate duration?
     // Backend defaults to 60 mins.
     // Let's allow fetching even if no services/workers, so user can see generic availability.
-    
+
     if (formData.booking_date) {
       fetchAvailableSlots();
     }
   }, [formData.workers, formData.booking_date, formData.service_ids]);
   useEffect(() => {
     let result = services;
-    
+
     // Filter by category
     if (selectedCategory !== 'All') {
       result = result.filter(s => (s.category || 'Other') === selectedCategory);
     }
-    
+
     // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(s => 
-        s.name.toLowerCase().includes(query) || 
+      result = result.filter(s =>
+        s.name.toLowerCase().includes(query) ||
         (s.description && s.description.toLowerCase().includes(query))
       );
     }
-    
+
     setFilteredServices(result);
   }, [selectedCategory, searchQuery, services]);
 
@@ -116,8 +116,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       setServicesLoading(true);
       const response = await axios.get(servicesEndpoint);
       // Ensure response.data is an array, fallback to empty array if not
-      const servicesData = Array.isArray(response.data) ? response.data : 
-                          (response.data && Array.isArray(response.data.services) ? response.data.services : []);
+      const servicesData = Array.isArray(response.data) ? response.data :
+        (response.data && Array.isArray(response.data.services) ? response.data.services : []);
       setServices(servicesData);
       setFilteredServices(servicesData);
       const uniqueCategories = ['All', ...new Set(servicesData.map(s => s.category || 'Other'))];
@@ -134,8 +134,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       setWorkersLoading(true);
       const response = await axios.get(workersEndpoint);
       // Ensure response.data is an array, fallback to empty array if not
-      const workersData = Array.isArray(response.data) ? response.data : 
-                         (response.data && Array.isArray(response.data.workers) ? response.data.workers : []);
+      const workersData = Array.isArray(response.data) ? response.data :
+        (response.data && Array.isArray(response.data.workers) ? response.data.workers : []);
       setWorkers(workersData);
     } catch (error) {
       handleError('Failed to load workers', error);
@@ -146,13 +146,11 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   };
   const fetchAvailableSlots = async () => {
     try {
-      const dateStr = formData.booking_date.toISOString().split('T')[0];
+      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
       const workerIds = Array.isArray(formData.workers) ? formData.workers.map(w => w.worker_id).join(',') : '';
       const url = `${availableSlotsEndpoint}?worker_id=${workerIds}&date=${dateStr}&service_ids=${formData.service_ids.join(',')}`;
       const response = await axios.get(url);
-      const data = Array.isArray(response.data)
-        ? response.data.map(s => s.formatted_time || s)
-        : [];
+      const data = Array.isArray(response.data) ? response.data : [];
       setAvailableSlots(data);
     } catch (error) {
       handleError(error, 'Failed to load available time slots');
@@ -160,7 +158,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   };
   const validateField = (name, value) => {
     let error = '';
-   
+
     switch (name) {
       case 'customer_name':
         if (!value.trim()) {
@@ -173,17 +171,15 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           error = 'Name can only contain letters, spaces, periods, apostrophes, and hyphens';
         }
         break;
-       
+
       case 'customer_email':
-        if (!value.trim()) {
-          error = 'Email address is required';
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
+        if (value.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) {
           error = 'Please enter a valid email address';
-        } else if (value.trim().length > 100) {
+        } else if (value.trim() && value.trim().length > 100) {
           error = 'Email must not exceed 100 characters';
         }
         break;
-       
+
       case 'customer_phone':
         if (!value.trim()) {
           error = 'Phone number is required';
@@ -191,29 +187,29 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           error = 'Please enter a valid Nigerian phone number (e.g., 08012345678 or +2348012345678)';
         }
         break;
-       
+
       case 'service_ids':
         if (!value || value.length === 0) {
           error = 'Please select at least one service';
         }
         break;
-       
+
       case 'booking_time':
         if (!isWalkInMode && !value) {
           error = 'Please select a time slot';
         }
         break;
-       
+
       case 'worker_id':
         if (!isWalkInMode && (!value || value.length === 0)) {
           error = 'Please select at least one worker';
         }
         break;
-       
+
       default:
         break;
     }
-   
+
     return error;
   };
   const handleInputChange = (e) => {
@@ -222,7 +218,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       ...prev,
       [name]: value
     }));
-   
+
     // Clear error for this field when user starts typing
     if (touched[name] && errors[name]) {
       setErrors(prev => ({
@@ -237,7 +233,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       ...prev,
       [name]: true
     }));
-   
+
     const error = validateField(name, value);
     setErrors(prev => ({
       ...prev,
@@ -255,7 +251,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     setFormData(prev => {
       const currentServices = prev.service_ids || [];
       const isSelected = currentServices.includes(serviceId);
-     
+
       if (isSelected) {
         return {
           ...prev,
@@ -273,7 +269,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     setFormData(prev => {
       const currentWorkers = prev.workers || [];
       const isSelected = currentWorkers.some(w => w.worker_id === workerId);
-     
+
       if (isSelected) {
         // Remove worker if already selected
         const updatedWorkers = currentWorkers.filter(w => w.worker_id !== workerId);
@@ -295,7 +291,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   };
   const validateForm = () => {
     const newErrors = {};
-   
+
     // Validate all fields
     Object.keys(formData).forEach(key => {
       const error = validateField(key, formData[key]);
@@ -303,17 +299,17 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         newErrors[key] = error;
       }
     });
-   
+
     // Additional date validation for non-walk-in bookings
     if (!isWalkInMode) {
       const selectedDate = new Date(formData.booking_date);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-     
+
       if (selectedDate < today) {
         newErrors.booking_date = 'Booking date cannot be in the past';
       }
-     
+
       // Check if selected date is too far in future (e.g., more than 6 months)
       const maxFutureDate = new Date();
       maxFutureDate.setMonth(maxFutureDate.getMonth() + 6);
@@ -321,7 +317,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         newErrors.booking_date = 'Booking date cannot be more than 6 months in advance';
       }
     }
-   
+
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -331,7 +327,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-   
+
     // Validate form before submission
     if (!validateForm()) {
       // Mark all fields as touched to show validation errors
@@ -342,17 +338,17 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       setTouched(allTouched);
       return;
     }
-   
+
     setLoading(true);
     try {
       let payload;
-     
+
       if (isWalkInMode) {
         // For walk-in customers, use current date/time
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0];
         const timeStr = now.toTimeString().slice(0, 8); // HH:MM:SS format
-        
+
         payload = {
           ...formData,
           service_ids: formData.service_ids, // Send array of service IDs
@@ -372,7 +368,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           service_id: formData.service_ids[0], // Keep for backward compatibility
           booking_date: formData.booking_date.toISOString().split('T')[0]
         };
-        
+
         // Compose scheduled_time from selected date and time if available
         const dateStr = formData.booking_date.toISOString().split('T')[0];
         const timeStr = formData.booking_time.length === 5 ? `${formData.booking_time}:00` : formData.booking_time;
@@ -387,7 +383,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       if (isEditing && booking) {
         // Update existing booking
         response = await axios.put(`${updateBookingEndpoint}/${booking.id}`, payload);
-       
+
         // Assign multiple workers if provided (simplified - no roles)
         if (formData.workers && formData.workers.length > 0) {
           try {
@@ -400,12 +396,12 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             // Don't fail the booking update if worker assignment fails
           }
         }
-       
+
         handleSuccess('Booking updated successfully!');
       } else {
         // Create new booking
         response = await axios.post(createBookingEndpoint, payload);
-       
+
         // Assign multiple workers if provided (simplified - no roles)
         if (formData.workers && formData.workers.length > 0) {
           try {
@@ -418,10 +414,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             // Don't fail the booking creation if worker assignment fails
           }
         }
-       
+
         handleSuccess('Booking created successfully!');
       }
-     
+
       if (onSubmit) {
         onSubmit(response.data);
       }
@@ -465,7 +461,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       <h2 className="text-2xl font-bold mb-6 text-gray-800" id="booking-form-title">
         {isEditing ? 'Edit Booking' : 'New Walk-in Customer'}
       </h2>
-     
+
       {/* Payment Status Display for Editing Mode */}
       {isEditing && (
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
@@ -482,7 +478,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           )}
         </div>
       )}
-     
+
       <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6" role="form" aria-labelledby="booking-form-title">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Customer Information */}
@@ -538,17 +534,16 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                     onBlur={handleBlur}
                     required
                     aria-required="true"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      touched.customer_name && errors.customer_name
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${touched.customer_name && errors.customer_name
                         ? 'border-red-500 focus:ring-red-500'
                         : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.customer_name && errors.customer_name && (
                     <p className="mt-1 text-sm text-red-600">{errors.customer_name}</p>
                   )}
                 </div>
-                
+
                 <div>
                   <label htmlFor="customer-phone" className="block text-sm font-medium text-gray-700 mb-2">
                     Customer Phone *
@@ -562,11 +557,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                     onBlur={handleBlur}
                     required
                     aria-required="true"
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${
-                      touched.customer_phone && errors.customer_phone
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 ${touched.customer_phone && errors.customer_phone
                         ? 'border-red-500 focus:ring-red-500'
                         : 'border-gray-300 focus:ring-blue-500'
-                    }`}
+                      }`}
                   />
                   {touched.customer_phone && errors.customer_phone && (
                     <p className="mt-1 text-sm text-red-600">{errors.customer_phone}</p>
@@ -596,59 +590,58 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             )}
           </div>
 
-        {/* Services Selection */}
-        <div className="space-y-4">
-          <label className="block text-sm font-medium text-gray-700 flex flex-wrap items-center gap-2">
-            <span>Select Services</span>
-            <span className="text-gray-400 cursor-help relative group">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                You can select multiple services for a single appointment.
+          {/* Services Selection */}
+          <div className="space-y-4">
+            <label className="block text-sm font-medium text-gray-700 flex flex-wrap items-center gap-2">
+              <span>Select Services</span>
+              <span className="text-gray-400 cursor-help relative group">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div className="hidden sm:block absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
+                  You can select multiple services for a single appointment.
+                </div>
+              </span>
+            </label>
+
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+              <div className="w-full sm:w-1/3">
+                <select
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                >
+                  <option value="All">All Categories</option>
+                  {categories.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
-            </span>
-          </label>
-          
-          <div className="flex flex-col sm:flex-row gap-4 mb-4">
-            <div className="w-full sm:w-1/3">
-              <select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-              >
-                <option value="All">All Categories</option>
-                {categories.map(cat => (
-                  <option key={cat} value={cat}>{cat}</option>
-                ))}
-              </select>
+              <div className="w-full sm:w-2/3">
+                <input
+                  type="text"
+                  placeholder="Search services..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+                />
+              </div>
             </div>
-            <div className="w-full sm:w-2/3">
-              <input
-                type="text"
-                placeholder="Search services..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-60 overflow-y-auto border border-gray-200 rounded-md p-2">
               {servicesLoading ? (
                 <div className="col-span-full text-center py-4 text-gray-500">Loading services...</div>
               ) : filteredServices.length === 0 ? (
                 <div className="col-span-full text-center py-4 text-gray-500">No services found</div>
               ) : (
                 filteredServices.map(service => (
-                  <div 
+                  <div
                     key={service.id}
                     onClick={() => handleServiceSelection(service.id)}
-                    className={`cursor-pointer p-3 border rounded-md transition-all ${
-                      formData.service_ids.includes(service.id)
+                    className={`cursor-pointer p-3 border rounded-md transition-all ${formData.service_ids.includes(service.id)
                         ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500'
                         : 'border-gray-200 hover:border-blue-300'
-                    }`}
+                      }`}
                   >
                     <div className="flex justify-between items-start">
                       <h4 className="font-medium text-sm text-gray-900">{service.name}</h4>
@@ -678,52 +671,51 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
                 Loading workers...
               </div>
             ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
-              {Array.isArray(workers) && workers.map(worker => {
-                const isSelected = Array.isArray(formData.workers) && formData.workers.some(w => w.worker_id === worker.id);
-                const statusColor = {
-                  'available': 'bg-green-100 text-green-800',
-                  'busy': 'bg-red-100 text-red-800',
-                  'offline': 'bg-gray-100 text-gray-800'
-                }[worker.current_status] || 'bg-gray-100 text-gray-800';
-                
-                return (
-                  <div
-                    key={worker.id}
-                    onClick={() => handleWorkerSelection(worker.id)}
-                    className={`p-3 rounded-md border cursor-pointer transition-all ${
-                      isSelected
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-medium text-gray-900">{worker.name}</div>
-                        <div className="text-sm text-gray-600">{worker.role}</div>
-                        {worker.specialty && (
-                          <div className="text-xs text-purple-600 font-medium mt-1">
-                            🎯 {worker.specialty}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-1">
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
-                          {worker.current_status || 'available'}
-                        </span>
-                        {isSelected && (
-                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Selected
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
+                {Array.isArray(workers) && workers.map(worker => {
+                  const isSelected = Array.isArray(formData.workers) && formData.workers.some(w => w.worker_id === worker.id);
+                  const statusColor = {
+                    'available': 'bg-green-100 text-green-800',
+                    'busy': 'bg-red-100 text-red-800',
+                    'offline': 'bg-gray-100 text-gray-800'
+                  }[worker.current_status] || 'bg-gray-100 text-gray-800';
+
+                  return (
+                    <div
+                      key={worker.id}
+                      onClick={() => handleWorkerSelection(worker.id)}
+                      className={`p-3 rounded-md border cursor-pointer transition-all ${isSelected
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{worker.name}</div>
+                          <div className="text-sm text-gray-600">{worker.role}</div>
+                          {worker.specialty && (
+                            <div className="text-xs text-purple-600 font-medium mt-1">
+                              🎯 {worker.specialty}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col items-end gap-1">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${statusColor}`}>
+                            {worker.current_status || 'available'}
                           </span>
-                        )}
+                          {isSelected && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                              Selected
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          {touched.workers && errors.workers && (
+                  );
+                })}
+              </div>
+            )}
+            {touched.workers && errors.workers && (
               <p id="worker-error" className="mt-1 text-sm text-red-600" role="alert">
                 {errors.workers}
               </p>
@@ -733,74 +725,75 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             )}
           </div>
         </div>
-      </div>
+    </div>
 
-        {/* Date and Time Selection */}
-        {!isWalkInMode && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Date *
-              </label>
-              <Calendar
-                onChange={handleDateChange}
-                value={formData.booking_date}
-                className="w-full border rounded-md p-2 text-sm"
-                tileClassName={({ date, view }) => {
-                  if (view === 'month') {
-                    // Check if date has available slots (simplified check)
-                    return 'hover:bg-blue-50 cursor-pointer rounded-full';
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Select Time *
-              </label>
-              {availableSlots.length > 0 ? (
-                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
-                  {availableSlots.map((slot, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, booking_time: slot }))}
-                      className={`py-2 px-3 text-sm rounded-md border ${
-                        formData.booking_time === slot
-                          ? 'bg-blue-500 text-white border-blue-500'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                      }`}
-                    >
-                      {slot}
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-gray-500 italic p-4 border border-gray-200 rounded-md bg-gray-50 text-center">
-                  {formData.booking_date ? 'No slots available for this date' : 'Select a date first'}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-        {/* Notes */}
+        {/* Date and Time Selection */ }
+  {
+    !isWalkInMode && (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <label htmlFor="booking-notes" className="block text-sm font-medium text-gray-700 mb-2">
-            Additional Notes
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Date *
           </label>
-          <textarea
-            id="booking-notes"
-            name="notes"
-            value={formData.notes}
-            onChange={handleInputChange}
-            rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="Any special requests or notes..."
-            aria-describedby="notes-description"
+          <Calendar
+            onChange={handleDateChange}
+            value={formData.booking_date}
+            className="w-full border rounded-md p-2 text-sm"
+            tileClassName={({ date, view }) => {
+              if (view === 'month') {
+                // Check if date has available slots (simplified check)
+                return 'hover:bg-blue-50 cursor-pointer rounded-full';
+              }
+            }}
           />
-          <span id="notes-description" className="sr-only">Optional field for any special requests or additional information</span>
         </div>
-        {/* Form Buttons */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select Time *
+          </label>
+          {availableSlots.length > 0 ? (
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-1">
+              {availableSlots.map((slot, index) => (
+                <button
+                  key={index}
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, booking_time: slot.time }))}
+                  className={`py-2 px-3 text-sm rounded-md border ${formData.booking_time === slot.time
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                    }`}
+                >
+                  {slot.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="text-gray-500 italic p-4 border border-gray-200 rounded-md bg-gray-50 text-center">
+              {formData.booking_date ? 'No slots available for this date' : 'Select a date first'}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+  {/* Notes */ }
+  <div>
+    <label htmlFor="booking-notes" className="block text-sm font-medium text-gray-700 mb-2">
+      Additional Notes
+    </label>
+    <textarea
+      id="booking-notes"
+      name="notes"
+      value={formData.notes}
+      onChange={handleInputChange}
+      rows={3}
+      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+      placeholder="Any special requests or notes..."
+      aria-describedby="notes-description"
+    />
+    <span id="notes-description" className="sr-only">Optional field for any special requests or additional information</span>
+  </div>
+  {/* Form Buttons */ }
         <div className="flex flex-col-reverse sm:flex-row gap-3 sm:space-x-4 pt-4 border-t border-gray-100">
           <button
             type="button"
@@ -823,8 +816,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         <div id="submit-status" className="sr-only" role="status" aria-live="polite">
           {loading ? (isEditing ? 'Updating booking' : 'Processing your booking request') : 'Ready to save booking'}
         </div>
-      </form>
-    </div>
+      </form >
+    </div >
   );
 };
 export default BookingForm;

@@ -40,42 +40,47 @@ const WalkInBooking = () => {
     if (formData.booking_date) {
       fetchAvailableSlots();
     }
+    return () => {
+      if (slotsControllerRef.current) {
+        slotsControllerRef.current.abort();
+      }
+    };
   }, [formData.booking_date]);
 
   const fetchAvailableSlots = async () => {
     if (slotsControllerRef.current) {
-      try { slotsControllerRef.current.abort(); } catch (e) {}
+      try { slotsControllerRef.current.abort(); } catch (e) { }
     }
-    
+
     setSlotsLoading(true);
     setSlotsError(null);
     setFormData(prev => ({ ...prev, booking_time: '' })); // Reset time selection
-    
+
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     if (controller) {
       slotsControllerRef.current = controller;
     }
 
     try {
-      const dateStr = new Date(formData.booking_date).toISOString().split('T')[0];
+      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
       // We don't send service_ids anymore, backend defaults to 60 mins duration
       const url = `${endpoints.availableSlots}?date=${dateStr}`;
-      
+
       const response = await axios.get(url, { signal: controller?.signal, timeout: 15000 });
-      
+
       let slots = [];
       if (Array.isArray(response.data)) {
         slots = response.data;
       } else if (response.data && typeof response.data === 'object') {
         slots = response.data.available_slots || response.data.slots || [];
       }
-      
+
       setAvailableSlots(slots);
+      setSlotsLoading(false);
     } catch (error) {
       if (axios.isCancel(error)) return;
       console.error('Error fetching slots:', error);
       setSlotsError('Could not load available times. Please try another date.');
-    } finally {
       setSlotsLoading(false);
     }
   };
@@ -86,7 +91,7 @@ const WalkInBooking = () => {
       ...prev,
       [name]: value
     }));
-    
+
     // Clear validation error when user types
     if (validationErrors[name]) {
       setValidationErrors(prev => ({ ...prev, [name]: null }));
@@ -100,10 +105,10 @@ const WalkInBooking = () => {
     }));
   };
 
-  const handleTimeSelect = (time) => {
+  const handleTimeSelect = (slot) => {
     setFormData(prev => ({
       ...prev,
-      booking_time: time
+      booking_time: slot.time
     }));
     if (validationErrors.booking_time) {
       setValidationErrors(prev => ({ ...prev, booking_time: null }));
@@ -113,17 +118,27 @@ const WalkInBooking = () => {
   const validateForm = () => {
     const errors = {};
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
-    if (!formData.customer_phone.trim()) errors.customer_phone = 'Phone number is required';
+    if (!formData.customer_phone.trim()) {
+      errors.customer_phone = 'Phone number is required';
+    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(formData.customer_phone.trim())) {
+      errors.customer_phone = 'Please enter a valid Nigerian phone number';
+    }
     if (!formData.booking_date) errors.booking_date = 'Date is required';
     if (!formData.booking_time) errors.booking_time = 'Time is required';
-    
+
+    // Email is now optional, validate only if provided
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (formData.customer_email && formData.customer_email.trim() && !emailRegex.test(formData.customer_email)) {
+      errors.customer_email = 'Please enter a valid email address';
+    }
+
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       handleError(null, 'Please fill in all required fields');
       return;
@@ -138,26 +153,30 @@ const WalkInBooking = () => {
         customer_phone: formData.customer_phone,
         customer_email: formData.customer_email || undefined,
         instagram_handle: formData.instagram_handle || undefined,
-        scheduled_time: `${new Date(formData.booking_date).toISOString().split('T')[0]}T${formData.booking_time}:00`,
+        scheduled_time: `${formData.booking_date.toLocaleDateString('en-CA')}T${formData.booking_time}:00`,
         notes: formData.notes,
         customer_type: 'walk_in',
         service_ids: [] // Walk-in doesn't select services upfront
       };
 
       const response = await axios.post(endpoints.createBooking, payload);
-      
+
       handleSuccess('Booking created successfully!');
-      
+
       // Navigate to confirmation page
-      navigate('/booking-confirmation', { 
-        state: { 
-          bookingData: response.data.data || response.data 
-        } 
+      navigate('/booking-confirmation', {
+        state: {
+          bookingData: response.data.data || response.data
+        }
       });
-      
+
     } catch (error) {
       console.error('Booking error:', error);
-      handleError(error, 'Failed to create booking. Please try again.');
+      let errorMessage = 'Failed to create booking. Please try again.';
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+      handleError(error, errorMessage);
     } finally {
       setLoading(false);
     }
@@ -189,17 +208,17 @@ const WalkInBooking = () => {
           }
         `}
       </style>
-      
+
       <div className="max-w-6xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-gray-900">
         <div className="grid grid-cols-1 lg:grid-cols-2">
-          
+
           {/* Left Panel - Branding & Info */}
           <div className="bg-gray-900 p-8 text-white relative overflow-hidden flex flex-col justify-between min-h-[400px] lg:min-h-full">
             {/* Background Pattern */}
-            <div className="absolute inset-0 opacity-10" 
-                 style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '30px 30px' }}>
+            <div className="absolute inset-0 opacity-10"
+              style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '30px 30px' }}>
             </div>
-            
+
             <div className="relative z-10">
               <div className="mb-6">
                 <button
@@ -212,9 +231,9 @@ const WalkInBooking = () => {
                   Back to Home
                 </button>
               </div>
-              
+
               <h1 className="text-5xl mb-4" style={{ fontFamily: '"UnifrakturCook", cursive', letterSpacing: '2px' }}>
-                Walk-In<br/>Booking
+                Walk-In<br />Booking
               </h1>
               <div className="w-20 h-1 bg-white mb-6"></div>
               <p className="text-xl opacity-90 font-light">
@@ -243,7 +262,7 @@ const WalkInBooking = () => {
           {/* Right Panel - Booking Form */}
           <div className="p-8 lg:p-12 bg-white">
             <form onSubmit={handleSubmit} className="space-y-8">
-              
+
               {/* Customer Details */}
               <section>
                 <h3 className="text-2xl font-bold mb-6 flex items-center text-gray-800" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
@@ -275,7 +294,7 @@ const WalkInBooking = () => {
                     />
                     {validationErrors.customer_phone && <p className="text-red-500 text-xs mt-1">{validationErrors.customer_phone}</p>}
                   </div>
-                  
+
                   <div className="col-span-1 md:col-span-2">
                     <button
                       type="button"
@@ -324,7 +343,7 @@ const WalkInBooking = () => {
                   <span className="w-8 h-8 rounded-full bg-black text-white text-sm flex items-center justify-center mr-3 font-sans">2</span>
                   Date & Time
                 </h3>
-                
+
                 <div className="mb-6 font-sans">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Date *</label>
                   <div className="border border-gray-200 rounded-xl overflow-hidden p-4 bg-gray-50">
@@ -340,7 +359,7 @@ const WalkInBooking = () => {
 
                 <div className="font-sans">
                   <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Time *</label>
-                  
+
                   {slotsLoading ? (
                     <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg">
                       <div className="animate-spin inline-block w-6 h-6 border-2 border-current border-t-transparent rounded-full mb-2"></div>
@@ -356,20 +375,20 @@ const WalkInBooking = () => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {availableSlots.map((time) => (
+                      {availableSlots.map((slot) => (
                         <button
-                          key={time}
+                          key={slot.time}
                           type="button"
-                          onClick={() => handleTimeSelect(time)}
+                          onClick={() => handleTimeSelect(slot)}
                           className={`
                             py-2 px-3 text-sm rounded-lg border transition-all duration-200
-                            ${formData.booking_time === time 
+                            ${formData.booking_time === slot.time 
                               ? 'bg-black text-white border-black shadow-lg transform scale-105' 
                               : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
                             }
                           `}
                         >
-                          {time}
+                          {slot.label}
                         </button>
                       ))}
                     </div>

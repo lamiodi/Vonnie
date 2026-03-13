@@ -30,6 +30,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/setup-admin" element={<SetupAdmin />} />
+        <Route path="/public-booking" element={<PublicBooking />} />
         <Route path="/walk-in-booking" element={<WalkInBooking />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />
           
@@ -42,7 +43,6 @@ function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="bookings" element={<Bookings />} />
-            <Route path="public-booking" element={<PublicBooking />} />
             <Route path="pos" element={<POSPage />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="workers" element={<Workers />} />

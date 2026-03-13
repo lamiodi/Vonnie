@@ -44,6 +44,10 @@ const getEmailWrapper = (content) => `
 `;
 
 export const sendEmail = async (to, subject, text, html = null, attachments = []) => {
+  if (!to) {
+    console.log('Skipping email sending: No recipient email provided');
+    return { success: false, error: 'No recipient email provided' };
+  }
   try {
     const resend = getResendClient();
     // Inject font imports if HTML is provided

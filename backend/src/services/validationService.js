@@ -17,7 +17,7 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
   try {
     const startTime = new Date(scheduledTime);
     const endTime = new Date(startTime.getTime() + (estimatedDuration || 60) * 60 * 1000); // Default 1 hour
-    
+
     // Check for overlapping bookings
     let conflictQuery = `
       SELECT 
@@ -44,25 +44,25 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
           (b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2)
         )
     `;
-    
+
     const queryParams = [startTime, endTime];
-    
+
     // Exclude current booking if updating
     if (excludeBookingId) {
       conflictQuery += ` AND b.id != $${queryParams.length + 1}`;
       queryParams.push(excludeBookingId);
     }
-    
+
     // Filter by workers if provided
     if (workerIds.length > 0) {
       conflictQuery += ` AND bw.worker_id = ANY($${queryParams.length + 1})`;
       queryParams.push(workerIds);
     }
-    
+
     conflictQuery += ` ORDER BY b.scheduled_time`;
-    
+
     const conflicts = await query(conflictQuery, queryParams);
-    
+
     if (conflicts.rows.length > 0) {
       return {
         isValid: false,
@@ -76,12 +76,12 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
         }))
       };
     }
-    
+
     return {
       isValid: true,
       message: 'No time conflicts found'
     };
-    
+
   } catch (error) {
     console.error('Error validating booking time conflict:', error);
     return {
@@ -107,10 +107,10 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
         message: 'At least one worker must be assigned'
       };
     }
-    
+
     const startTime = new Date(scheduledTime);
     const endTime = new Date(startTime.getTime() + estimatedDuration * 60 * 1000);
-    
+
     // Check worker availability and current status
     const availabilityQuery = `
       SELECT 
@@ -133,13 +133,13 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
       WHERE u.id = ANY($1) AND u.role = 'staff'
       GROUP BY u.id, u.name, u.current_status, u.is_active
     `;
-    
+
     const availabilityResult = await query(availabilityQuery, [workerIds]);
-    
-    const unavailableWorkers = availabilityResult.rows.filter(worker => 
+
+    const unavailableWorkers = availabilityResult.rows.filter(worker =>
       worker.availability_status !== 'available'
     );
-    
+
     if (unavailableWorkers.length > 0) {
       return {
         isValid: false,
@@ -152,14 +152,14 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
         message: `${unavailableWorkers.length} worker(s) are not available`
       };
     }
-    
+
     // Check for time conflicts for available workers
     const timeConflictResult = await validateBookingTimeConflict(
-      scheduledTime, 
-      estimatedDuration, 
+      scheduledTime,
+      estimatedDuration,
       workerIds
     );
-    
+
     if (!timeConflictResult.isValid) {
       return {
         isValid: false,
@@ -167,13 +167,13 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
         conflicts: timeConflictResult.conflicts
       };
     }
-    
+
     return {
       isValid: true,
       message: 'All workers are available',
       availableWorkers: availabilityResult.rows
     };
-    
+
   } catch (error) {
     console.error('Error validating worker availability:', error);
     return {
@@ -198,7 +198,7 @@ export async function validateServicePricing(serviceIds, pricingData = {}) {
         message: 'At least one service must be selected'
       };
     }
-    
+
     // Fetch current service pricing
     const pricingQuery = `
       SELECT 
@@ -210,26 +210,26 @@ export async function validateServicePricing(serviceIds, pricingData = {}) {
       FROM services 
       WHERE id = ANY($1) AND is_active = true
     `;
-    
+
     const pricingResult = await query(pricingQuery, [serviceIds]);
-    
+
     if (pricingResult.rows.length !== serviceIds.length) {
       const foundIds = pricingResult.rows.map(s => s.id);
       const missingIds = serviceIds.filter(id => !foundIds.includes(id));
-      
+
       return {
         isValid: false,
         message: `${missingIds.length} service(s) not found or inactive`,
         missingServices: missingIds
       };
     }
-    
+
     // Calculate expected total
     const expectedTotal = pricingResult.rows.reduce((total, service) => {
       const quantity = pricingData.quantities?.[service.id] || 1;
       return total + (service.price * quantity);
     }, 0);
-    
+
     // Validate provided total against calculated total
     if (pricingData.totalAmount && Math.abs(pricingData.totalAmount - expectedTotal) > 0.01) {
       return {
@@ -240,7 +240,7 @@ export async function validateServicePricing(serviceIds, pricingData = {}) {
         difference: Math.abs(pricingData.totalAmount - expectedTotal)
       };
     }
-    
+
     // Validate individual service pricing if provided
     const pricingErrors = [];
     if (pricingData.individualPrices) {
@@ -256,7 +256,7 @@ export async function validateServicePricing(serviceIds, pricingData = {}) {
         }
       });
     }
-    
+
     if (pricingErrors.length > 0) {
       return {
         isValid: false,
@@ -264,14 +264,14 @@ export async function validateServicePricing(serviceIds, pricingData = {}) {
         pricingErrors: pricingErrors
       };
     }
-    
+
     return {
       isValid: true,
       message: 'Service pricing is valid',
       totalAmount: expectedTotal,
       services: pricingResult.rows
     };
-    
+
   } catch (error) {
     console.error('Error validating service pricing:', error);
     return {
@@ -292,15 +292,15 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
   try {
     const errors = [];
     const warnings = [];
-    
-    // Validate required fields
+
+    // Validate required fields (email is now optional)
     const requiredFields = ['customer_name', 'customer_phone', 'scheduled_time', 'services'];
     for (const field of requiredFields) {
       if (!bookingData[field]) {
         errors.push(`Missing required field: ${field}`);
       }
     }
-    
+
     if (errors.length > 0) {
       return {
         isValid: false,
@@ -308,24 +308,24 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
         errors: errors
       };
     }
-    
+
     // Validate customer phone format
     const phoneRegex = /^[\d\s\-\(\)\+]{10,}$/;
     if (bookingData.customer_phone && !phoneRegex.test(bookingData.customer_phone)) {
       errors.push('Invalid phone number format');
     }
-    
+
     // Validate scheduled time is in the future
     const scheduledTime = new Date(bookingData.scheduled_time);
     const now = new Date();
     const minAdvanceTime = 30; // 30 minutes minimum advance notice
-    
+
     if (scheduledTime <= now) {
       errors.push('Scheduled time must be in the future');
     } else if (scheduledTime < new Date(now.getTime() + minAdvanceTime * 60 * 1000)) {
       warnings.push('Booking is scheduled with less than 30 minutes advance notice');
     }
-    
+
     // Validate worker availability
     if (bookingData.worker_ids && bookingData.worker_ids.length > 0) {
       const workerAvailability = await validateWorkerAvailability(
@@ -333,17 +333,17 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
         bookingData.scheduled_time,
         bookingData.estimated_duration
       );
-      
+
       if (!workerAvailability.isValid) {
         errors.push(workerAvailability.message);
         if (workerAvailability.unavailableWorkers) {
-          errors.push(...workerAvailability.unavailableWorkers.map(w => 
+          errors.push(...workerAvailability.unavailableWorkers.map(w =>
             `${w.name} is ${w.status}: ${w.reason}`
           ));
         }
       }
     }
-    
+
     // Validate service pricing
     if (bookingData.services && bookingData.services.length > 0) {
       const serviceValidation = await validateServicePricing(
@@ -353,12 +353,12 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
           quantities: bookingData.service_quantities
         }
       );
-      
+
       if (!serviceValidation.isValid) {
         errors.push(serviceValidation.message);
       }
     }
-    
+
     // Validate booking time conflicts
     if (bookingData.scheduled_time && bookingData.worker_ids) {
       const conflictValidation = await validateBookingTimeConflict(
@@ -367,17 +367,17 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
         bookingData.worker_ids,
         excludeBookingId
       );
-      
+
       if (!conflictValidation.isValid) {
         errors.push(conflictValidation.message);
         if (conflictValidation.conflicts) {
-          errors.push(...conflictValidation.conflicts.map(c => 
+          errors.push(...conflictValidation.conflicts.map(c =>
             `Conflict with booking ${c.bookingNumber} for ${c.worker}`
           ));
         }
       }
     }
-    
+
     if (errors.length > 0) {
       return {
         isValid: false,
@@ -386,13 +386,13 @@ export async function validateBookingData(bookingData, excludeBookingId = null) 
         warnings: warnings.length > 0 ? warnings : undefined
       };
     }
-    
+
     return {
       isValid: true,
       message: 'Booking data is valid',
       warnings: warnings.length > 0 ? warnings : undefined
     };
-    
+
   } catch (error) {
     console.error('Error validating booking data:', error);
     return {
@@ -415,7 +415,7 @@ function getAvailabilityReason(status) {
     'on_break': 'Worker is currently on break',
     'busy': 'Worker has active bookings'
   };
-  
+
   return reasons[status] || 'Worker is not available';
 }
 
@@ -437,14 +437,14 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
         message: 'At least one worker must be assigned'
       };
     }
-    
+
     const startTime = new Date(scheduledTime);
     const endTime = new Date(startTime.getTime() + estimatedDuration * 60 * 1000);
-    
+
     // Use provided client or default query function
     // Fix: Ensure queryFunction is callable even if client object is passed
     const queryFunction = client ? (text, params) => client.query(text, params) : query;
-    
+
     // 🔒 CRITICAL: Lock worker rows to prevent concurrent assignments
     const availabilityQuery = `
       WITH locked_workers AS (
@@ -487,26 +487,26 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
       LEFT JOIN bookings b ON bw.booking_id = b.id
       GROUP BY u.id, u.name, u.current_status, u.is_active
     `;
-    
+
     const availabilityResult = await queryFunction(availabilityQuery, [workerIds, startTime, endTime, excludeBookingId]);
-    
+
     // Check if any workers were skipped due to locking
     if (availabilityResult.rows.length !== workerIds.length) {
-      const lockedWorkerIds = workerIds.filter(id => 
+      const lockedWorkerIds = workerIds.filter(id =>
         !availabilityResult.rows.some(row => row.worker_id === id)
       );
-      
+
       return {
         isValid: false,
         message: `Some workers are currently being assigned by another user: ${lockedWorkerIds.join(', ')}`,
         lockedWorkers: lockedWorkerIds
       };
     }
-    
-    const unavailableWorkers = availabilityResult.rows.filter(worker => 
+
+    const unavailableWorkers = availabilityResult.rows.filter(worker =>
       worker.availability_status !== 'available'
     );
-    
+
     if (unavailableWorkers.length > 0) {
       return {
         isValid: false,
@@ -519,16 +519,16 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
         message: `${unavailableWorkers.length} worker(s) are not available`
       };
     }
-    
+
     // Check for time conflicts with row locking
     const timeConflictResult = await validateBookingTimeConflictWithLocking(
-      scheduledTime, 
-      estimatedDuration, 
+      scheduledTime,
+      estimatedDuration,
       workerIds,
       excludeBookingId,
       queryFunction
     );
-    
+
     if (!timeConflictResult.isValid) {
       return {
         isValid: false,
@@ -536,13 +536,13 @@ export async function validateWorkerAvailabilityWithLocking(workerIds, scheduled
         conflicts: timeConflictResult.conflicts
       };
     }
-    
+
     return {
       isValid: true,
       message: 'All workers are available',
       availableWorkers: availabilityResult.rows
     };
-    
+
   } catch (error) {
     console.error('Error validating worker availability with locking:', error);
     return {
@@ -566,7 +566,7 @@ async function validateBookingTimeConflictWithLocking(scheduledTime, estimatedDu
   try {
     const startTime = new Date(scheduledTime);
     const endTime = new Date(startTime.getTime() + (estimatedDuration || 60) * 60 * 1000);
-    
+
     // Check for overlapping bookings with row locking
     let conflictQuery = `
       SELECT 
@@ -593,26 +593,26 @@ async function validateBookingTimeConflictWithLocking(scheduledTime, estimatedDu
           (b.scheduled_time >= $1 AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') <= $2)
         )
     `;
-    
+
     const queryParams = [startTime, endTime];
-    
+
     // Exclude current booking if updating
     if (excludeBookingId) {
       conflictQuery += ` AND b.id != $${queryParams.length + 1}`;
       queryParams.push(excludeBookingId);
     }
-    
+
     // Filter by workers if provided
     if (workerIds.length > 0) {
       conflictQuery += ` AND bw.worker_id = ANY($${queryParams.length + 1})`;
       queryParams.push(workerIds);
     }
-    
+
     // 🔒 LOCK CONFLICTING BOOKING ROWS TO PREVENT CONCURRENT ASSIGNMENTS
     conflictQuery += ` ORDER BY b.scheduled_time FOR UPDATE OF b`;
-    
+
     const conflicts = await queryFunction(conflictQuery, queryParams);
-    
+
     if (conflicts.length > 0) {
       return {
         isValid: false,
@@ -628,12 +628,12 @@ async function validateBookingTimeConflictWithLocking(scheduledTime, estimatedDu
         }))
       };
     }
-    
+
     return {
       isValid: true,
       message: 'No time conflicts detected'
     };
-    
+
   } catch (error) {
     console.error('Error validating booking time conflict with locking:', error);
     return {

@@ -110,7 +110,7 @@ router.get('/bookings/available-slots', async (req, res) => {
          JOIN booking_workers bw ON b.id = bw.booking_id
          WHERE bw.worker_id = $1 
          AND DATE(b.scheduled_time) = $2 
-         AND b.status IN ('scheduled', 'in-progress')`,
+         AND b.status IN ('scheduled', 'in-progress', 'confirmed')`,
         [worker_id, date]
       );
       workerIds = [worker_id];
@@ -132,7 +132,7 @@ router.get('/bookings/available-slots', async (req, res) => {
          JOIN booking_workers bw ON b.id = bw.booking_id
          WHERE bw.worker_id = ANY($1) 
          AND DATE(b.scheduled_time) = $2 
-         AND b.status IN ('scheduled', 'in-progress')`,
+         AND b.status IN ('scheduled', 'in-progress', 'confirmed')`,
         [workerIds, date]
       );
     }
@@ -213,7 +213,10 @@ router.get('/bookings/available-slots', async (req, res) => {
     const formatTimeSlot = (h, m) => {
       const ampm = h >= 12 ? 'pm' : 'am';
       const hours = h % 12 || 12; // the hour '0' should be '12'
-      return `${hours}:${pad(m)}${ampm}`;
+      return {
+        time: `${pad(h)}:${pad(m)}`,
+        label: `${hours}:${pad(m)}${ampm}`
+      };
     };
 
     // Check if Tuesday (Day 2) - Closed
