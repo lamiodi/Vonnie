@@ -375,22 +375,35 @@ const WalkInBooking = () => {
                     </div>
                   ) : (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {availableSlots.map((slot) => (
-                        <button
-                          key={slot.time}
-                          type="button"
-                          onClick={() => handleTimeSelect(slot)}
-                          className={`
-                            py-2 px-3 text-sm rounded-lg border transition-all duration-200
-                            ${formData.booking_time === slot.time 
-                              ? 'bg-black text-white border-black shadow-lg transform scale-105' 
-                              : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
-                            }
-                          `}
-                        >
-                          {slot.label}
-                        </button>
-                      ))}
+                      {availableSlots.map((slot, index) => {
+                        // Ensure slot is an object and has required properties
+                        let time = typeof slot === 'string' ? slot : slot?.time;
+                        let label = typeof slot === 'string' ? slot : slot?.label;
+                        
+                        // Fallback if label is missing or invalid
+                        if (!label || typeof label === 'object') {
+                          label = time;
+                        }
+
+                        if (!time) return null;
+
+                        return (
+                          <button
+                            key={`${time}-${index}`}
+                            type="button"
+                            onClick={() => handleTimeSelect(typeof slot === 'string' ? { time: slot, label: slot } : slot)}
+                            className={`
+                              py-2 px-3 text-sm rounded-lg border transition-all duration-200
+                              ${formData.booking_time === time 
+                                ? 'bg-black text-white border-black shadow-lg transform scale-105' 
+                                : 'bg-white text-gray-700 border-gray-200 hover:border-gray-400 hover:bg-gray-50'
+                              }
+                            `}
+                          >
+                            {String(label)}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                   {validationErrors.booking_time && <p className="text-red-500 text-xs mt-1">{validationErrors.booking_time}</p>}
