@@ -26,14 +26,8 @@ export const scheduleWeeklyReport = () => {
       console.log('✅ Report PDF generated successfully.');
 
       // Get Admin Emails
-      const adminQuery = `SELECT email FROM users WHERE role = 'admin' OR role = 'manager'`;
-      const adminResult = await query(adminQuery);
-      const admins = adminResult.rows.map(row => row.email);
-
-      if (admins.length === 0) {
-        console.warn('⚠️ No admins found to send report to.');
-        return;
-      }
+      // Only send to chevonnespirin@gmail.com
+      const admins = ['chevonnespirin@gmail.com'];
 
       console.log(`📧 Sending report to ${admins.length} recipients: ${admins.join(', ')}`);
 
