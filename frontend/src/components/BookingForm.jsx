@@ -725,7 +725,6 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
             )}
           </div>
         </div>
-    </div>
 
         {/* Date and Time Selection */ }
   {
@@ -816,8 +815,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         <div id="submit-status" className="sr-only" role="status" aria-live="polite">
           {loading ? (isEditing ? 'Updating booking' : 'Processing your booking request') : 'Ready to save booking'}
         </div>
-      </form >
-    </div >
+      </form>
+    </div>
   );
 };
 export default BookingForm;
