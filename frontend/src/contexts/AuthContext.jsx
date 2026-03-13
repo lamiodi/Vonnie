@@ -21,11 +21,19 @@ export const AuthProvider = ({ children }) => {
   // Configure axios defaults
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      if (axios.defaults && axios.defaults.headers && axios.defaults.headers.common) {
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
+      if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+        api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      }
     } else {
-      delete axios.defaults.headers.common['Authorization'];
-      delete api.defaults.headers.common['Authorization'];
+      if (axios.defaults && axios.defaults.headers && axios.defaults.headers.common) {
+        delete axios.defaults.headers.common['Authorization'];
+      }
+      if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+        delete api.defaults.headers.common['Authorization'];
+      }
     }
   }, [token]);
 
@@ -38,8 +46,12 @@ export const AuthProvider = ({ children }) => {
       if (storedToken && storedUser) {
         try {
           // Verify token is still valid
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-          api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          if (axios.defaults && axios.defaults.headers && axios.defaults.headers.common) {
+            axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          }
+          if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+            api.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+          }
           const response = await api.get('/auth/verify');
           
           if (response.status === 200 && response.data?.user) {
@@ -49,15 +61,23 @@ export const AuthProvider = ({ children }) => {
             // Token is invalid, clear storage
             localStorage.removeItem('token');
             localStorage.removeItem('user');
-            delete axios.defaults.headers.common['Authorization'];
-            delete api.defaults.headers.common['Authorization'];
+            if (axios.defaults && axios.defaults.headers && axios.defaults.headers.common) {
+              delete axios.defaults.headers.common['Authorization'];
+            }
+            if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+              delete api.defaults.headers.common['Authorization'];
+            }
           }
         } catch (error) {
           console.error('Token verification failed:', error);
           localStorage.removeItem('token');
           localStorage.removeItem('user');
-          delete axios.defaults.headers.common['Authorization'];
-          delete api.defaults.headers.common['Authorization'];
+          if (axios.defaults && axios.defaults.headers && axios.defaults.headers.common) {
+            delete axios.defaults.headers.common['Authorization'];
+          }
+          if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+            delete api.defaults.headers.common['Authorization'];
+          }
         }
       }
       setLoading(false);
@@ -87,7 +107,9 @@ export const AuthProvider = ({ children }) => {
         setUser(userData);
         
         // Set axios default header
-        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        }
         
         toast.success('Login successful!');
         return { success: true };

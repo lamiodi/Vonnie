@@ -5,9 +5,28 @@
 
 import axios from 'axios';
 
+const getApiUrl = () => {
+  // Use a safer check for import.meta that works in both Vite and Jest
+  try {
+    // Check if we are in a Vite environment (import.meta.env exists)
+    // We use a specific trick here: eval is used to prevent Jest/Babel from parsing import.meta
+    // which is not supported in CommonJS modules (which Jest uses by default)
+    // eslint-disable-next-line no-eval
+    const meta = new Function('return import.meta')();
+    if (meta && meta.env && meta.env.VITE_API_URL) {
+      return meta.env.VITE_API_URL;
+    }
+  } catch (e) {
+    // Ignore error if import.meta is not available or throws
+  }
+  
+  // Fallback for Jest or default
+  return (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) || 'http://localhost:5010/api';
+};
+
 // Base API configuration
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:5010/api',
+  baseURL: getApiUrl(),
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -15,69 +34,71 @@ const api = axios.create({
 });
 
 // Request interceptor for adding auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+if (api && api.interceptors) {
+  api.interceptors.request.use(
+    (config) => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+      return config;
+    },
+    (error) => {
+      return Promise.reject(error);
     }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
+  );
 
-// Response interceptor for standardized error handling
-api.interceptors.response.use(
-  (response) => {
-    // Handle standardized success response format
-    if (response.data && response.data.success === true) {
-      return response.data;
-    }
-    
-    // Handle legacy responses (convert to standardized format)
-    if (Array.isArray(response.data) || (typeof response.data === 'object' && !response.data.success)) {
-      return {
-        success: true,
-        data: response.data,
-        message: 'Operation successful',
-        status: response.status,
+  // Response interceptor for standardized error handling
+  api.interceptors.response.use(
+    (response) => {
+      // Handle standardized success response format
+      if (response.data && response.data.success === true) {
+        return response.data;
+      }
+      
+      // Handle legacy responses (convert to standardized format)
+      if (Array.isArray(response.data) || (typeof response.data === 'object' && !response.data.success)) {
+        return {
+          success: true,
+          data: response.data,
+          message: 'Operation successful',
+          status: response.status,
+          timestamp: new Date().toISOString()
+        };
+      }
+      
+      return response;
+    },
+    (error) => {
+      // Handle standardized error response format
+      if (error.response?.data?.success === false) {
+        return Promise.reject(error.response.data);
+      }
+      
+      // Convert legacy error responses to standardized format
+      const status = error.response?.status || 500;
+      let errorData = {
+        success: false,
+        error: {
+          code: 'SERVER_ERROR',
+          message: error.response?.data?.error || error.response?.data?.message || error.message || 'Server error'
+        },
+        status,
         timestamp: new Date().toISOString()
       };
+      
+      // Add field validation errors if available
+      if (error.response?.data?.errors) {
+        errorData.error.details = error.response.data.errors;
+      }
+      
+      return Promise.reject(errorData);
     }
-    
-    return response;
-  },
-  (error) => {
-    // Handle standardized error response format
-    if (error.response?.data?.success === false) {
-      return Promise.reject(error.response.data);
-    }
-    
-    // Convert legacy error responses to standardized format
-    const status = error.response?.status || 500;
-    let errorData = {
-      success: false,
-      error: {
-        code: 'SERVER_ERROR',
-        message: error.response?.data?.error || error.response?.data?.message || error.message || 'Server error'
-      },
-      status,
-      timestamp: new Date().toISOString()
-    };
-    
-    // Add field validation errors if available
-    if (error.response?.data?.errors) {
-      errorData.error.details = error.response.data.errors;
-    }
-    
-    return Promise.reject(errorData);
-  }
-);
+  );
+}
 
 // Export API base URL for use in other components
-export const API_BASE_URL = import.meta.env.VITE_API_URL;
+export const API_BASE_URL = getApiUrl();
 
 /**
  * Generic API request function with enhanced error handling and exponential backoff retry
@@ -90,7 +111,7 @@ async function apiRequest(endpoint, options = {}, retryConfig = {}) {
   try {
     // Prevent double '/api' in final URL when baseURL already includes '/api'
     let cleanedEndpoint = endpoint;
-    const baseUrl = import.meta.env.VITE_API_URL || '';
+    const baseUrl = getApiUrl();
     if (typeof endpoint === 'string' && baseUrl.endsWith('/api') && endpoint.startsWith('/api')) {
       cleanedEndpoint = endpoint.replace(/^\/api/, ''); // remove leading /api to avoid duplication
     }
