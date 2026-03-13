@@ -6,21 +6,12 @@
 import axios from 'axios';
 
 const getApiUrl = () => {
-  // Use a safer check for import.meta that works in both Vite and Jest
-  try {
-    // Check if we are in a Vite environment (import.meta.env exists)
-    // We use a specific trick here: eval is used to prevent Jest/Babel from parsing import.meta
-    // which is not supported in CommonJS modules (which Jest uses by default)
-    // eslint-disable-next-line no-eval
-    const meta = new Function('return import.meta')();
-    if (meta && meta.env && meta.env.VITE_API_URL) {
-      return meta.env.VITE_API_URL;
-    }
-  } catch (e) {
-    // Ignore error if import.meta is not available or throws
+  // Simple check for Vite environment variable
+  if (import.meta.env && import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
   }
   
-  // Fallback for Jest or default
+  // Fallback for non-Vite environments (like Jest) or default
   return (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) || 'http://localhost:5010/api';
 };
 
