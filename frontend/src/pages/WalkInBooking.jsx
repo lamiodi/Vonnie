@@ -381,7 +381,7 @@ const WalkInBooking = () => {
                         let label = typeof slot === 'string' ? slot : slot?.label;
                         
                         // Fallback if label is missing or invalid
-                        if (!label || typeof label === 'object') {
+                        if (typeof label !== 'string' && typeof label !== 'number') {
                           label = time;
                         }
 

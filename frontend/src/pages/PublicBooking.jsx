@@ -363,13 +363,24 @@ const PublicBooking = () => {
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                     {availableSlots.map((slot, index) => {
-                      const isSelected = formData.booking_time === slot.time;
+                      // Ensure slot is an object and has required properties
+                      let time = typeof slot === 'string' ? slot : slot?.time;
+                      let label = typeof slot === 'string' ? slot : slot?.label;
+                      
+                      // Fallback if label is missing or invalid
+                      if (typeof label !== 'string' && typeof label !== 'number') {
+                        label = time;
+                      }
+
+                      if (!time) return null;
+
+                      const isSelected = formData.booking_time === time;
 
                       return (
                         <button
-                          key={index}
+                          key={`${time}-${index}`}
                           type="button"
-                          onClick={() => handleTimeSelect(slot)}
+                          onClick={() => handleTimeSelect(typeof slot === 'string' ? { time: slot, label: slot } : slot)}
                           className={`
                             py-2 px-1 text-sm rounded-lg border transition-all duration-200
                             ${isSelected
@@ -377,7 +388,7 @@ const PublicBooking = () => {
                               : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50'}
                           `}
                         >
-                          {slot.label}
+                          {String(label)}
                         </button>
                       );
                     })}
