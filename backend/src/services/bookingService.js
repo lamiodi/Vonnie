@@ -38,8 +38,22 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     if (isNaN(dateObj.getTime())) {
       throw new Error('Invalid date format');
     }
+
+    // Check if date is in the past (allow 10 min buffer for clock skew)
+    const now = new Date();
+    const bufferTime = new Date(now.getTime() - 10 * 60000); 
+    
+    if (dateObj < bufferTime) {
+      throw {
+        success: false,
+        message: 'Cannot create a booking in the past. Please select a future time.',
+        status: 400
+      };
+    }
+
     formattedScheduledTime = dateObj.toISOString();
   } catch (error) {
+    if (error.success === false) throw error; // Re-throw validation error
     throw {
       success: false,
       message: `Invalid scheduled_time format: ${scheduled_time}. Please use ISO 8601 format (YYYY-MM-DDTHH:mm:ss)`,

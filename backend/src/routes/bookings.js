@@ -8,6 +8,12 @@ import { successResponse, errorResponse, notFoundResponse } from '../utils/apiRe
 import { validateBookingData, validateBookingTimeConflict, validateWorkerAvailability, validateWorkerAvailabilityWithLocking } from '../services/validationService.js';
 const router = express.Router();
 
+// ============================================
+// IMPORTANT: Route ordering matters in Express!
+// Static routes (like /available-slots, /queue) must be defined BEFORE parameterized routes (like /:id)
+// Otherwise Express will match the parameterized route first
+// ============================================
+
 // Create booking (authenticated)
 router.post('/', authenticate, async (req, res) => {
   try {
@@ -33,6 +39,187 @@ router.post('/', authenticate, async (req, res) => {
     }
    
     res.status(400).json(errorResponse(error.message, 'BOOKING_CREATION_ERROR', 400));
+  }
+});
+
+// Get available time slots for booking
+// IMPORTANT: This must be defined BEFORE /:id to avoid route conflicts
+router.get('/available-slots', async (req, res) => {
+  try {
+    const { date, worker_id, service_ids } = req.query;
+   
+    if (!date) {
+      return res.status(400).json(errorResponse('Date is required', 'MISSING_REQUIRED_FIELDS', 400));
+    }
+
+    // Parse service IDs and calculate duration
+    let serviceDuration = 60; // Default 60 mins
+    if (service_ids) {
+      const ids = String(service_ids).split(',').map(id => id.trim()).filter(id => id !== '');
+      if (ids.length > 0) {
+        const serviceResult = await query(
+          'SELECT COALESCE(SUM(duration), 0) AS total_duration FROM services WHERE id = ANY($1)',
+          [ids]
+        );
+        const duration = parseInt(serviceResult.rows[0]?.total_duration || 0, 10);
+        if (duration > 0) serviceDuration = duration;
+      }
+    }
+
+    // Determine target workers
+    let targetWorkerIds = [];
+    if (worker_id) {
+      targetWorkerIds = String(worker_id).split(',').map(id => id.trim()).filter(id => id !== '');
+    }
+
+    // If no specific workers requested, get all active staff/managers
+    if (targetWorkerIds.length === 0) {
+      const workersResult = await query("SELECT id FROM users WHERE role IN ('staff', 'manager') AND is_active = true");
+      targetWorkerIds = workersResult.rows.map(w => w.id);
+    }
+
+    if (targetWorkerIds.length === 0) {
+      return res.json([]); // No workers available in system
+    }
+
+    const dayOfWeek = new Date(date).getDay();
+    
+    // Get schedules for ALL target workers
+    const schedulesResult = await query(
+      'SELECT worker_id, start_time, end_time FROM worker_schedules WHERE worker_id = ANY($1) AND day_of_week = $2 AND is_available = true',
+      [targetWorkerIds, dayOfWeek]
+    );
+
+    if (schedulesResult.rows.length === 0) {
+      return res.json([]); // No workers scheduled for this day
+    }
+
+    // Get existing bookings for ALL target workers on this date
+    const bookingsResult = await query(
+      `SELECT
+         b.worker_id,
+         b.scheduled_time,
+         COALESCE(svc.total_duration, 0) AS duration
+       FROM bookings b
+       LEFT JOIN LATERAL (
+         SELECT SUM(s.duration * COALESCE(bs.quantity, 1)) AS total_duration
+         FROM booking_services bs
+         JOIN services s ON s.id = bs.service_id
+         WHERE bs.booking_id = b.id
+       ) svc ON TRUE
+       WHERE b.worker_id = ANY($1)
+         AND DATE(b.scheduled_time) = $2
+         AND b.status IN ('scheduled', 'in-progress', 'confirmed')`,
+      [targetWorkerIds, date]
+    );
+
+    // Group bookings by worker
+    const bookingsByWorker = {};
+    bookingsResult.rows.forEach(booking => {
+      if (!bookingsByWorker[booking.worker_id]) {
+        bookingsByWorker[booking.worker_id] = [];
+      }
+      bookingsByWorker[booking.worker_id].push(booking);
+    });
+
+    // Generate slots: Find Union of available slots across all workers
+    // (If user selected multiple workers, we assume they want to see if ANY of them is free)
+    // (If user selected NO workers, we definitely want to see if ANYONE is free)
+    
+    // We'll iterate through all possible 30-min slots for the day (e.g. 00:00 to 23:30)
+    // But practically, we can just take the min start_time and max end_time across all schedules to limit iteration
+    
+    let minStart = '23:59:59';
+    let maxEnd = '00:00:00';
+    
+    const workerSchedules = {}; // Map worker_id -> schedule
+    
+    schedulesResult.rows.forEach(sch => {
+      workerSchedules[sch.worker_id] = sch;
+      if (sch.start_time < minStart) minStart = sch.start_time;
+      if (sch.end_time > maxEnd) maxEnd = sch.end_time;
+    });
+
+    const availableSlots = new Set();
+    const start = new Date(`${date}T${minStart}`);
+    const end = new Date(`${date}T${maxEnd}`);
+    const now = new Date();
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+    
+    let currentTime = new Date(start);
+   
+    while (currentTime < end) {
+      const slotStart = new Date(currentTime);
+      const slotEnd = new Date(currentTime.getTime() + serviceDuration * 60000);
+      
+      // Basic validity checks
+      const isToday = today.getTime() === selectedDate.getTime();
+      const isPastTime = isToday && currentTime < now;
+
+      if (!isPastTime) {
+        // Check if AT LEAST ONE worker is available for this slot
+        let isAnyWorkerAvailable = false;
+
+        for (const workerId of targetWorkerIds) {
+          const schedule = workerSchedules[workerId];
+          if (!schedule) continue; // Worker not scheduled today
+
+          // Check if slot fits in worker's shift
+          const shiftStart = new Date(`${date}T${schedule.start_time}`);
+          const shiftEnd = new Date(`${date}T${schedule.end_time}`);
+          
+          if (slotStart >= shiftStart && slotEnd <= shiftEnd) {
+            // Check conflicts for this worker
+            const workerBookings = bookingsByWorker[workerId] || [];
+            const hasConflict = workerBookings.some(booking => {
+              const bookingStart = new Date(booking.scheduled_time);
+              const bookingEnd = new Date(bookingStart.getTime() + booking.duration * 60000);
+              return (slotStart < bookingEnd && slotEnd > bookingStart);
+            });
+
+            if (!hasConflict) {
+              isAnyWorkerAvailable = true;
+              break; // Found an available worker, so this slot is valid
+            }
+          }
+        }
+
+        if (isAnyWorkerAvailable) {
+          const hours = currentTime.getHours().toString().padStart(2, '0');
+          const minutes = currentTime.getMinutes().toString().padStart(2, '0');
+          const ampm = currentTime.getHours() >= 12 ? 'pm' : 'am';
+          const h12 = currentTime.getHours() % 12 || 12;
+          
+          // Return simple string format for slots - this ensures time and label are always strings
+          availableSlots.add(JSON.stringify({
+            time: `${hours}:${minutes}`,
+            label: `${h12}:${minutes}${ampm}`
+          }));
+        }
+      }
+     
+      // Move to next slot (30-minute intervals)
+      currentTime = new Date(currentTime.getTime() + 30 * 60000);
+    }
+   
+    // Sort slots and return clean array
+    const sortedSlots = Array.from(availableSlots)
+      .map(s => JSON.parse(s))
+      .sort((a, b) => {
+        // Sort by time string
+        if (a.time < b.time) return -1;
+        if (a.time > b.time) return 1;
+        return 0;
+      });
+
+    res.json(sortedSlots);
+  } catch (error) {
+    console.error('Get available slots error:', error);
+    res.status(400).json(errorResponse(error.message, 'AVAILABLE_SLOTS_ERROR', 400));
   }
 });
 
@@ -308,59 +495,8 @@ router.get('/conflicts', async (req, res) => {
   }
 });
 
-// Get booking by ID (for POS and other systems)
-router.get('/:id', authenticate, async (req, res) => {
-  try {
-    const { id } = req.params;
-   
-    const result = await query(`
-      SELECT
-        b.*,
-        u.email as worker_email,
-        u.name as worker_name,
-        svc.service_names,
-        svc.service_price,
-        COALESCE(
-          json_agg(
-            json_build_object(
-              'id', bw.id,
-              'worker_id', bw.worker_id,
-              'worker_name', w.name,
-              'worker_email', w.email,
-              'role', bw.role,
-              'status', bw.status
-            )
-          ) FILTER (WHERE bw.id IS NOT NULL AND bw.status = 'active'),
-          '[]'
-        ) as workers
-      FROM bookings b
-      LEFT JOIN users u ON b.worker_id = u.id
-      LEFT JOIN LATERAL (
-        SELECT
-          array_agg(s.name ORDER BY s.name) AS service_names,
-          SUM(s.price * COALESCE(bs.quantity, 1)) AS service_price
-        FROM booking_services bs
-        LEFT JOIN services s ON bs.service_id = s.id
-        WHERE bs.booking_id = b.id
-      ) svc ON TRUE
-      LEFT JOIN booking_workers bw ON bw.booking_id = b.id AND bw.status = 'active'
-      LEFT JOIN users w ON bw.worker_id = w.id
-      WHERE b.id = $1
-      GROUP BY b.id, u.email, u.name, svc.service_names, svc.service_price
-      LIMIT 1
-    `, [id]);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json(notFoundResponse('Booking not found'));
-    }
-    res.json(successResponse(result.rows[0], 'Booking retrieved successfully'));
-  } catch (error) {
-    console.error('Get booking by ID error:', error);
-    res.status(400).json(errorResponse(error.message, 'BOOKING_RETRIEVAL_ERROR', 400));
-  }
-});
-
 // Get booking by booking number (for public access)
+// IMPORTANT: This must be defined BEFORE /:id to avoid route conflicts
 router.get('/number/:bookingNumber', async (req, res) => {
   try {
     const { bookingNumber } = req.params;
@@ -408,6 +544,59 @@ router.get('/number/:bookingNumber', async (req, res) => {
     res.json(successResponse(result.rows[0], 'Booking retrieved successfully'));
   } catch (error) {
     console.error('Get booking by number error:', error);
+    res.status(400).json(errorResponse(error.message, 'BOOKING_RETRIEVAL_ERROR', 400));
+  }
+});
+
+// Get booking by ID (for POS and other systems)
+// IMPORTANT: This parameterized route must be defined AFTER all static routes
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const { id } = req.params;
+   
+    const result = await query(`
+      SELECT
+        b.*,
+        u.email as worker_email,
+        u.name as worker_name,
+        svc.service_names,
+        svc.service_price,
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'id', bw.id,
+              'worker_id', bw.worker_id,
+              'worker_name', w.name,
+              'worker_email', w.email,
+              'role', bw.role,
+              'status', bw.status
+            )
+          ) FILTER (WHERE bw.id IS NOT NULL AND bw.status = 'active'),
+          '[]'
+        ) as workers
+      FROM bookings b
+      LEFT JOIN users u ON b.worker_id = u.id
+      LEFT JOIN LATERAL (
+        SELECT
+          array_agg(s.name ORDER BY s.name) AS service_names,
+          SUM(s.price * COALESCE(bs.quantity, 1)) AS service_price
+        FROM booking_services bs
+        LEFT JOIN services s ON bs.service_id = s.id
+        WHERE bs.booking_id = b.id
+      ) svc ON TRUE
+      LEFT JOIN booking_workers bw ON bw.booking_id = b.id AND bw.status = 'active'
+      LEFT JOIN users w ON bw.worker_id = w.id
+      WHERE b.id = $1
+      GROUP BY b.id, u.email, u.name, svc.service_names, svc.service_price
+      LIMIT 1
+    `, [id]);
+    
+    if (result.rows.length === 0) {
+      return res.status(404).json(notFoundResponse('Booking not found'));
+    }
+    res.json(successResponse(result.rows[0], 'Booking retrieved successfully'));
+  } catch (error) {
+    console.error('Get booking by ID error:', error);
     res.status(400).json(errorResponse(error.message, 'BOOKING_RETRIEVAL_ERROR', 400));
   }
 });
@@ -867,185 +1056,6 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
   } finally {
     // Always release the client back to the pool
     client.release();
-  }
-});
-
-// Get available time slots for booking
-router.get('/available-slots', authenticate, async (req, res) => {
-  try {
-    const { date, worker_id, service_ids } = req.query;
-   
-    if (!date) {
-      return res.status(400).json(errorResponse('Date is required', 'MISSING_REQUIRED_FIELDS', 400));
-    }
-
-    // Parse service IDs and calculate duration
-    let serviceDuration = 60; // Default 60 mins
-    if (service_ids) {
-      const ids = String(service_ids).split(',').map(id => id.trim()).filter(id => id !== '');
-      if (ids.length > 0) {
-        const serviceResult = await query(
-          'SELECT COALESCE(SUM(duration), 0) AS total_duration FROM services WHERE id = ANY($1)',
-          [ids]
-        );
-        const duration = parseInt(serviceResult.rows[0]?.total_duration || 0, 10);
-        if (duration > 0) serviceDuration = duration;
-      }
-    }
-
-    // Determine target workers
-    let targetWorkerIds = [];
-    if (worker_id) {
-      targetWorkerIds = String(worker_id).split(',').map(id => id.trim()).filter(id => id !== '');
-    }
-
-    // If no specific workers requested, get all active staff/managers
-    if (targetWorkerIds.length === 0) {
-      const workersResult = await query("SELECT id FROM users WHERE role IN ('staff', 'manager') AND is_active = true");
-      targetWorkerIds = workersResult.rows.map(w => w.id);
-    }
-
-    if (targetWorkerIds.length === 0) {
-      return res.json([]); // No workers available in system
-    }
-
-    const dayOfWeek = new Date(date).getDay();
-    
-    // Get schedules for ALL target workers
-    const schedulesResult = await query(
-      'SELECT worker_id, start_time, end_time FROM worker_schedules WHERE worker_id = ANY($1) AND day_of_week = $2 AND is_available = true',
-      [targetWorkerIds, dayOfWeek]
-    );
-
-    if (schedulesResult.rows.length === 0) {
-      return res.json([]); // No workers scheduled for this day
-    }
-
-    // Get existing bookings for ALL target workers on this date
-    const bookingsResult = await query(
-      `SELECT
-         b.worker_id,
-         b.scheduled_time,
-         COALESCE(svc.total_duration, 0) AS duration
-       FROM bookings b
-       LEFT JOIN LATERAL (
-         SELECT SUM(s.duration * COALESCE(bs.quantity, 1)) AS total_duration
-         FROM booking_services bs
-         JOIN services s ON s.id = bs.service_id
-         WHERE bs.booking_id = b.id
-       ) svc ON TRUE
-       WHERE b.worker_id = ANY($1)
-         AND DATE(b.scheduled_time) = $2
-         AND b.status IN ('scheduled', 'in-progress', 'confirmed')`,
-      [targetWorkerIds, date]
-    );
-
-    // Group bookings by worker
-    const bookingsByWorker = {};
-    bookingsResult.rows.forEach(booking => {
-      if (!bookingsByWorker[booking.worker_id]) {
-        bookingsByWorker[booking.worker_id] = [];
-      }
-      bookingsByWorker[booking.worker_id].push(booking);
-    });
-
-    // Generate slots: Find Union of available slots across all workers
-    // (If user selected multiple workers, we assume they want to see if ANY of them is free)
-    // (If user selected NO workers, we definitely want to see if ANYONE is free)
-    
-    // We'll iterate through all possible 30-min slots for the day (e.g. 00:00 to 23:30)
-    // But practically, we can just take the min start_time and max end_time across all schedules to limit iteration
-    
-    let minStart = '23:59:59';
-    let maxEnd = '00:00:00';
-    
-    const workerSchedules = {}; // Map worker_id -> schedule
-    
-    schedulesResult.rows.forEach(sch => {
-      workerSchedules[sch.worker_id] = sch;
-      if (sch.start_time < minStart) minStart = sch.start_time;
-      if (sch.end_time > maxEnd) maxEnd = sch.end_time;
-    });
-
-    const availableSlots = new Set();
-    const start = new Date(`${date}T${minStart}`);
-    const end = new Date(`${date}T${maxEnd}`);
-    const now = new Date();
-    
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(date);
-    selectedDate.setHours(0, 0, 0, 0);
-    
-    let currentTime = new Date(start);
-   
-    while (currentTime < end) {
-      const slotStart = new Date(currentTime);
-      const slotEnd = new Date(currentTime.getTime() + serviceDuration * 60000);
-      
-      // Basic validity checks
-      const isToday = today.getTime() === selectedDate.getTime();
-      const isPastTime = isToday && currentTime < now;
-
-      if (!isPastTime) {
-        // Check if AT LEAST ONE worker is available for this slot
-        let isAnyWorkerAvailable = false;
-
-        for (const workerId of targetWorkerIds) {
-          const schedule = workerSchedules[workerId];
-          if (!schedule) continue; // Worker not scheduled today
-
-          // Check if slot fits in worker's shift
-          const shiftStart = new Date(`${date}T${schedule.start_time}`);
-          const shiftEnd = new Date(`${date}T${schedule.end_time}`);
-          
-          if (slotStart >= shiftStart && slotEnd <= shiftEnd) {
-            // Check conflicts for this worker
-            const workerBookings = bookingsByWorker[workerId] || [];
-            const hasConflict = workerBookings.some(booking => {
-              const bookingStart = new Date(booking.scheduled_time);
-              const bookingEnd = new Date(bookingStart.getTime() + booking.duration * 60000);
-              return (slotStart < bookingEnd && slotEnd > bookingStart);
-            });
-
-            if (!hasConflict) {
-              isAnyWorkerAvailable = true;
-              break; // Found an available worker, so this slot is valid
-            }
-          }
-        }
-
-        if (isAnyWorkerAvailable) {
-          const hours = currentTime.getHours().toString().padStart(2, '0');
-          const minutes = currentTime.getMinutes().toString().padStart(2, '0');
-          const ampm = currentTime.getHours() >= 12 ? 'pm' : 'am';
-          const h12 = currentTime.getHours() % 12 || 12;
-          
-          availableSlots.add(JSON.stringify({
-            time: `${hours}:${minutes}`,
-            label: `${h12}:${minutes}${ampm}`,
-            start_time: currentTime.toISOString()
-          }));
-        }
-      }
-     
-      // Move to next slot (30-minute intervals)
-      currentTime = new Date(currentTime.getTime() + 30 * 60000);
-    }
-   
-    // Sort slots
-    const sortedSlots = Array.from(availableSlots)
-      .map(s => JSON.parse(s))
-      .sort((a, b) => new Date(a.start_time) - new Date(b.start_time))
-      .map(s => ({
-        ...s,
-        end_time: new Date(new Date(s.start_time).getTime() + serviceDuration * 60000).toISOString()
-      }));
-
-    res.json(sortedSlots);
-  } catch (error) {
-    console.error('Get available slots error:', error);
-    res.status(400).json(errorResponse(error.message, 'AVAILABLE_SLOTS_ERROR', 400));
   }
 });
 

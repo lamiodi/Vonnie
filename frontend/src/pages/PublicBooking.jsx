@@ -12,6 +12,58 @@ const endpoints = {
   createBooking: '/api/public/bookings'
 };
 
+// Helper function to safely extract time and label from any slot format
+const parseSlot = (slot) => {
+  let time = null;
+  let label = null;
+
+  // Case 1: Slot is a simple string like "10:00"
+  if (typeof slot === 'string') {
+    time = slot;
+    label = slot;
+    return { time, label, isValid: true };
+  }
+
+  // Case 2: Slot is an object
+  if (typeof slot === 'object' && slot !== null) {
+    // Extract time - handle deeply nested objects
+    let extractedTime = slot.time;
+    while (typeof extractedTime === 'object' && extractedTime !== null) {
+      extractedTime = extractedTime.time;
+    }
+    time = extractedTime;
+
+    // Extract label - handle deeply nested objects
+    let extractedLabel = slot.label;
+    while (typeof extractedLabel === 'object' && extractedLabel !== null) {
+      extractedLabel = extractedLabel.label;
+    }
+    label = extractedLabel;
+
+    // If label couldn't be extracted, try to get it from nested time object
+    if (!label && typeof slot.time === 'object' && slot.time !== null) {
+      let nestedLabel = slot.time.label;
+      while (typeof nestedLabel === 'object' && nestedLabel !== null) {
+        nestedLabel = nestedLabel.label;
+      }
+      if (nestedLabel) label = nestedLabel;
+    }
+
+    // If we still don't have a label, use time as label
+    if (!label && time) {
+      label = time;
+    }
+
+    // Validate: time must be a non-empty string
+    const isValid = typeof time === 'string' && time.trim() !== '';
+
+    return { time, label, isValid };
+  }
+
+  // Invalid slot format
+  return { time: null, label: null, isValid: false };
+};
+
 const PublicBooking = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,10 +159,10 @@ const PublicBooking = () => {
     }));
   };
 
-  const handleTimeSelect = (slot) => {
+  const handleTimeSelect = (time, label) => {
     setFormData(prev => ({
       ...prev,
-      booking_time: slot.time
+      booking_time: time
     }));
     
     if (validationErrors.booking_time) {
@@ -159,7 +211,9 @@ const PublicBooking = () => {
 
     try {
       const dateStr = formData.booking_date.toLocaleDateString('en-CA');
-      const scheduledTime = `${dateStr}T${formData.booking_time}:00`;
+      // Create date object in Lagos time (UTC+1)
+      // We append +01:00 to ensure the backend interprets it as Lagos time
+      const scheduledTime = `${dateStr}T${formData.booking_time}:00+01:00`;
 
       const bookingData = {
         customer_name: formData.customer_name,
@@ -356,37 +410,25 @@ const PublicBooking = () => {
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
                     {availableSlots.map((slot, index) => {
-                      // Robust slot parsing
-                      let time, label;
+                      // Use the robust parseSlot helper to extract time and label
+                      const { time, label, isValid } = parseSlot(slot);
 
-                      if (typeof slot === 'string') {
-                        time = slot;
-                        label = slot;
-                      } else if (typeof slot === 'object' && slot !== null) {
-                        time = slot.time;
-                        label = slot.label;
-                        
-                        if (typeof time === 'object' && time !== null) {
-                            label = time.label || label;
-                            time = time.time;
-                        }
+                      // Skip invalid slots
+                      if (!isValid) {
+                        console.warn('Skipping invalid slot:', slot);
+                        return null;
                       }
 
-                      // Ensure time is a valid string
-                      if (typeof time !== 'string' || !time) return null;
-
-                      // Ensure label is a valid string/number
-                      if (typeof label !== 'string' && typeof label !== 'number') {
-                        label = time;
-                      }
+                      // Ensure label is a valid renderable value
+                      const displayLabel = String(label || time);
 
                       const isSelected = formData.booking_time === time;
 
                       return (
                         <button
-                          key={`${time}-${index}`}
+                          key={`slot-${index}-${time}`}
                           type="button"
-                          onClick={() => handleTimeSelect({ time, label })}
+                          onClick={() => handleTimeSelect(time, label)}
                           className={`
                             py-2 px-1 text-sm rounded-lg border transition-all duration-200
                             ${isSelected
@@ -394,7 +436,7 @@ const PublicBooking = () => {
                               : 'bg-white text-gray-700 border-gray-200 hover:border-purple-300 hover:bg-purple-50'}
                           `}
                         >
-                          {String(label)}
+                          {displayLabel}
                         </button>
                       );
                     })}
