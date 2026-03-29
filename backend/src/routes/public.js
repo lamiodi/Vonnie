@@ -42,7 +42,7 @@ router.get('/workers', async (req, res) => {
 router.get('/workers/busy-today', async (req, res) => {
   try {
     const { date } = req.query;
-    
+
     if (!date) {
       return res.status(400).json(errorResponse('Date is required', 'MISSING_DATE', 400));
     }
@@ -72,7 +72,7 @@ router.get('/workers/busy-today', async (req, res) => {
 router.get('/bookings/available-slots', async (req, res) => {
   try {
     const { worker_id, date, service_id, service_ids } = req.query;
-    
+
     if (!date) {
       return res.status(400).json(errorResponse('date is required', 'MISSING_REQUIRED_FIELDS', 400));
     }
@@ -93,7 +93,7 @@ router.get('/bookings/available-slots', async (req, res) => {
         'SELECT SUM(COALESCE(max_duration, duration)) as total_duration FROM services WHERE id = ANY($1)',
         [serviceIds]
       );
-      
+
       if (serviceResult.rows[0].total_duration) {
         totalDuration = parseInt(serviceResult.rows[0].total_duration);
       }
@@ -121,11 +121,11 @@ router.get('/bookings/available-slots', async (req, res) => {
          WHERE role IN ('staff', 'manager') AND is_active = true`
       );
       workerIds = workersResult.rows.map(row => row.id);
-      
+
       if (workerIds.length === 0) {
         return res.status(404).json(errorResponse('No available workers found', 'NO_AVAILABLE_WORKERS', 404));
       }
-      
+
       bookingsResult = await query(
         `SELECT b.scheduled_time, b.duration, bw.worker_id 
          FROM bookings b
@@ -151,45 +151,46 @@ router.get('/bookings/available-slots', async (req, res) => {
     // Generate available slots based on day of week
     const availableSlots = [];
     const slotInterval = 30; // minutes
-    
+
     // Create date objects for comparison (without time portion)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const selectedDate = new Date(`${date}T00:00:00`);
-    
+
     // Check if Tuesday (Day 2) - Closed
     if (selectedDate.getDay() === 2) {
       return res.json([]); // Return empty array for Tuesdays
     }
 
-    let startHour, endHour, closingTime;
-    
+    let startHour, startMinute = 0, endHour, closingTime;
+
     if (selectedDate.getDay() === 0) {
       // Sunday: 1 PM to 7 PM
       startHour = 13; // 1 PM
       endHour = 19;   // 7 PM
       closingTime = new Date(`${date}T19:00:00`);
     } else {
-      // Mon, Wed-Sat: 8 AM to 8:30 PM
-      startHour = 8;  // 8 AM
+      // Mon, Wed-Sat: 8:30 AM to 8:30 PM
+      startHour = 8;  // startHour stays 8 for the loop, but minute check will shift
+      startMinute = 30; // 8:30 AM
       endHour = 20;   // 8 PM (for loop limit)
       closingTime = new Date(`${date}T20:30:00`);
     }
 
     // Get current time in Lagos (WAT) using Intl to avoid server timezone issues
     const now = new Date();
-    const lagosOptions = { 
-      timeZone: 'Africa/Lagos', 
-      hour12: false, 
-      year: 'numeric', 
-      month: 'numeric', 
+    const lagosOptions = {
+      timeZone: 'Africa/Lagos',
+      hour12: false,
+      year: 'numeric',
+      month: 'numeric',
       day: 'numeric',
       hour: 'numeric',
       minute: 'numeric'
     };
     const formatter = new Intl.DateTimeFormat('en-US', lagosOptions);
     const parts = formatter.formatToParts(now);
-    
+
     const getPart = (type) => parseInt(parts.find(p => p.type === type).value);
     const lYear = getPart('year');
     const lMonth = getPart('month');
@@ -199,7 +200,7 @@ router.get('/bookings/available-slots', async (req, res) => {
 
     // Parse selected date string (YYYY-MM-DD) directly to avoid timezone shifts
     const [selYear, selMonth, selDay] = date.split('-').map(Number);
-    
+
     // Create a UTC date to strictly determine the day of the week for the given date string
     const utcDate = new Date(Date.UTC(selYear, selMonth - 1, selDay));
     const dayOfWeek = utcDate.getUTCDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
@@ -207,7 +208,7 @@ router.get('/bookings/available-slots', async (req, res) => {
     const isToday = (selYear === lYear && selMonth === lMonth && selDay === lDay);
 
     const pad = (n) => String(n).padStart(2, '0');
-    
+
     // Helper to format time as 12-hour am/pm string (lowercase, no space)
     // Example: 7:00pm, 12:30pm
     const formatTimeSlot = (h, m) => {
@@ -225,14 +226,16 @@ router.get('/bookings/available-slots', async (req, res) => {
     }
 
     // Closing time logic needs to be handled inside the loop or via specific hour checks
-    
+
     if (dayOfWeek === 0) {
       // Sunday: 1 PM to 7 PM
       startHour = 13; // 1 PM
+      startMinute = 0; // 00 mins
       endHour = 19;   // 7 PM
     } else {
-      // Mon, Wed-Sat: 8 AM to 8:30 PM
+      // Mon, Wed-Sat: 8:30 AM to 8:30 PM
       startHour = 8;  // 8 AM
+      startMinute = 30; // 30 mins
       endHour = 20;   // 8 PM (for loop limit)
     }
 
@@ -244,12 +247,14 @@ router.get('/bookings/available-slots', async (req, res) => {
 
     for (let hour = startHour; hour <= endHour; hour++) {
       for (let minute = 0; minute < 60; minute += slotInterval) {
+        // Skip if before resumption time for the specific day
+        if (hour === startHour && minute < startMinute) continue;
         // Special closing logic for regular days (close at 8:30 PM)
         if (dayOfWeek !== 0 && hour === 20 && minute >= 30) continue;
-        
+
         // Special closing logic for Sundays (close at 7:00 PM)
         if (dayOfWeek === 0 && hour === 19 && minute > 0) continue;
-        
+
         // Skip past times if it is today in Lagos
         if (isToday) {
           // Compare "Face Value" of hours/minutes
@@ -263,21 +268,21 @@ router.get('/bookings/available-slots', async (req, res) => {
         // We subtract 1 hour from the loop 'hour' to get the UTC equivalent.
         const utcHour = hour - 1;
         const slotTime = new Date(Date.UTC(selYear, selMonth - 1, selDay, utcHour, minute));
-        
+
         // Construct Closing Time for this specific day in UTC
         // This ensures comparison is apples-to-apples (UTC Date vs UTC Date)
         let closingHourLagos, closingMinuteLagos;
         if (dayOfWeek === 0) { // Sunday 7:00 PM
-             closingHourLagos = 19; closingMinuteLagos = 0;
+          closingHourLagos = 19; closingMinuteLagos = 0;
         } else { // Others 8:30 PM
-             closingHourLagos = 20; closingMinuteLagos = 30;
+          closingHourLagos = 20; closingMinuteLagos = 30;
         }
-        
+
         const closingTime = new Date(Date.UTC(selYear, selMonth - 1, selDay, closingHourLagos - 1, closingMinuteLagos));
-        
+
         // Check if the service finishes before closing time
         const slotEndForBusinessHours = new Date(slotTime.getTime() + totalDuration * 60000);
-        
+
         if (slotEndForBusinessHours > closingTime) {
           continue;
         }
@@ -315,12 +320,12 @@ router.post('/bookings', async (req, res) => {
     res.status(201).json(successResponse(booking, 'Booking created successfully', 201));
   } catch (error) {
     console.error('Public booking creation error:', error);
-    
+
     // Handle standardized error responses
     if (error.success === false) {
       return res.status(error.status || 400).json(error);
     }
-    
+
     res.status(400).json(errorResponse(error.message, 'BOOKING_CREATION_ERROR', 400));
   }
 });
@@ -328,14 +333,14 @@ router.post('/bookings', async (req, res) => {
 // Create walk-in booking with optional service and worker assignment
 router.post('/walk-in', async (req, res) => {
   try {
-    const { 
-      customer_email, 
-      customer_name, 
-      customer_phone, 
-      notes, 
-      service_ids, 
-      worker_id, 
-      worker_ids 
+    const {
+      customer_email,
+      customer_name,
+      customer_phone,
+      notes,
+      service_ids,
+      worker_id,
+      worker_ids
     } = req.body;
 
     if (!customer_name || !customer_phone) {
@@ -346,18 +351,18 @@ router.post('/walk-in', async (req, res) => {
     let finalServiceIds = [];
     let totalAmount = 0;
     let totalDuration = 0;
-    
+
     if (service_ids && service_ids.length > 0) {
       const servicesResult = await query(
         'SELECT id, price, duration FROM services WHERE id = ANY($1) AND is_active = true',
         [service_ids]
       );
-      
+
       if (servicesResult.rows.length !== service_ids.length) {
         return res.status(400).json(errorResponse('One or more services not found or inactive', 'INVALID_SERVICES', 400));
       }
       finalServiceIds = service_ids;
-      
+
       // Calculate total amount and duration
       servicesResult.rows.forEach(service => {
         totalAmount += parseFloat(service.price);
@@ -368,7 +373,7 @@ router.post('/walk-in', async (req, res) => {
       const defaultServiceResult = await query(
         'SELECT id, price, duration FROM services WHERE is_active = true ORDER BY name LIMIT 1'
       );
-      
+
       if (defaultServiceResult.rows.length === 0) {
         return res.status(400).json(errorResponse('No services available', 'NO_SERVICES_AVAILABLE', 400));
       }
@@ -392,7 +397,7 @@ router.post('/walk-in', async (req, res) => {
     };
 
     const booking = await createBooking(bookingPayload, false);
-    
+
     // Handle worker assignment if worker_ids are provided
     let assignedWorkers = [];
     if (worker_ids && worker_ids.length > 0 && booking.id) {
@@ -402,7 +407,7 @@ router.post('/walk-in', async (req, res) => {
           'SELECT id FROM users WHERE id = ANY($1) AND role IN ($2, $3, $4) AND is_active = true',
           [worker_ids, 'staff', 'manager', 'admin']
         );
-        
+
         if (workersResult.rows.length !== worker_ids.length) {
           console.warn('Some workers not found or inactive, skipping assignment');
         } else {
@@ -415,7 +420,7 @@ router.post('/walk-in', async (req, res) => {
             );
             assignedWorkers.push(workerId);
           }
-          
+
           // Update main booking with first worker as primary
           if (worker_ids.length > 0) {
             await query(
@@ -448,28 +453,28 @@ router.post('/walk-in', async (req, res) => {
 // Public payment verification endpoint (no authentication required)
 router.post('/payment/verify', async (req, res) => {
   const { reference } = req.body;
-  
+
   if (!reference) {
     return res.status(400).json(errorResponse('Reference is required', 'MISSING_REFERENCE', 400));
   }
-  
+
   try {
     // Use enhanced payment verification with fallback methods
     const verificationResult = await verifyPaymentWithFallbacks(reference);
-    
+
     // Log the verification attempt
     await logPaymentVerification(reference, verificationResult);
-    
+
     if (verificationResult.success) {
       // Extract booking number from reference (format: BOOKINGNUMBER_timestamp)
       // Handle multiple underscore formats and edge cases
       let booking_number = reference;
-      
+
       // Try to extract booking number from reference format: BOOKINGNUMBER_timestamp
       if (reference.includes('_')) {
         booking_number = reference.split('_')[0];
       }
-      
+
       // If booking number is too long (likely contains timestamp), try alternative extraction
       if (booking_number.length > 20) {
         // Look for the booking number in metadata if available
@@ -477,9 +482,9 @@ router.post('/payment/verify', async (req, res) => {
           booking_number = verificationResult.data.metadata.booking_number;
         }
       }
-      
+
       console.log('Payment verification successful - Reference:', reference, 'Method:', verificationResult.method, 'Extracted booking number:', booking_number);
-      
+
       // Update booking payment status
       const bookingResult = await query(
         `UPDATE bookings 
@@ -492,10 +497,10 @@ router.post('/payment/verify', async (req, res) => {
          RETURNING id, customer_email, customer_name, total_amount, service_id, booking_number`,
         ['completed', 'card', reference, booking_number]
       );
-      
+
       if (bookingResult.rows.length > 0) {
         const booking = bookingResult.rows[0];
-        
+
         // Get service names from booking_services junction
         const serviceResult = await query(
           `SELECT s.name 
@@ -506,7 +511,7 @@ router.post('/payment/verify', async (req, res) => {
         );
         const serviceNames = serviceResult.rows.map(row => row.name);
         const serviceNamesList = serviceNames.length > 0 ? serviceNames.join(', ') : 'Service';
-        
+
         // Send payment confirmation email
         try {
           await sendEmail(
@@ -531,18 +536,18 @@ Vonne X2X Team`
           console.error('Error sending confirmation email:', emailError);
           // Continue even if email fails
         }
-        
+
         console.log(`Payment verified successfully for booking ${booking_number}`);
-        
-        res.json({ 
-          success: true, 
+
+        res.json({
+          success: true,
           message: 'Payment verified and booking updated',
-          data: verificationResult.data 
+          data: verificationResult.data
         });
       } else {
         // Booking not found with the extracted booking number
         console.error(`Booking not found for booking number: ${booking_number}, reference: ${reference}`);
-        
+
         // Try to find booking by payment reference as fallback
         const fallbackBookingResult = await query(
           `SELECT id, booking_number, customer_email, customer_name, total_amount 
@@ -551,28 +556,28 @@ Vonne X2X Team`
            LIMIT 1`,
           [reference]
         );
-        
+
         if (fallbackBookingResult.rows.length > 0) {
           // Booking found by reference, payment already processed
           console.log(`Payment already processed for reference: ${reference}`);
-          res.json({ 
-            success: true, 
+          res.json({
+            success: true,
             message: 'Payment already processed',
-            data: verificationResult.data 
+            data: verificationResult.data
           });
         } else {
           // No booking found at all
           console.error(`No booking found for reference: ${reference}`);
-          res.status(404).json({ 
-            success: false, 
+          res.status(404).json({
+            success: false,
             error: 'Booking not found',
             message: 'Could not find booking associated with this payment reference'
           });
         }
       }
     } else {
-      res.status(400).json({ 
-        success: false, 
+      res.status(400).json({
+        success: false,
         error: 'Payment verification failed',
         message: 'All verification methods failed',
         details: {
@@ -580,13 +585,13 @@ Vonne X2X Team`
           attempts: verificationResult.attempts || [],
           failed_methods: verificationResult.attempts?.map(attempt => attempt.method) || []
         },
-        data: verificationResult.data 
+        data: verificationResult.data
       });
     }
-    
+
   } catch (error) {
     console.error('Public payment verification error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Payment verification failed',
       message: error.message,
@@ -621,7 +626,7 @@ router.get('/bookings/by-number/:booking_number', async (req, res) => {
 router.post('/payment/webhook', async (req, res) => {
   try {
     const webhookData = req.body;
-    
+
     // Verify webhook signature (optional but recommended)
     const signature = req.headers['x-paystack-signature'];
     if (signature && process.env.PAYSTACK_SECRET_KEY) {
@@ -629,30 +634,30 @@ router.post('/payment/webhook', async (req, res) => {
         .createHmac('sha512', process.env.PAYSTACK_SECRET_KEY)
         .update(JSON.stringify(webhookData))
         .digest('hex');
-      
+
       if (hash !== signature) {
         return res.status(401).json({ success: false, error: 'Invalid signature' });
       }
     }
-    
+
     // Store webhook data for fallback verification
     await storeWebhookData(webhookData);
-    
+
     // Process successful payments
     if (webhookData.event === 'charge.success') {
       const { reference, data } = webhookData;
-      
+
       // Auto-verify the payment
       try {
         const verificationResult = await verifyPaymentWithFallbacks(reference);
         await logPaymentVerification(reference, verificationResult, null);
-        
+
         console.log(`Webhook payment verification completed for reference: ${reference}`);
       } catch (verifyError) {
         console.error('Error during webhook payment verification:', verifyError);
       }
     }
-    
+
     res.status(200).json({ success: true, message: 'Webhook processed' });
   } catch (error) {
     console.error('Webhook processing error:', error);
@@ -665,7 +670,7 @@ router.get('/health', async (req, res) => {
   try {
     // Basic health check - verify database connection
     await query('SELECT 1');
-    
+
     // Return simple 'healthy' response
     res.status(200).send('healthy');
   } catch (error) {
@@ -678,22 +683,22 @@ router.get('/health', async (req, res) => {
 router.get('/signup-status', async (req, res) => {
   try {
     const statusResult = await query('SELECT * FROM signup_status ORDER BY id DESC LIMIT 1');
-    
+
     if (statusResult.rows.length === 0) {
-      return res.json({ 
-        is_enabled: true, 
+      return res.json({
+        is_enabled: true,
         message: 'Signups are currently enabled.'
       });
     }
-    
+
     // Return only necessary public info
     const { is_enabled, message } = statusResult.rows[0];
     res.json({ is_enabled, message });
   } catch (error) {
     // If table doesn't exist or other error, fail open (allow signups)
     console.log('Error checking signup status (public), defaulting to enabled:', error.message);
-    res.json({ 
-      is_enabled: true, 
+    res.json({
+      is_enabled: true,
       message: 'Signups are currently enabled.'
     });
   }
@@ -722,10 +727,10 @@ router.post('/contact', async (req, res) => {
         </div>
       </div>
     `;
-    
+
     const adminEmail = process.env.ADMIN_EMAIL || 'support@vonneex2x.store';
     await sendEmail(adminEmail, adminSubject, `New message from ${name}: ${message}`, adminHtml);
-    
+
     // Auto-reply to user
     try {
       await sendContactFormResponse(email, name, message);

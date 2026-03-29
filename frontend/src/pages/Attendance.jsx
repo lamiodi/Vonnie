@@ -38,6 +38,7 @@ const AdminAttendanceView = () => {
       if (filters.startDate) params.start_date = filters.startDate;
       if (filters.endDate) params.end_date = filters.endDate;
       if (filters.workerId) params.worker_id = filters.workerId;
+      if (filters.status && filters.status !== 'absent') params.status = filters.status;
 
       const response = await apiGet(API_ENDPOINTS.ATTENDANCE, params);
       setAttendanceRecords(Array.isArray(response) ? response : (response.data || []));
@@ -84,23 +85,23 @@ const AdminAttendanceView = () => {
 
       {/* Today's Snapshot */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
-        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center border-t-4 border-blue-500">
           <div className="text-2xl sm:text-3xl font-bold text-blue-600">{workers.filter(w => w.status !== 'inactive').length}</div>
           <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Workers</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center border-t-4 border-green-500">
           <div className="text-2xl sm:text-3xl font-bold text-green-600">{presentWorkers.length}</div>
           <div className="text-xs sm:text-sm text-gray-600 mt-1">Present Today</div>
         </div>
-        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center border-t-4 border-yellow-500">
+          <div className="text-2xl sm:text-3xl font-bold text-yellow-600">
+            {todayRecords.filter(r => r.status === 'late').length}
+          </div>
+          <div className="text-xs sm:text-sm text-gray-600 mt-1 uppercase font-semibold">Late Today</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center border-t-4 border-red-500">
           <div className="text-2xl sm:text-3xl font-bold text-red-600">{absentWorkers.length}</div>
           <div className="text-xs sm:text-sm text-gray-600 mt-1">Absent Today</div>
-        </div>
-        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
-          <div className="text-2xl sm:text-3xl font-bold text-yellow-600">
-            {todayRecords.filter(r => r.status === 'late' || r.status === 'flagged').length}
-          </div>
-          <div className="text-xs sm:text-sm text-gray-600 mt-1">Late/Flagged</div>
         </div>
       </div>
 
@@ -119,10 +120,10 @@ const AdminAttendanceView = () => {
 
               return (
                 <div key={worker.id} className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${hasCheckedOut
-                    ? 'border-gray-200 bg-gray-50'
-                    : isPresent
-                      ? 'border-green-200 bg-green-50'
-                      : 'border-red-200 bg-red-50'
+                  ? 'border-gray-200 bg-gray-50'
+                  : isPresent
+                    ? 'border-green-200 bg-green-50'
+                    : 'border-red-200 bg-red-50'
                   }`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 min-w-0">
@@ -131,14 +132,14 @@ const AdminAttendanceView = () => {
                       <span className="font-medium text-gray-900 text-sm sm:text-base truncate">{worker.name}</span>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${hasCheckedOut
-                        ? 'bg-gray-100 text-gray-700'
-                        : isPresent
-                          ? record.status === 'late'
-                            ? 'bg-yellow-100 text-yellow-800'
-                            : record.status === 'flagged'
-                              ? 'bg-orange-100 text-orange-800'
-                              : 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
+                      ? 'bg-gray-100 text-gray-700'
+                      : isPresent
+                        ? record.status === 'late'
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : record.status === 'flagged'
+                            ? 'bg-orange-100 text-orange-800'
+                            : 'bg-green-100 text-green-800'
+                        : 'bg-red-100 text-red-800'
                       }`}>
                       {hasCheckedOut ? 'Left' : isPresent ? (record.status || 'Present') : 'Absent'}
                     </span>
@@ -165,8 +166,8 @@ const AdminAttendanceView = () => {
                         <div className="flex justify-between">
                           <span>Location:</span>
                           <span className={`text-xs font-medium ${record.location_verification_status === 'verified' ? 'text-green-600' :
-                              record.location_verification_status === 'rejected' ? 'text-red-600' :
-                                'text-yellow-600'
+                            record.location_verification_status === 'rejected' ? 'text-red-600' :
+                              'text-yellow-600'
                             }`}>
                             {record.location_verification_status === 'verified' ? '✓ Verified' :
                               record.location_verification_status === 'rejected' ? '✗ Rejected' :
@@ -223,7 +224,21 @@ const AdminAttendanceView = () => {
               ))}
             </select>
           </div>
-          <div className="flex items-end">
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Status</label>
+            <select
+              value={filters.status || ''}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="present">Present</option>
+              <option value="late">Late</option>
+              <option value="flagged">Flagged</option>
+              <option value="absent">Absent (Calculated)</option>
+            </select>
+          </div>
+          <div className="flex items-end lg:col-span-4">
             <button
               onClick={fetchAttendanceRecords}
               className="w-full bg-blue-600 text-white px-4 py-2 text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm active:scale-95 transition-transform"
@@ -263,9 +278,9 @@ const AdminAttendanceView = () => {
                       <div className="text-xs text-gray-500">{formatDate(record.date)}</div>
                     </div>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${record.status === 'present' ? 'bg-green-100 text-green-800' :
-                        record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                          record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                            'bg-red-100 text-red-800'
+                      record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                        record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                          'bg-red-100 text-red-800'
                       }`}>
                       {record.status}
                     </span>
@@ -285,8 +300,8 @@ const AdminAttendanceView = () => {
                   {record.location_verification_status && (
                     <div className="mt-1.5 text-xs">
                       <span className={`inline-flex items-center gap-1 ${record.location_verification_status === 'verified' ? 'text-green-600' :
-                          record.location_verification_status === 'rejected' ? 'text-red-600' :
-                            'text-yellow-600'
+                        record.location_verification_status === 'rejected' ? 'text-red-600' :
+                          'text-yellow-600'
                         }`}>
                         {record.location_verification_status === 'verified' ? '✓ Location Verified' :
                           record.location_verification_status === 'rejected' ? '✗ Location Rejected' :
@@ -330,9 +345,9 @@ const AdminAttendanceView = () => {
                       </td>
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
-                            record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                              record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                                'bg-red-100 text-red-800'
+                          record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                            record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                              'bg-red-100 text-red-800'
                           }`}>
                           {record.status}
                         </span>
@@ -643,9 +658,9 @@ const WorkerAttendanceView = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <span className="text-sm sm:text-base text-gray-600 font-medium">Status:</span>
               <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium w-fit ${todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
-                  todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                    todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                      'bg-red-100 text-red-800'
+                todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                  todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                    'bg-red-100 text-red-800'
                 }`}>
                 {todayAttendance.status}
               </span>
@@ -681,9 +696,9 @@ const WorkerAttendanceView = () => {
               <div className="flex items-center justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Location Status:</span>
                 <span className={`px-2 py-0.5 rounded text-xs font-medium ${todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
-                    todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                        'bg-yellow-100 text-yellow-800'
+                  todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                    todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                      'bg-yellow-100 text-yellow-800'
                   }`}>
                   {todayAttendance.location_verification_status === 'verified' ? 'Verified' :
                     todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
@@ -726,8 +741,8 @@ const WorkerAttendanceView = () => {
               onClick={handleCheckOut}
               disabled={checkingOut || locationLoading || !!todayAttendance.check_out_time}
               className={`w-full text-white px-4 py-2.5 sm:py-3 rounded-lg flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform ${todayAttendance.check_out_time
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-green-600 hover:bg-green-700'
                 }`}
             >
               {todayAttendance.check_out_time
@@ -824,9 +839,9 @@ const WorkerAttendanceView = () => {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-gray-900">{formatDate(record.date)}</span>
                     <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${record.status === 'present' ? 'bg-green-100 text-green-800' :
-                        record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                          record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                            'bg-red-100 text-red-800'
+                      record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                        record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                          'bg-red-100 text-red-800'
                       }`}>
                       {record.status}
                     </span>
@@ -879,9 +894,9 @@ const WorkerAttendanceView = () => {
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
-                            record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                              record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                                'bg-red-100 text-red-800'
+                          record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                            record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                              'bg-red-100 text-red-800'
                           }`}>
                           {record.status}
                         </span>

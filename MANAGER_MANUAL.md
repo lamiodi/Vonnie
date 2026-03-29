@@ -42,7 +42,7 @@ This manual guides you through managing bookings, workers, and understanding how
 The system automatically hides time slots that don't fit your operating hours. You don't need to calculate this manually.
 
 ### Operating Hours
-- **Regular Days (Mon, Wed-Sat):** 8:00 AM – 8:30 PM
+- **Regular Days (Mon, Wed-Sat):** 8:30 AM – 8:30 PM
 - **Sundays:** 1:00 PM – 7:00 PM
 - **Tuesdays:** **CLOSED**
 

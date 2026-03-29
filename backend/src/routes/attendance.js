@@ -13,7 +13,7 @@ const BUSINESS_LOCATION = {
 
 // Work hours configuration (Lagos Time)
 const WORK_HOURS = {
-  RESUMPTION: { HOUR: 9, MINUTE: 0 }, // 9:00 AM
+  RESUMPTION: { HOUR: 8, MINUTE: 30 }, // 8:30 AM
   CLOSING: { HOUR: 20, MINUTE: 30 }   // 8:30 PM
 };
 
@@ -32,10 +32,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lon2 - lon1) * Math.PI / 180;
 
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
   return R * c; // Distance in meters
 }
@@ -45,23 +45,23 @@ function validateGPSCoordinates(latitude, longitude, accuracy = null) {
   if (typeof latitude !== 'number' || typeof longitude !== 'number') {
     return { isValid: false, error: 'Coordinates must be numbers' };
   }
-  
+
   if (latitude < -90 || latitude > 90) {
     return { isValid: false, error: 'Latitude must be between -90 and 90' };
   }
-  
+
   if (longitude < -180 || longitude > 180) {
     return { isValid: false, error: 'Longitude must be between -180 and 180' };
   }
-  
+
   // Check accuracy if provided
   if (accuracy && accuracy > 100) { // If accuracy is worse than 100m
-    return { 
-      isValid: false, 
-      error: 'GPS accuracy is too poor for reliable location verification. Please try again in an area with better GPS signal.' 
+    return {
+      isValid: false,
+      error: 'GPS accuracy is too poor for reliable location verification. Please try again in an area with better GPS signal.'
     };
   }
-  
+
   return { isValid: true };
 }
 
@@ -69,13 +69,13 @@ function validateGPSCoordinates(latitude, longitude, accuracy = null) {
 router.post('/checkin', authenticate, async (req, res) => {
   try {
     const { worker_id, latitude, longitude, accuracy } = req.body;
-    
+
     if (!worker_id) {
       return res.status(400).json({ error: 'worker_id is required' });
     }
-    
+
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Check if already checked in today
     const existing = await query(
       `SELECT * FROM attendance 
@@ -83,25 +83,34 @@ router.post('/checkin', authenticate, async (req, res) => {
        AND (date = $2 OR date::text LIKE $3)`,
       [worker_id, today, `${today}%`]
     );
-    
+
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'Already checked in today' });
     }
-    
+
     let locationVerificationStatus = null;
     let distanceFromShop = null;
     let attendanceStatus = 'present';
-    
+
+    // Lateness detection (9:00 AM Lagos Time)
+    const lagosNow = getLagosTime();
+    const resumptionTime = new Date(lagosNow);
+    resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
+
+    if (lagosNow > resumptionTime) {
+      attendanceStatus = 'late';
+    }
+
     // Validate GPS coordinates and calculate distance if provided
     if (latitude !== undefined && longitude !== undefined) {
       const validation = validateGPSCoordinates(latitude, longitude, accuracy);
       if (!validation.isValid) {
         return res.status(400).json({ error: validation.error });
       }
-      
+
       // Calculate distance from shop
       distanceFromShop = calculateDistance(latitude, longitude, BUSINESS_LOCATION.LATITUDE, BUSINESS_LOCATION.LONGITUDE);
-      
+
       // Determine location verification status based on distance
       if (distanceFromShop <= BUSINESS_LOCATION.ALLOWED_RADIUS_METERS) {
         locationVerificationStatus = 'verified';
@@ -113,42 +122,42 @@ router.post('/checkin', authenticate, async (req, res) => {
       // No GPS data provided
       locationVerificationStatus = 'flagged';
     }
-    
+
     const result = await query(
       `INSERT INTO attendance (worker_id, date, check_in_time, status, check_in_latitude, check_in_longitude, 
                               location_verification_status, distance_from_shop) 
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
-        worker_id, 
-        today, 
-        new Date().toISOString(), 
-        attendanceStatus, 
-        latitude || null, 
+        worker_id,
+        today,
+        new Date().toISOString(),
+        attendanceStatus,
+        latitude || null,
         longitude || null,
         locationVerificationStatus,
         distanceFromShop
       ]
     );
-    
+
     // Update user status to 'available' on checkin (if not busy)
-     try {
-       await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
-     } catch (statusError) {
-       console.error('Failed to update user status on checkin:', statusError);
-     }
-    
+    try {
+      await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
+    } catch (statusError) {
+      console.error('Failed to update user status on checkin:', statusError);
+    }
+
     // Return appropriate message based on verification status
     let message = 'Check-in successful';
     if (locationVerificationStatus === 'verified') {
-      message = attendanceStatus === 'late' 
-        ? 'Attendance marked (Late). Work starts at 9:00 AM.' 
+      message = attendanceStatus === 'late'
+        ? 'Attendance marked (Late). Work starts at 9:00 AM.'
         : 'Attendance marked successfully.';
     } else if (locationVerificationStatus === 'rejected') {
       message = 'Unable to verify attendance. You appear to be too far from shop.';
     } else if (locationVerificationStatus === 'flagged') {
       message = 'Check-in recorded without location verification.';
     }
-    
+
     // REMOVED INCORRECT LOGIC: "Update user status to 'offline' on checkout" block was copy-pasted into checkin route
     // The checkin route should set status to 'available', which is already handled above.
 
@@ -168,26 +177,26 @@ router.post('/checkin', authenticate, async (req, res) => {
 router.post('/checkout', authenticate, async (req, res) => {
   try {
     const { worker_id, latitude, longitude, accuracy } = req.body;
-    
+
     if (!worker_id) {
       return res.status(400).json({ error: 'worker_id is required' });
     }
-    
+
     const today = new Date().toISOString().split('T')[0];
-    
+
     let locationVerificationStatus = null;
     let distanceFromShop = null;
-    
+
     // Validate GPS coordinates and calculate distance if provided
     if (latitude !== undefined && longitude !== undefined) {
       const validation = validateGPSCoordinates(latitude, longitude, accuracy);
       if (!validation.isValid) {
         return res.status(400).json({ error: validation.error });
       }
-      
+
       // Calculate distance from shop
       distanceFromShop = calculateDistance(latitude, longitude, BUSINESS_LOCATION.LATITUDE, BUSINESS_LOCATION.LONGITUDE);
-      
+
       // Determine location verification status based on distance
       if (distanceFromShop <= BUSINESS_LOCATION.ALLOWED_RADIUS_METERS) {
         locationVerificationStatus = 'verified';
@@ -198,7 +207,7 @@ router.post('/checkout', authenticate, async (req, res) => {
       // No GPS data provided
       locationVerificationStatus = 'flagged';
     }
-    
+
     const result = await query(
       `UPDATE attendance 
        SET check_out_time = $1, 
@@ -209,18 +218,18 @@ router.post('/checkout', authenticate, async (req, res) => {
        RETURNING *`,
       [new Date().toISOString(), latitude || null, longitude || null, locationVerificationStatus, worker_id, today]
     );
-    
+
     // Update user status to 'offline' on checkout
     try {
       await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
     } catch (statusError) {
       console.error('Failed to update user status on checkout:', statusError);
     }
-    
+
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'No check-in record found for today' });
     }
-    
+
     // Return appropriate message based on verification status
     let message = 'Check-out successful';
     if (locationVerificationStatus === 'verified') {
@@ -230,7 +239,7 @@ router.post('/checkout', authenticate, async (req, res) => {
     } else if (locationVerificationStatus === 'flagged') {
       message = 'Check-out recorded without location verification.';
     }
-    
+
     res.json({
       message: message,
       attendance: result.rows[0],
@@ -247,7 +256,7 @@ router.post('/checkout', authenticate, async (req, res) => {
 router.get('/', authenticate, async (req, res) => {
   try {
     let { start_date, end_date, worker_id } = req.query;
-    
+
     // If not admin/manager, can only view own attendance
     if (req.user.role !== 'admin' && req.user.role !== 'manager') {
       worker_id = req.user.id;
@@ -269,7 +278,7 @@ router.get('/', authenticate, async (req, res) => {
       WHERE 1=1
     `;
     const params = [];
-    
+
     if (start_date) {
       params.push(start_date);
       sql += ` AND a.date >= $${params.length}`;
@@ -282,12 +291,16 @@ router.get('/', authenticate, async (req, res) => {
       params.push(worker_id);
       sql += ` AND a.worker_id = $${params.length}`;
     }
-    
+    if (req.query.status) {
+      params.push(req.query.status);
+      sql += ` AND a.status = $${params.length}`;
+    }
+
     // Ensure we're fetching dates as strings to avoid timezone shifts in JSON response
     sql += ' ORDER BY a.date DESC, a.check_in_time DESC';
-    
+
     const result = await query(sql, params);
-    
+
     // Process results to include GPS verification status and ensure date is string
     const processedRows = result.rows.map(row => ({
       ...row,
@@ -295,7 +308,7 @@ router.get('/', authenticate, async (req, res) => {
       gps_check_in_verified: !!(row.check_in_latitude && row.check_in_longitude),
       gps_check_out_verified: !!(row.check_out_latitude && row.check_out_longitude)
     }));
-    
+
     res.json(processedRows);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -306,21 +319,21 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/verify-location', authenticate, async (req, res) => {
   try {
     const { latitude, longitude, accuracy, worker_id } = req.body;
-    
+
     if (!latitude || !longitude) {
       return res.status(400).json({ error: 'Latitude and longitude are required' });
     }
-    
+
     // Validate GPS coordinates
     const validation = validateGPSCoordinates(latitude, longitude, accuracy);
     if (!validation.isValid) {
       return res.status(400).json({ error: validation.error });
     }
-    
+
     // Calculate distance from business location
     const distance = calculateDistance(latitude, longitude, BUSINESS_LOCATION.LATITUDE, BUSINESS_LOCATION.LONGITUDE);
     const isWithinRadius = distance <= BUSINESS_LOCATION.ALLOWED_RADIUS_METERS;
-    
+
     res.json({
       verified: isWithinRadius,
       distance_meters: Math.round(distance),
@@ -335,7 +348,7 @@ router.post('/verify-location', authenticate, async (req, res) => {
         accuracy: accuracy ? Math.round(accuracy) : null
       }
     });
-    
+
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
