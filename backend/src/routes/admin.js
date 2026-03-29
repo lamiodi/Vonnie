@@ -21,8 +21,8 @@ router.get('/dashboard', authenticate, authorize(['admin', 'manager']), async (r
   }
 });
 
-// Get current signup status
-router.get('/signup-status', authenticate, authorize(['admin']), async (req, res) => {
+// Get current signup status - PUBLIC access needed for login/signup pages
+router.get('/signup-status', async (req, res) => {
   try {
     // Check if signup_status table exists, if not create it
     try {

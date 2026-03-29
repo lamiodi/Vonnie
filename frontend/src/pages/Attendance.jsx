@@ -3,97 +3,368 @@ import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 
-const Attendance = () => {
-  const { user, hasRole } = useAuth();
-  const isAdmin = hasRole('admin');
+// ============================================
+// Admin Attendance View Component
+// ============================================
+const AdminAttendanceView = () => {
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState({
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    workerId: ''
+  });
 
-  // If user is admin, they don't need to mark attendance
-  if (isAdmin) {
-    return (
-      <div className="p-4 sm:p-6">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
-          <p className="text-gray-600">Track worker attendance records</p>
-        </div>
-        
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-          <div className="flex items-center space-x-4">
-            <div className="bg-purple-100 p-3 rounded-full">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-medium text-gray-900">Admin Exempt</h3>
-              <p className="text-gray-600 text-sm sm:text-base">As the salon owner/admin, you are exempt from attendance tracking requirements.</p>
-            </div>
-          </div>
-        </div>
+  useEffect(() => {
+    fetchWorkers();
+    fetchAttendanceRecords();
+  }, []);
 
-        {/* Admin can still see the records table below */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="px-4 py-4 sm:px-6 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Worker Attendance Records</h3>
+  const fetchWorkers = async () => {
+    try {
+      const response = await apiGet(API_ENDPOINTS.WORKERS);
+      const workerList = Array.isArray(response) ? response : (response.data || []);
+      setWorkers(workerList.filter(w => w.role !== 'admin'));
+    } catch (error) {
+      console.error('Failed to fetch workers:', error);
+    }
+  };
+
+  const fetchAttendanceRecords = async () => {
+    try {
+      setLoading(true);
+      const params = {};
+      if (filters.startDate) params.start_date = filters.startDate;
+      if (filters.endDate) params.end_date = filters.endDate;
+      if (filters.workerId) params.worker_id = filters.workerId;
+
+      const response = await apiGet(API_ENDPOINTS.ATTENDANCE, params);
+      setAttendanceRecords(Array.isArray(response) ? response : (response.data || []));
+    } catch (error) {
+      handleError(error, 'Failed to fetch attendance records');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatTime = (timeString) => {
+    if (!timeString) return '-';
+    return new Date(timeString).toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const formatDate = (dateString) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Build today's summary: which workers checked in, who hasn't
+  const todayStr = new Date().toISOString().split('T')[0];
+  const todayRecords = attendanceRecords.filter(r => {
+    const recordDate = new Date(r.date).toISOString().split('T')[0];
+    return recordDate === todayStr;
+  });
+
+  const checkedInWorkerIds = new Set(todayRecords.map(r => r.worker_id));
+  const presentWorkers = workers.filter(w => checkedInWorkerIds.has(w.id));
+  const absentWorkers = workers.filter(w => !checkedInWorkerIds.has(w.id) && w.status !== 'inactive');
+
+  return (
+    <div className="p-3 sm:p-4 md:p-6">
+      <div className="mb-6 sm:mb-8">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
+        <p className="text-sm sm:text-base text-gray-600">Track and monitor worker attendance records</p>
+      </div>
+
+      {/* Today's Snapshot */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-blue-600">{workers.filter(w => w.status !== 'inactive').length}</div>
+          <div className="text-xs sm:text-sm text-gray-600 mt-1">Total Workers</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-green-600">{presentWorkers.length}</div>
+          <div className="text-xs sm:text-sm text-gray-600 mt-1">Present Today</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-red-600">{absentWorkers.length}</div>
+          <div className="text-xs sm:text-sm text-gray-600 mt-1">Absent Today</div>
+        </div>
+        <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 text-center">
+          <div className="text-2xl sm:text-3xl font-bold text-yellow-600">
+            {todayRecords.filter(r => r.status === 'late' || r.status === 'flagged').length}
           </div>
-          {/* Reuse the existing table component logic or simpler view for admin */}
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {attendanceRecords.length === 0 ? (
-                  <tr>
-                    <td colSpan="6" className="px-6 py-4 text-center text-gray-500">
-                      No attendance records found
-                    </td>
-                  </tr>
-                ) : (
-                  attendanceRecords.map((record) => (
-                    <tr key={record.id}>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(record.date)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {record.worker_name || 'Unknown'}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
-                        {formatTime(record.check_in_time)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 hidden sm:table-cell">
-                        {formatTime(record.check_out_time)}
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 sm:hidden">
-                        <div>In: {formatTime(record.check_in_time)}</div>
-                        <div>Out: {formatTime(record.check_out_time)}</div>
-                      </td>
-                      <td className="px-4 py-4 whitespace-nowrap">
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          record.status === 'present' ? 'bg-green-100 text-green-800' : 
-                          record.status === 'late' ? 'bg-yellow-100 text-yellow-800' : 
-                          'bg-red-100 text-red-800'
-                        }`}>
-                          {record.status}
+          <div className="text-xs sm:text-sm text-gray-600 mt-1">Late/Flagged</div>
+        </div>
+      </div>
+
+      {/* Today's Worker Status Cards */}
+      <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 md:p-6 mb-6">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-4">Today's Worker Status</h2>
+
+        {workers.filter(w => w.status !== 'inactive').length === 0 ? (
+          <p className="text-gray-500 text-sm">No workers found.</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {workers.filter(w => w.status !== 'inactive').map(worker => {
+              const record = todayRecords.find(r => r.worker_id === worker.id);
+              const isPresent = !!record;
+              const hasCheckedOut = record?.check_out_time;
+
+              return (
+                <div key={worker.id} className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${hasCheckedOut
+                    ? 'border-gray-200 bg-gray-50'
+                    : isPresent
+                      ? 'border-green-200 bg-green-50'
+                      : 'border-red-200 bg-red-50'
+                  }`}>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${hasCheckedOut ? 'bg-gray-400' : isPresent ? 'bg-green-500' : 'bg-red-500'
+                        }`}></div>
+                      <span className="font-medium text-gray-900 text-sm sm:text-base truncate">{worker.name}</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${hasCheckedOut
+                        ? 'bg-gray-100 text-gray-700'
+                        : isPresent
+                          ? record.status === 'late'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : record.status === 'flagged'
+                              ? 'bg-orange-100 text-orange-800'
+                              : 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                      {hasCheckedOut ? 'Left' : isPresent ? (record.status || 'Present') : 'Absent'}
+                    </span>
+                  </div>
+                  {isPresent && (
+                    <div className="text-xs sm:text-sm text-gray-600 space-y-1">
+                      <div className="flex justify-between">
+                        <span>Check-in:</span>
+                        <span className="font-medium flex items-center gap-1">
+                          {formatTime(record.check_in_time)}
+                          {record.gps_check_in_verified && <span className="text-green-600 text-xs">✓</span>}
                         </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                      {record.check_out_time && (
+                        <div className="flex justify-between">
+                          <span>Check-out:</span>
+                          <span className="font-medium flex items-center gap-1">
+                            {formatTime(record.check_out_time)}
+                            {record.gps_check_out_verified && <span className="text-green-600 text-xs">✓</span>}
+                          </span>
+                        </div>
+                      )}
+                      {record.location_verification_status && (
+                        <div className="flex justify-between">
+                          <span>Location:</span>
+                          <span className={`text-xs font-medium ${record.location_verification_status === 'verified' ? 'text-green-600' :
+                              record.location_verification_status === 'rejected' ? 'text-red-600' :
+                                'text-yellow-600'
+                            }`}>
+                            {record.location_verification_status === 'verified' ? '✓ Verified' :
+                              record.location_verification_status === 'rejected' ? '✗ Rejected' :
+                                '⚠ Flagged'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!isPresent && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      {worker.role && <span className="capitalize">{worker.role}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 md:p-6 mb-6">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-4">Filter Records</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Start Date</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">End Date</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Worker</label>
+            <select
+              value={filters.workerId}
+              onChange={(e) => setFilters({ ...filters, workerId: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">All Workers</option>
+              {workers.map(w => (
+                <option key={w.id} value={w.id}>{w.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end">
+            <button
+              onClick={fetchAttendanceRecords}
+              className="w-full bg-blue-600 text-white px-4 py-2 text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm active:scale-95 transition-transform"
+            >
+              Apply Filters
+            </button>
           </div>
         </div>
       </div>
-    );
-  }
 
+      {/* Attendance Records Table/Cards */}
+      <div className="bg-white rounded-lg shadow-md overflow-hidden">
+        <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800">Attendance History</h2>
+          <span className="text-xs sm:text-sm text-gray-500">{attendanceRecords.length} record(s)</span>
+        </div>
+
+        {loading ? (
+          <div className="p-6 text-center text-gray-500">
+            <svg className="animate-spin h-6 w-6 mx-auto mb-2 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading attendance records...
+          </div>
+        ) : attendanceRecords.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">No attendance records found for the selected filters.</div>
+        ) : (
+          <>
+            {/* Mobile Card View */}
+            <div className="block md:hidden divide-y divide-gray-200">
+              {attendanceRecords.map((record) => (
+                <div key={record.id} className="p-3 sm:p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900 text-sm truncate">{record.name || 'Unknown'}</div>
+                      <div className="text-xs text-gray-500">{formatDate(record.date)}</div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${record.status === 'present' ? 'bg-green-100 text-green-800' :
+                        record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                          record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
+                      }`}>
+                      {record.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <div>
+                      <span className="text-gray-500">In: </span>
+                      <span className="font-medium">{formatTime(record.check_in_time)}</span>
+                      {record.gps_check_in_verified && <span className="text-green-600 ml-1">✓</span>}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Out: </span>
+                      <span className="font-medium">{formatTime(record.check_out_time)}</span>
+                      {record.gps_check_out_verified && <span className="text-green-600 ml-1">✓</span>}
+                    </div>
+                  </div>
+                  {record.location_verification_status && (
+                    <div className="mt-1.5 text-xs">
+                      <span className={`inline-flex items-center gap-1 ${record.location_verification_status === 'verified' ? 'text-green-600' :
+                          record.location_verification_status === 'rejected' ? 'text-red-600' :
+                            'text-yellow-600'
+                        }`}>
+                        {record.location_verification_status === 'verified' ? '✓ Location Verified' :
+                          record.location_verification_status === 'rejected' ? '✗ Location Rejected' :
+                            '⚠ Location Flagged'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {attendanceRecords.map((record) => (
+                    <tr key={record.id} className="hover:bg-gray-50">
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{record.name || 'Unknown'}</td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatTime(record.check_in_time)}
+                        {record.gps_check_in_verified && (
+                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
+                        )}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatTime(record.check_out_time)}
+                        {record.gps_check_out_verified && (
+                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
+                        )}
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
+                            record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                              record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                                'bg-red-100 text-red-800'
+                          }`}>
+                          {record.status}
+                        </span>
+                      </td>
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {record.location_verification_status === 'verified' ? (
+                          <span className="text-green-600 flex items-center"><span className="mr-1">✓</span> Verified</span>
+                        ) : record.location_verification_status === 'rejected' ? (
+                          <span className="text-red-600 flex items-center"><span className="mr-1">✗</span> Rejected</span>
+                        ) : record.location_verification_status === 'flagged' ? (
+                          <span className="text-yellow-600 flex items-center"><span className="mr-1">⚠</span> Flagged</span>
+                        ) : (
+                          <span className="text-gray-400">No Data</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Worker Attendance View Component
+// ============================================
+const WorkerAttendanceView = () => {
+  const { user } = useAuth();
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -111,10 +382,9 @@ const Attendance = () => {
 
   useEffect(() => {
     fetchAttendanceRecords();
-    // Check if it's a mobile device
     const checkMobile = () => {
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                      (navigator.maxTouchPoints > 0 && navigator.maxTouchPoints <= 2);
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        (navigator.maxTouchPoints > 0 && navigator.maxTouchPoints <= 2);
       setIsMobileDevice(isMobile);
     };
     checkMobile();
@@ -127,7 +397,7 @@ const Attendance = () => {
       if (filters.startDate) params.start_date = filters.startDate;
       if (filters.endDate) params.end_date = filters.endDate;
       if (filters.workerId) params.worker_id = filters.workerId;
-      
+
       const response = await apiGet(API_ENDPOINTS.ATTENDANCE, params);
       setAttendanceRecords(Array.isArray(response) ? response : (response.data || []));
     } catch (error) {
@@ -153,8 +423,6 @@ const Attendance = () => {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy
         };
-        // Only accept high accuracy results (< 50m) if possible, but relax for retries
-        // If accuracy is poor (>100m) and we have retries left, try again
         if (position.coords.accuracy > 100 && retries > 0) {
           console.log(`GPS accuracy poor (${position.coords.accuracy}m), retrying...`);
           setTimeout(() => {
@@ -208,10 +476,9 @@ const Attendance = () => {
     try {
       setCheckingIn(true);
       setLocationError('');
-      
+
       let locationData = {};
-      
-      // Try to get GPS location
+
       try {
         const location = await getCurrentLocation();
         locationData = {
@@ -220,7 +487,6 @@ const Attendance = () => {
           accuracy: location.accuracy
         };
       } catch (locationError) {
-        // Allow check-in without GPS if user denies permission or on desktop
         console.warn('GPS location not available:', locationError.message);
         if (!isMobileDevice || manualOverride) {
           setLocationError('Check-in recorded without GPS verification (Desktop mode)');
@@ -234,19 +500,15 @@ const Attendance = () => {
         ...locationData
       });
 
-      // Show appropriate notification based on verification status
       const responseData = response.data || response;
       if (responseData.location_verification_status === 'rejected') {
         setLocationError('Unable to verify attendance. You appear to be outside the shop. Please ensure you are inside the shop to mark attendance.');
       } else if (responseData.location_verification_status === 'verified') {
-        // Success - clear any previous errors
         setLocationError('');
       }
 
       handleSuccess('Check-in successful');
-      fetchAttendanceRecords(); // Refresh the list
-      
-      // Reset location after successful check-in
+      fetchAttendanceRecords();
       setCurrentLocation(null);
     } catch (error) {
       handleError(error, 'Check-in failed');
@@ -259,10 +521,9 @@ const Attendance = () => {
     try {
       setCheckingOut(true);
       setLocationError('');
-      
+
       let locationData = {};
-      
-      // Try to get GPS location
+
       try {
         const location = await getCurrentLocation();
         locationData = {
@@ -271,7 +532,6 @@ const Attendance = () => {
           accuracy: location.accuracy
         };
       } catch (locationError) {
-        // Allow check-out without GPS if user denies permission or on desktop
         console.warn('GPS location not available:', locationError.message);
         if (!isMobileDevice || manualOverride) {
           setLocationError('Check-out recorded without GPS verification (Desktop mode)');
@@ -280,15 +540,13 @@ const Attendance = () => {
         }
       }
 
-      const response = await apiPost(API_ENDPOINTS.ATTENDANCE_CHECKOUT, {
+      await apiPost(API_ENDPOINTS.ATTENDANCE_CHECKOUT, {
         worker_id: user.id,
         ...locationData
       });
 
       handleSuccess('Check-out successful');
-      fetchAttendanceRecords(); // Refresh the list
-      
-      // Reset location after successful check-out
+      fetchAttendanceRecords();
       setCurrentLocation(null);
     } catch (error) {
       handleError(error, 'Check-out failed');
@@ -301,7 +559,7 @@ const Attendance = () => {
     try {
       setLocationLoading(true);
       const location = await getCurrentLocation();
-      
+
       const response = await apiPost(API_ENDPOINTS.ATTENDANCE_VERIFY, {
         latitude: location.latitude,
         longitude: location.longitude,
@@ -341,9 +599,7 @@ const Attendance = () => {
   const getTodayAttendance = () => {
     const today = new Date().toISOString().split('T')[0];
     return attendanceRecords.find(record => {
-      // Handle potential full ISO string from backend
       const recordDate = new Date(record.date).toISOString().split('T')[0];
-      // Ensure we only look at OUR attendance record (matching current user ID)
       return recordDate === today && record.worker_id === user.id;
     });
   };
@@ -351,12 +607,12 @@ const Attendance = () => {
   const todayAttendance = getTodayAttendance();
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
-        
+    <div className="p-3 sm:p-4 md:p-6">
+      <div className="mb-4 sm:mb-6 md:mb-8">
+        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">Attendance</h1>
+
         {/* Guidelines Section */}
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 mb-4 rounded-r-md">
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-3 sm:p-4 mb-4 rounded-r-md">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -364,13 +620,13 @@ const Attendance = () => {
               </svg>
             </div>
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-blue-800">Attendance Guidelines</h3>
-              <div className="mt-2 text-sm text-blue-700">
-                <ul className="list-disc pl-5 space-y-1">
-                  <li><strong>Check-In:</strong> You must be within 500 meters of the shop to check in. Please enable GPS location on your device.</li>
-                  <li><strong>One Check-In Per Day:</strong> You can only check in once per day. If you check out, you cannot check in again until tomorrow.</li>
-                  <li><strong>Check-Out:</strong> Don't forget to check out when you leave! The "Check Out" button will appear only after you have checked in.</li>
-                  <li><strong>Troubleshooting:</strong> If the "Check Out" button is missing, refresh the page. If GPS fails, try moving near a window or going outside for a moment.</li>
+              <h3 className="text-xs sm:text-sm font-medium text-blue-800">Attendance Guidelines</h3>
+              <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-blue-700">
+                <ul className="list-disc pl-4 sm:pl-5 space-y-0.5 sm:space-y-1">
+                  <li><strong>Check-In:</strong> You must be within 500 meters of the shop. Enable GPS on your device.</li>
+                  <li><strong>One Check-In Per Day:</strong> You can only check in once per day.</li>
+                  <li><strong>Check-Out:</strong> Don't forget to check out when you leave!</li>
+                  <li><strong>Troubleshooting:</strong> If GPS fails, try moving near a window or going outside.</li>
                 </ul>
               </div>
             </div>
@@ -378,53 +634,27 @@ const Attendance = () => {
         </div>
       </div>
 
-      {/* Device Detection Notice - Hidden as requested to simplify user experience 
-      {!isMobileDevice && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md p-3 sm:p-4 mb-6">
-          <div className="flex items-start">
-            <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <div>
-              <h3 className="text-sm font-medium text-blue-800">Desktop Device Detected</h3>
-              <p className="text-sm text-blue-700 mt-1">
-                GPS accuracy may be limited on desktop devices. Consider using a mobile device for better location accuracy, 
-                or enable manual override to proceed without GPS verification.
-              </p>
-              <button
-                onClick={() => setManualOverride(!manualOverride)}
-                className="mt-2 text-sm text-blue-600 hover:text-blue-800 underline"
-              >
-                {manualOverride ? 'Disable Manual Override' : 'Enable Manual Override'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      */}
-
       {/* Today's Attendance Status */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Today's Attendance</h2>
-        
+      <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 md:p-6 mb-4 sm:mb-6">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">Today's Attendance</h2>
+
         {todayAttendance ? (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-gray-600 font-medium">Status:</span>
-              <span className={`px-3 py-1 rounded-full text-sm font-medium w-fit ${
-                todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
-                todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                'bg-red-100 text-red-800'
-              }`}>
+              <span className="text-sm sm:text-base text-gray-600 font-medium">Status:</span>
+              <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium w-fit ${todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
+                  todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                    todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                      'bg-red-100 text-red-800'
+                }`}>
                 {todayAttendance.status}
               </span>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="bg-gray-50 p-3 rounded-md">
-                <span className="text-gray-600 text-sm block mb-1">Check-in:</span>
-                <p className="font-semibold text-gray-900">{formatTime(todayAttendance.check_in_time)}</p>
+                <span className="text-gray-600 text-xs sm:text-sm block mb-1">Check-in:</span>
+                <p className="font-semibold text-sm sm:text-base text-gray-900">{formatTime(todayAttendance.check_in_time)}</p>
                 {todayAttendance.gps_check_in_verified && (
                   <span className="text-xs text-green-600 flex items-center mt-1">
                     <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
@@ -432,11 +662,11 @@ const Attendance = () => {
                   </span>
                 )}
               </div>
-              
+
               {todayAttendance.check_out_time && (
                 <div className="bg-gray-50 p-3 rounded-md">
-                  <span className="text-gray-600 text-sm block mb-1">Check-out:</span>
-                  <p className="font-semibold text-gray-900">{formatTime(todayAttendance.check_out_time)}</p>
+                  <span className="text-gray-600 text-xs sm:text-sm block mb-1">Check-out:</span>
+                  <p className="font-semibold text-sm sm:text-base text-gray-900">{formatTime(todayAttendance.check_out_time)}</p>
                   {todayAttendance.gps_check_out_verified && (
                     <span className="text-xs text-green-600 flex items-center mt-1">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
@@ -448,26 +678,25 @@ const Attendance = () => {
             </div>
 
             <div className="border-t border-gray-100 pt-3 space-y-2">
-              <div className="flex items-center justify-between text-sm">
+              <div className="flex items-center justify-between text-xs sm:text-sm">
                 <span className="text-gray-600">Location Status:</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                  todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
-                  todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                  todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                  'bg-yellow-100 text-yellow-800'
-                }`}>
+                <span className={`px-2 py-0.5 rounded text-xs font-medium ${todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
+                    todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
+                      todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                        'bg-yellow-100 text-yellow-800'
+                  }`}>
                   {todayAttendance.location_verification_status === 'verified' ? 'Verified' :
-                   todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
-                   todayAttendance.location_verification_status === 'flagged' ? 'Flagged' :
-                   'Pending'}
+                    todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
+                      todayAttendance.location_verification_status === 'flagged' ? 'Flagged' :
+                        'Pending'}
                 </span>
               </div>
 
               {todayAttendance.distance_from_shop && (
-                <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center justify-between text-xs sm:text-sm">
                   <span className="text-gray-600">Distance from Shop:</span>
                   <span className="font-medium">
-                    {todayAttendance.distance_from_shop <= 1000 ? 
+                    {todayAttendance.distance_from_shop <= 1000 ?
                       `${Math.round(todayAttendance.distance_from_shop)}m` :
                       `${(todayAttendance.distance_from_shop / 1000).toFixed(1)}km`
                     }
@@ -477,46 +706,45 @@ const Attendance = () => {
             </div>
           </div>
         ) : (
-          <p className="text-gray-500 text-sm sm:text-base">No attendance record for today</p>
+          <p className="text-gray-500 text-xs sm:text-sm md:text-base">No attendance record for today</p>
         )}
 
         {/* Action Buttons */}
-        <div className="mt-6 space-y-3">
+        <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-3">
           {!todayAttendance?.check_in_time && (
             <button
               onClick={handleCheckIn}
               disabled={checkingIn || locationLoading}
-              className="w-full bg-blue-600 text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform"
+              className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
             >
               {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In'}
             </button>
           )}
-          
+
           {todayAttendance?.check_in_time && (
             <button
               onClick={handleCheckOut}
               disabled={checkingOut || locationLoading || !!todayAttendance.check_out_time}
-              className={`w-full text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform ${
-                todayAttendance.check_out_time 
-                  ? 'bg-gray-400 cursor-not-allowed' 
+              className={`w-full text-white px-4 py-2.5 sm:py-3 rounded-lg flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform ${todayAttendance.check_out_time
+                  ? 'bg-gray-400 cursor-not-allowed'
                   : 'bg-green-600 hover:bg-green-700'
-              }`}
+                }`}
             >
-              {todayAttendance.check_out_time 
-                ? 'Checked Out' 
-                : checkingOut 
-                  ? 'Checking out...' 
-                  : locationLoading 
-                    ? 'Getting location...' 
+              {todayAttendance.check_out_time
+                ? 'Checked Out'
+                : checkingOut
+                  ? 'Checking out...'
+                  : locationLoading
+                    ? 'Getting location...'
                     : 'Check Out'}
             </button>
           )}
-          
+
           {isMobileDevice && !manualOverride && (
             <button
               onClick={verifyLocation}
               disabled={locationLoading}
-              className="w-full bg-gray-600 text-white px-4 py-3 sm:py-2 rounded-lg sm:rounded-md hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center font-medium shadow-sm active:scale-95 transition-transform"
+              className="w-full bg-gray-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
             >
               {locationLoading ? 'Getting location...' : 'Verify Location'}
             </button>
@@ -524,14 +752,14 @@ const Attendance = () => {
         </div>
 
         {locationError && (
-          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-yellow-800 text-sm">{locationError}</p>
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <p className="text-yellow-800 text-xs sm:text-sm">{locationError}</p>
           </div>
         )}
 
         {currentLocation && (
-          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-green-800 text-sm">
+          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-green-50 border border-green-200 rounded-md">
+            <p className="text-green-800 text-xs sm:text-sm">
               Current location: {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
               {currentLocation.accuracy && ` (±${Math.round(currentLocation.accuracy)}m accuracy)`}
             </p>
@@ -545,31 +773,31 @@ const Attendance = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
-        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-4">Filters</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white rounded-lg shadow-md p-3 sm:p-4 md:p-6 mb-4 sm:mb-6">
+        <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">Filters</h2>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Date</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Start Date</label>
             <input
               type="date"
               value={filters.startDate}
-              onChange={(e) => setFilters({...filters, startDate: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Date</label>
+            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">End Date</label>
             <input
               type="date"
               value={filters.endDate}
-              onChange={(e) => setFilters({...filters, endDate: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
           <div className="flex items-end">
             <button
               onClick={fetchAttendanceRecords}
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm active:scale-95 transition-transform"
+              className="w-full bg-blue-600 text-white px-4 py-2 text-sm rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm active:scale-95 transition-transform"
             >
               Apply Filters
             </button>
@@ -579,91 +807,120 @@ const Attendance = () => {
 
       {/* Attendance Records */}
       <div className="bg-white rounded-lg shadow-md overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg sm:text-xl font-semibold text-gray-800">Attendance History</h2>
+        <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-b border-gray-200">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800">Attendance History</h2>
         </div>
-        
+
         {loading ? (
           <div className="p-6 text-center text-gray-500">Loading attendance records...</div>
+        ) : attendanceRecords.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">No attendance records found</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check In</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden sm:table-cell">Check Out</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider sm:hidden">Times</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {attendanceRecords.map((record) => (
-                  <tr key={record.id}>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-                      {formatTime(record.check_in_time)}
-                      {record.gps_check_in_verified && (
-                        <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                      )}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 hidden sm:table-cell">
-                      {formatTime(record.check_out_time) || '-'}
-                      {record.gps_check_out_verified && (
-                        <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                      )}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900 sm:hidden">
-                      <div className="flex flex-col text-xs space-y-1">
-                        <span className="flex items-center">
-                          <span className="w-6 text-gray-500">In:</span> 
-                          {formatTime(record.check_in_time)}
-                          {record.gps_check_in_verified && <span className="ml-1 text-green-600">✓</span>}
-                        </span>
-                        <span className="flex items-center">
-                          <span className="w-6 text-gray-500">Out:</span> 
-                          {formatTime(record.check_out_time) || '-'}
-                          {record.gps_check_out_verified && <span className="ml-1 text-green-600">✓</span>}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                        record.status === 'present' ? 'bg-green-100 text-green-800' :
+          <>
+            {/* Mobile Card View */}
+            <div className="block sm:hidden divide-y divide-gray-200">
+              {attendanceRecords.map((record) => (
+                <div key={record.id} className="p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-900">{formatDate(record.date)}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${record.status === 'present' ? 'bg-green-100 text-green-800' :
                         record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
-                        record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                        'bg-red-100 text-red-800'
+                          record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
                       }`}>
-                        {record.status}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
-                      {record.location_verification_status === 'verified' ? (
-                        <span className="text-green-600 flex items-center"><span className="mr-1">✓</span> Verified</span>
-                      ) : record.location_verification_status === 'rejected' ? (
-                        <span className="text-red-600 flex items-center"><span className="mr-1">✗</span> Rejected</span>
-                      ) : record.location_verification_status === 'flagged' ? (
-                        <span className="text-yellow-600 flex items-center"><span className="mr-1">⚠</span> Flagged</span>
-                      ) : (
-                        <span className="text-gray-400">No Data</span>
-                      )}
-                    </td>
+                      {record.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                    <div>
+                      <span className="text-gray-500">In: </span>
+                      <span className="font-medium">{formatTime(record.check_in_time)}</span>
+                      {record.gps_check_in_verified && <span className="text-green-600 ml-1">✓</span>}
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Out: </span>
+                      <span className="font-medium">{formatTime(record.check_out_time)}</span>
+                      {record.gps_check_out_verified && <span className="text-green-600 ml-1">✓</span>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Table View */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Worker</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-            
-            {attendanceRecords.length === 0 && (
-              <div className="p-6 text-center text-gray-500">No attendance records found</div>
-            )}
-          </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {attendanceRecords.map((record) => (
+                    <tr key={record.id}>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(record.date)}</td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatTime(record.check_in_time)}
+                        {record.gps_check_in_verified && (
+                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
+                        )}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatTime(record.check_out_time) || '-'}
+                        {record.gps_check_out_verified && (
+                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
+                        )}
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
+                            record.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
+                              record.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
+                                'bg-red-100 text-red-800'
+                          }`}>
+                          {record.status}
+                        </span>
+                      </td>
+                      <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
+                        {record.location_verification_status === 'verified' ? (
+                          <span className="text-green-600 flex items-center"><span className="mr-1">✓</span> Verified</span>
+                        ) : record.location_verification_status === 'rejected' ? (
+                          <span className="text-red-600 flex items-center"><span className="mr-1">✗</span> Rejected</span>
+                        ) : record.location_verification_status === 'flagged' ? (
+                          <span className="text-yellow-600 flex items-center"><span className="mr-1">⚠</span> Flagged</span>
+                        ) : (
+                          <span className="text-gray-400">No Data</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>
   );
+};
+
+// ============================================
+// Main Attendance Component (Router)
+// ============================================
+const Attendance = () => {
+  const { hasRole } = useAuth();
+  const isAdmin = hasRole('admin');
+
+  if (isAdmin) {
+    return <AdminAttendanceView />;
+  }
+
+  return <WorkerAttendanceView />;
 };
 
 export default Attendance;
