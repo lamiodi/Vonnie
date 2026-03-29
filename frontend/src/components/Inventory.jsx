@@ -25,6 +25,8 @@ const Inventory = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isAdmin = hasRole('admin');
+  const isManager = hasRole('manager');
+  const canManageInventory = isAdmin || isManager;
 
   useEffect(() => {
     fetchProducts();
@@ -43,14 +45,14 @@ const Inventory = () => {
 
   const validateForm = () => {
     const errors = {};
-    
+
     // Price validation
     if (!formData.price || parseFloat(formData.price) <= 0) {
       errors.price = 'Price must be greater than 0';
     } else if (parseFloat(formData.price) > 1000000) {
       errors.price = 'Price cannot exceed ₦1,000,000';
     }
-    
+
     // Stock validation
     if (!useSizeStock) {
       if (formData.stock_level === '' || parseInt(formData.stock_level) < 0) {
@@ -73,19 +75,19 @@ const Inventory = () => {
         errors.stock_by_size = 'Total stock cannot exceed 100,000';
       }
     }
-    
+
     // Required fields validation
     if (!formData.name.trim()) errors.name = 'Product name is required';
     if (!formData.sku.trim()) errors.sku = 'SKU is required';
     if (!formData.category.trim()) errors.category = 'Category is required';
-    
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    
+
     // Clear error when user starts typing
     if (formErrors[name]) {
       setFormErrors(prev => ({
@@ -93,7 +95,7 @@ const Inventory = () => {
         [name]: ''
       }));
     }
-    
+
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -112,14 +114,14 @@ const Inventory = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     // Validate form before submission
     if (!validateForm()) {
       return;
     }
-    
+
     setIsSubmitting(true);
-    
+
     try {
       // Format data for API
       const submitData = {
@@ -128,26 +130,26 @@ const Inventory = () => {
       };
 
       if (useSizeStock) {
-         submitData.stock_by_size = formData.stock_by_size;
-         // Calculate total stock level from sizes
-         submitData.stock_level = Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0);
+        submitData.stock_by_size = formData.stock_by_size;
+        // Calculate total stock level from sizes
+        submitData.stock_level = Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0);
       } else {
-         submitData.stock_level = parseInt(formData.stock_level);
-         submitData.stock_by_size = null; // Or empty object if preferred
+        submitData.stock_level = parseInt(formData.stock_level);
+        submitData.stock_by_size = null; // Or empty object if preferred
       }
-      
+
       if (editingProduct) {
         await apiPut(`${API_ENDPOINTS.INVENTORY}/${editingProduct.id}`, submitData);
       } else {
         await apiPost(API_ENDPOINTS.INVENTORY, submitData);
       }
-      
+
       fetchProducts();
       resetForm();
       alert(editingProduct ? 'Product updated successfully!' : 'Product added successfully!');
     } catch (error) {
       console.error('Error saving product:', error);
-      
+
       // Handle specific error cases
       if (error.response?.status === 409) {
         alert('A product with this SKU already exists.');
@@ -165,7 +167,7 @@ const Inventory = () => {
     setEditingProduct(product);
     const hasSizeStock = product.stock_by_size && Object.keys(product.stock_by_size).length > 0;
     setUseSizeStock(hasSizeStock);
-    
+
     setFormData({
       name: product.name,
       description: product.description || '',
@@ -193,6 +195,20 @@ const Inventory = () => {
     }
   };
 
+  const handleDelete = async (product) => {
+    if (!window.confirm(`Are you sure you want to delete "${product.name}"?\n\nThis action will remove the product from inventory. Historical transaction records will be preserved.`)) {
+      return;
+    }
+    try {
+      await apiDelete(`${API_ENDPOINTS.INVENTORY}/${product.id}`);
+      fetchProducts();
+      alert('Product deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      alert(error?.error?.message || 'Error deleting product. Please try again.');
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -217,7 +233,7 @@ const Inventory = () => {
   const handleBarcodeInput = (e) => {
     const barcode = e.target.value;
     setBarcodeInput(barcode);
-    
+
     // Auto-search when barcode is entered (typically 8-13 digits)
     if (barcode.length >= 8 && /^\d+$/.test(barcode)) {
       searchProductByBarcode(barcode);
@@ -259,17 +275,17 @@ const Inventory = () => {
 
   const quickStockAdjustment = async (adjustment) => {
     if (!scannedProduct) return;
-    
+
     // Check if product has sizes
     const hasSizeStock = scannedProduct.stock_by_size && Object.keys(scannedProduct.stock_by_size).length > 0;
-    
+
     let size = null;
     if (hasSizeStock) {
-       size = prompt(`Enter size to adjust (${Object.keys(scannedProduct.stock_by_size).join(', ')}):`);
-       if (!size || !scannedProduct.stock_by_size.hasOwnProperty(size)) {
-         alert('Invalid size selected');
-         return;
-       }
+      size = prompt(`Enter size to adjust (${Object.keys(scannedProduct.stock_by_size).join(', ')}):`);
+      if (!size || !scannedProduct.stock_by_size.hasOwnProperty(size)) {
+        alert('Invalid size selected');
+        return;
+      }
     }
 
     const reason = prompt('Enter reason for stock adjustment:');
@@ -296,16 +312,15 @@ const Inventory = () => {
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
             onClick={toggleScanningMode}
-            className={`px-4 py-2 rounded-md focus:outline-none focus:ring-2 ${
-              scanningMode 
-                ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500' 
-                : 'bg-gray-500 text-white hover:bg-gray-600 focus:ring-gray-500'
-            }`}
+            className={`px-4 py-2 rounded-md focus:outline-none focus:ring-2 ${scanningMode
+              ? 'bg-green-500 text-white hover:bg-green-600 focus:ring-green-500'
+              : 'bg-gray-500 text-white hover:bg-gray-600 focus:ring-gray-500'
+              }`}
             aria-label={scanningMode ? 'Disable scanning mode' : 'Enable scanning mode'}
           >
             {scanningMode ? '📱 Scanning ON' : '📱 Enable Scanner'}
           </button>
-          {isAdmin && (
+          {canManageInventory && (
             <button
               onClick={() => setShowAddForm(true)}
               className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -353,7 +368,7 @@ const Inventory = () => {
               <div><strong>Price:</strong> ₦{parseFloat(scannedProduct.price || 0).toFixed(2)}</div>
             </div>
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-              {isAdmin && (
+              {canManageInventory && (
                 <button
                   onClick={() => quickStockAdjustment(1)}
                   className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
@@ -362,7 +377,7 @@ const Inventory = () => {
                   +1 Stock
                 </button>
               )}
-              {isAdmin && (
+              {canManageInventory && (
                 <button
                   onClick={() => quickStockAdjustment(-1)}
                   className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
@@ -371,7 +386,7 @@ const Inventory = () => {
                   -1 Stock
                 </button>
               )}
-              {isAdmin && (
+              {canManageInventory && (
                 <button
                   onClick={() => handleEdit(scannedProduct)}
                   className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
@@ -401,7 +416,7 @@ const Inventory = () => {
                 ✕
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4" role="form" aria-label={editingProduct ? 'Edit product form' : 'Add new product form'}>
               <div>
                 <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-1">
@@ -415,15 +430,14 @@ const Inventory = () => {
                   onChange={handleInputChange}
                   required
                   aria-required="true"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.name ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.name ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
                 {formErrors.name && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.name}</p>
                 )}
               </div>
-        
+
               <div>
                 <label htmlFor="product-sku" className="block text-sm font-medium text-gray-700 mb-1">
                   SKU *
@@ -436,15 +450,14 @@ const Inventory = () => {
                   onChange={handleInputChange}
                   required
                   aria-required="true"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.sku ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.sku ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
                 {formErrors.sku && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.sku}</p>
                 )}
               </div>
-        
+
               <div>
                 <label htmlFor="product-price" className="block text-sm font-medium text-gray-700 mb-1">
                   Price (₦) *
@@ -459,15 +472,14 @@ const Inventory = () => {
                   aria-required="true"
                   min="0"
                   step="0.01"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.price ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.price ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
                 {formErrors.price && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.price}</p>
                 )}
               </div>
-        
+
               <div>
                 <label htmlFor="product-category" className="block text-sm font-medium text-gray-700 mb-1">
                   Category *
@@ -481,15 +493,14 @@ const Inventory = () => {
                   required
                   aria-required="true"
                   placeholder="Enter product category"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formErrors.category ? 'border-red-500' : 'border-gray-300'
-                  }`}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.category ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
                 {formErrors.category && (
                   <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.category}</p>
                 )}
               </div>
-        
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Stock Management
@@ -544,9 +555,8 @@ const Inventory = () => {
                       onChange={handleInputChange}
                       required={!useSizeStock}
                       min="0"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        formErrors.stock_level ? 'border-red-500' : 'border-gray-300'
-                      }`}
+                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.stock_level ? 'border-red-500' : 'border-gray-300'
+                        }`}
                     />
                     {formErrors.stock_level && (
                       <p className="mt-1 text-sm text-red-600">{formErrors.stock_level}</p>
@@ -554,7 +564,7 @@ const Inventory = () => {
                   </div>
                 )}
               </div>
-        
+
               <div>
                 <label htmlFor="product-description" className="block text-sm font-medium text-gray-700 mb-1">
                   Description
@@ -568,14 +578,13 @@ const Inventory = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-        
+
               <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4" role="group" aria-label="Form actions">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex-1 bg-blue-500 text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
-                  }`}
+                  className={`flex-1 bg-blue-500 text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
+                    }`}
                   aria-label={editingProduct ? 'Update product information' : 'Add product to inventory'}
                 >
                   {isSubmitting ? (
@@ -655,10 +664,10 @@ const Inventory = () => {
                       {product.stock_level}
                       {product.stock_by_size && Object.keys(product.stock_by_size).length > 0 && (
                         <div className="text-xs text-gray-500 mt-1">
-                           {Object.entries(product.stock_by_size)
-                             .filter(([_, qty]) => qty > 0)
-                             .map(([size, qty]) => `${size}:${qty}`)
-                             .join(', ')}
+                          {Object.entries(product.stock_by_size)
+                            .filter(([_, qty]) => qty > 0)
+                            .map(([size, qty]) => `${size}:${qty}`)
+                            .join(', ')}
                         </div>
                       )}
                     </td>
@@ -669,7 +678,7 @@ const Inventory = () => {
                     </td>
                     <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" role="cell">
                       <div role="group" aria-label={`Actions for ${product.name}`}>
-                        {isAdmin && (
+                        {canManageInventory && (
                           <button
                             onClick={() => handleEdit(product)}
                             className="text-indigo-600 hover:text-indigo-900 mr-2 sm:mr-3"
@@ -678,20 +687,20 @@ const Inventory = () => {
                             Edit
                           </button>
                         )}
-                        {isAdmin && (
+                        {canManageInventory && (
                           <button
                             onClick={() => {
                               const adjustment = prompt('Enter stock adjustment (positive to add, negative to remove):');
                               if (adjustment) {
                                 let size = null;
                                 if (product.stock_by_size && Object.keys(product.stock_by_size).length > 0) {
-                                   size = prompt(`Enter size to adjust (${Object.keys(product.stock_by_size).join(', ')}):`);
-                                   if (!size || !product.stock_by_size.hasOwnProperty(size)) {
-                                     alert('Invalid size selected');
-                                     return;
-                                   }
+                                  size = prompt(`Enter size to adjust (${Object.keys(product.stock_by_size).join(', ')}):`);
+                                  if (!size || !product.stock_by_size.hasOwnProperty(size)) {
+                                    alert('Invalid size selected');
+                                    return;
+                                  }
                                 }
-                                
+
                                 const reason = prompt('Enter reason for adjustment:');
                                 if (reason) {
                                   handleStockAdjustment(product.id, adjustment, reason, size);
@@ -702,6 +711,15 @@ const Inventory = () => {
                             aria-label={`Adjust stock for ${product.name}`}
                           >
                             Adjust
+                          </button>
+                        )}
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDelete(product)}
+                            className="text-red-600 hover:text-red-900 ml-2 sm:ml-3"
+                            aria-label={`Delete ${product.name}`}
+                          >
+                            Delete
                           </button>
                         )}
                       </div>

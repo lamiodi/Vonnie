@@ -20,7 +20,7 @@ const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [signupStatus, setSignupStatus] = useState(null);
-  
+
   // Available professions
   const AVAILABLE_PROFESSIONS = [
     { id: 'pedicurist', label: 'Pedicurist' },
@@ -28,7 +28,7 @@ const Signup = () => {
     { id: 'hairstylist', label: 'Hairstylist' },
     { id: 'lash_technician', label: 'Lash Technician' }
   ];
-  
+
   const { register } = useContext(AuthContext);
   const navigate = useNavigate();
 
@@ -58,21 +58,12 @@ const Signup = () => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    
-    // If changing role to manager, clear professions
-    if (name === 'role' && value === 'manager') {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value,
-        professions: []
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: value
-      }));
-    }
-    
+
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+
     if (error) setError('');
     if (success) setSuccess('');
   };
@@ -80,7 +71,7 @@ const Signup = () => {
   const handleProfessionToggle = (professionId) => {
     setFormData(prev => {
       const currentProfessions = prev.professions || [];
-      
+
       // If already selected, remove it
       if (currentProfessions.includes(professionId)) {
         return {
@@ -88,7 +79,7 @@ const Signup = () => {
           professions: currentProfessions.filter(id => id !== professionId)
         };
       }
-      
+
       // If not selected, add it (limit to 2)
       if (currentProfessions.length < 2) {
         return {
@@ -96,11 +87,11 @@ const Signup = () => {
           professions: [...currentProfessions, professionId]
         };
       }
-      
+
       // If already has 2, don't add
       return prev;
     });
-    
+
     if (error) setError('');
   };
 
@@ -125,13 +116,13 @@ const Signup = () => {
       setError('Please enter a valid phone number (at least 10 digits)');
       return false;
     }
-    
+
     // Validate role/professions
     if (formData.role === 'staff' && (!formData.professions || formData.professions.length === 0)) {
       setError('Please select at least one profession');
       return false;
     }
-    
+
     if (formData.password.length < 6) {
       setError('Password must be at least 6 characters long');
       return false;
@@ -145,21 +136,19 @@ const Signup = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) return;
-    
+
     setLoading(true);
     setError('');
     setSuccess('');
 
     try {
       // Combine professions into specialty string for backend compatibility
-      const specialty = formData.role === 'manager' 
-        ? 'Manager' 
-        : formData.professions.map(p => {
-            const profession = AVAILABLE_PROFESSIONS.find(ap => ap.id === p);
-            return profession ? profession.label : p;
-          }).join(', ');
+      const specialty = formData.professions.map(p => {
+        const profession = AVAILABLE_PROFESSIONS.find(ap => ap.id === p);
+        return profession ? profession.label : p;
+      }).join(', ');
 
       const submitData = {
         ...formData,
@@ -168,7 +157,7 @@ const Signup = () => {
 
       await register(submitData);
       setSuccess('Account created successfully! Redirecting to login...');
-      
+
       // Redirect to login after 2 seconds
       setTimeout(() => {
         navigate('/login');
@@ -189,10 +178,10 @@ const Signup = () => {
         <div className="max-w-md w-full space-y-6">
           <div className="text-center">
             <div className="mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-r from-gray-500 to-gray-600 shadow-2xl">
-              <svg 
-                className="h-12 w-12 text-white" 
-                fill="none" 
-                stroke="currentColor" 
+              <svg
+                className="h-12 w-12 text-white"
+                fill="none"
+                stroke="currentColor"
                 viewBox="0 0 24 24"
                 strokeWidth={2}
               >
@@ -230,10 +219,10 @@ const Signup = () => {
         {/* Header */}
         <div className="text-center">
           <div className="mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-2xl transform hover:scale-105 transition-transform duration-300">
-            <svg 
-              className="h-12 w-12 text-white" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="h-12 w-12 text-white"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
               strokeWidth={2}
             >
@@ -276,7 +265,7 @@ const Signup = () => {
                 />
               </div>
             </div>
-            
+
             {/* Email Field */}
             <div>
               <label htmlFor="email" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -303,7 +292,7 @@ const Signup = () => {
                 />
               </div>
             </div>
-            
+
             {/* Phone Number Field */}
             <div>
               <label htmlFor="phone" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -329,7 +318,7 @@ const Signup = () => {
                 />
               </div>
             </div>
-            
+
             {/* Role Field */}
             <div>
               <label htmlFor="role" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -350,11 +339,10 @@ const Signup = () => {
                   onChange={handleChange}
                 >
                   <option value="staff">Staff</option>
-                  <option value="manager">Manager</option>
                 </select>
               </div>
             </div>
-            
+
             {/* Profession Selection - Only show for staff role */}
             {formData.role === 'staff' && (
               <div>
@@ -366,7 +354,7 @@ const Signup = () => {
                   {AVAILABLE_PROFESSIONS.map((profession) => {
                     const isSelected = formData.professions.includes(profession.id);
                     const isDisabled = !isSelected && formData.professions.length >= 2;
-                    
+
                     return (
                       <button
                         key={profession.id}
@@ -375,8 +363,8 @@ const Signup = () => {
                         disabled={isDisabled}
                         className={`
                           px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all duration-200
-                          ${isSelected 
-                            ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-sm' 
+                          ${isSelected
+                            ? 'border-purple-500 bg-purple-50 text-purple-700 shadow-sm'
                             : isDisabled
                               ? 'border-gray-100 bg-gray-50 text-gray-400 cursor-not-allowed'
                               : 'border-gray-200 bg-white text-gray-600 hover:border-purple-200 hover:bg-gray-50'
@@ -394,7 +382,7 @@ const Signup = () => {
                 </p>
               </div>
             )}
-            
+
             {/* Password Field */}
             <div>
               <label htmlFor="password" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -437,7 +425,7 @@ const Signup = () => {
                 </button>
               </div>
             </div>
-            
+
             {/* Confirm Password Field */}
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-bold text-gray-700 mb-2 flex items-center gap-2">
@@ -533,8 +521,8 @@ const Signup = () => {
                 {loading ? (
                   <>
                     <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                     </svg>
                     <span>Creating Account...</span>
                   </>
@@ -563,7 +551,7 @@ const Signup = () => {
             </p>
           </div>
         </div>
-        
+
         {/* Footer */}
         <div className="text-center space-y-2">
           <p className="text-sm text-gray-600">
