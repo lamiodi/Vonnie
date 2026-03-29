@@ -4,10 +4,12 @@ import { useAuth } from '../contexts/AuthContext';
 
 const Inventory = () => {
   const { user, hasRole } = useAuth();
+  const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
+  const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddForm, setShowAddForm] = useState(false);
-  const [editingProduct, setEditingProduct] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scanningMode, setScanningMode] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
@@ -18,7 +20,9 @@ const Inventory = () => {
     price: '',
     category: '',
     stock_level: '',
-    stock_by_size: { S: 0, M: 0, L: 0, XL: 0 }
+    stock_by_size: { S: 0, M: 0, L: 0, XL: 0 },
+    duration: '',
+    max_duration: ''
   });
   const [useSizeStock, setUseSizeStock] = useState(false);
   const [formErrors, setFormErrors] = useState({});
@@ -30,6 +34,7 @@ const Inventory = () => {
 
   useEffect(() => {
     fetchProducts();
+    fetchServices();
   }, []);
 
   const fetchProducts = async () => {
@@ -38,48 +43,61 @@ const Inventory = () => {
       setProducts(Array.isArray(response) ? response : (response.data || []));
     } catch (error) {
       console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
     }
   };
+
+  const fetchServices = async () => {
+    try {
+      const response = await apiGet(API_ENDPOINTS.SERVICES);
+      setServices(Array.isArray(response) ? response : (response.data || []));
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      if (activeTab === 'services') setLoading(false);
+    }
+  };
+
+  // Update loading state when both are fetched
+  useEffect(() => {
+    if (products.length >= 0 && services.length >= 0) {
+      setLoading(false);
+    }
+  }, [products, services]);
 
   const validateForm = () => {
     const errors = {};
 
-    // Price validation
+    // Common Price validation
     if (!formData.price || parseFloat(formData.price) <= 0) {
       errors.price = 'Price must be greater than 0';
-    } else if (parseFloat(formData.price) > 1000000) {
-      errors.price = 'Price cannot exceed ₦1,000,000';
     }
 
-    // Stock validation
-    if (!useSizeStock) {
-      if (formData.stock_level === '' || parseInt(formData.stock_level) < 0) {
-        errors.stock_level = 'Stock level cannot be negative';
-      } else if (parseInt(formData.stock_level) > 100000) {
-        errors.stock_level = 'Stock level cannot exceed 100,000';
-      }
-    } else {
-      // Validate size stocks
-      const sizes = ['S', 'M', 'L', 'XL'];
-      let total = 0;
-      sizes.forEach(size => {
-        const val = parseInt(formData.stock_by_size[size] || 0);
-        if (val < 0) {
-          errors[`stock_${size}`] = `${size} stock cannot be negative`;
+    if (activeTab === 'products') {
+      // Stock validation
+      if (!useSizeStock) {
+        if (formData.stock_level === '' || parseInt(formData.stock_level) < 0) {
+          errors.stock_level = 'Stock level cannot be negative';
         }
-        total += val;
-      });
-      if (total > 100000) {
-        errors.stock_by_size = 'Total stock cannot exceed 100,000';
+      } else {
+        // Validate size stocks
+        const sizes = ['S', 'M', 'L', 'XL'];
+        sizes.forEach(size => {
+          if (parseInt(formData.stock_by_size[size] || 0) < 0) {
+            errors[`stock_${size}`] = `${size} stock cannot be negative`;
+          }
+        });
       }
+      if (!formData.name.trim()) errors.name = 'Product name is required';
+      if (!formData.sku.trim()) errors.sku = 'SKU is required';
+      if (!formData.category.trim()) errors.category = 'Category is required';
+    } else {
+      // Service validation
+      if (!formData.duration || parseInt(formData.duration) <= 0) {
+        errors.duration = 'Duration is required';
+      }
+      if (!formData.name.trim()) errors.name = 'Service name is required';
+      if (!formData.category.trim()) errors.category = 'Category is required';
     }
-
-    // Required fields validation
-    if (!formData.name.trim()) errors.name = 'Product name is required';
-    if (!formData.sku.trim()) errors.sku = 'SKU is required';
-    if (!formData.category.trim()) errors.category = 'Category is required';
 
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
@@ -114,69 +132,77 @@ const Inventory = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validate form before submission
-    if (!validateForm()) {
-      return;
-    }
-
+    if (!validateForm()) return;
     setIsSubmitting(true);
-
     try {
-      // Format data for API
-      const submitData = {
-        ...formData,
-        price: parseFloat(formData.price).toFixed(2),
-      };
-
-      if (useSizeStock) {
-        submitData.stock_by_size = formData.stock_by_size;
-        // Calculate total stock level from sizes
-        submitData.stock_level = Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0);
+      if (activeTab === 'products') {
+        const submitData = {
+          ...formData,
+          price: parseFloat(formData.price).toFixed(2),
+          stock_level: useSizeStock
+            ? Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0)
+            : parseInt(formData.stock_level),
+          stock_by_size: useSizeStock ? formData.stock_by_size : null
+        };
+        if (editingItem) {
+          await apiPut(`${API_ENDPOINTS.INVENTORY}/${editingItem.id}`, submitData);
+        } else {
+          await apiPost(API_ENDPOINTS.INVENTORY, submitData);
+        }
+        fetchProducts();
       } else {
-        submitData.stock_level = parseInt(formData.stock_level);
-        submitData.stock_by_size = null; // Or empty object if preferred
+        const serviceData = {
+          name: formData.name,
+          description: formData.description,
+          price: parseFloat(formData.price),
+          duration: parseInt(formData.duration),
+          max_duration: formData.max_duration ? parseInt(formData.max_duration) : null,
+          category: formData.category
+        };
+        if (editingItem) {
+          await apiPut(`${API_ENDPOINTS.SERVICES}/${editingItem.id}`, serviceData);
+        } else {
+          await apiPost(API_ENDPOINTS.SERVICES, serviceData);
+        }
+        fetchServices();
       }
 
-      if (editingProduct) {
-        await apiPut(`${API_ENDPOINTS.INVENTORY}/${editingProduct.id}`, submitData);
-      } else {
-        await apiPost(API_ENDPOINTS.INVENTORY, submitData);
-      }
-
-      fetchProducts();
       resetForm();
-      alert(editingProduct ? 'Product updated successfully!' : 'Product added successfully!');
+      alert(`${activeTab === 'products' ? 'Product' : 'Service'} saved successfully!`);
     } catch (error) {
-      console.error('Error saving product:', error);
-
-      // Handle specific error cases
-      if (error.response?.status === 409) {
-        alert('A product with this SKU already exists.');
-      } else if (error.response?.status === 400) {
-        alert('Invalid data. Please check your inputs.');
-      } else {
-        alert('Error saving product. Please try again.');
-      }
+      console.error('Error saving:', error);
+      alert(error.error?.message || 'Error saving. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEdit = (product) => {
-    setEditingProduct(product);
-    const hasSizeStock = product.stock_by_size && Object.keys(product.stock_by_size).length > 0;
-    setUseSizeStock(hasSizeStock);
-
-    setFormData({
-      name: product.name,
-      description: product.description || '',
-      sku: product.sku,
-      price: product.price,
-      category: product.category,
-      stock_level: product.stock_level,
-      stock_by_size: hasSizeStock ? product.stock_by_size : { S: 0, M: 0, L: 0, XL: 0 }
-    });
+  const handleEdit = (item) => {
+    setEditingItem(item);
+    if (activeTab === 'products') {
+      const hasSizeStock = item.stock_by_size && Object.keys(item.stock_by_size).length > 0;
+      setUseSizeStock(hasSizeStock);
+      setFormData({
+        ...formData,
+        name: item.name,
+        description: item.description || '',
+        sku: item.sku,
+        price: item.price,
+        category: item.category,
+        stock_level: item.stock_level,
+        stock_by_size: hasSizeStock ? item.stock_by_size : { S: 0, M: 0, L: 0, XL: 0 }
+      });
+    } else {
+      setFormData({
+        ...formData,
+        name: item.name,
+        description: item.description || '',
+        price: item.price,
+        category: item.category,
+        duration: item.duration,
+        max_duration: item.max_duration || ''
+      });
+    }
     setShowAddForm(true);
   };
 
@@ -195,17 +221,17 @@ const Inventory = () => {
     }
   };
 
-  const handleDelete = async (product) => {
-    if (!window.confirm(`Are you sure you want to delete "${product.name}"?\n\nThis action will remove the product from inventory. Historical transaction records will be preserved.`)) {
-      return;
-    }
+  const handleDelete = async (item) => {
+    const type = activeTab === 'products' ? 'product' : 'service';
+    if (!window.confirm(`Are you sure you want to delete this ${type} "${item.name}"?`)) return;
     try {
-      await apiDelete(`${API_ENDPOINTS.INVENTORY}/${product.id}`);
-      fetchProducts();
-      alert('Product deleted successfully!');
+      const endpoint = activeTab === 'products' ? API_ENDPOINTS.INVENTORY : API_ENDPOINTS.SERVICES;
+      await apiDelete(`${endpoint}/${item.id}`);
+      activeTab === 'products' ? fetchProducts() : fetchServices();
+      alert(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
     } catch (error) {
-      console.error('Error deleting product:', error);
-      alert(error?.error?.message || 'Error deleting product. Please try again.');
+      console.error('Error deleting:', error);
+      alert(error?.error?.message || 'Error deleting. Please try again.');
     }
   };
 
@@ -217,11 +243,14 @@ const Inventory = () => {
       price: '',
       category: '',
       stock_level: '',
-      stock_by_size: { S: 0, M: 0, L: 0, XL: 0 }
+      stock_by_size: { S: 0, M: 0, L: 0, XL: 0 },
+      duration: '',
+      max_duration: ''
     });
     setUseSizeStock(false);
-    setEditingProduct(null);
+    setEditingItem(null);
     setShowAddForm(false);
+    setFormErrors({});
   };
 
   const getStockStatus = (stockLevel) => {
@@ -306,9 +335,12 @@ const Inventory = () => {
   }
 
   return (
-    <div className="p-4 sm:p-6">
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 space-y-4 sm:space-y-0" role="banner">
-        <h2 className="text-xl sm:text-2xl font-bold text-gray-800">Inventory Management</h2>
+    <div className="p-4 sm:p-6 lg:p-8 max-w-full">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Inventory & Services</h1>
+          <p className="text-gray-600">Manage your product stock and service offerings</p>
+        </div>
         <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
           <button
             onClick={toggleScanningMode}
@@ -322,286 +354,375 @@ const Inventory = () => {
           </button>
           {canManageInventory && (
             <button
-              onClick={() => setShowAddForm(true)}
-              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              aria-label="Add new product to inventory"
+              onClick={() => {
+                resetForm();
+                setShowAddForm(true);
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
             >
-              Add Product
+              Add {activeTab === 'products' ? 'Product' : 'Service'}
             </button>
           )}
         </div>
       </div>
 
-      {/* Barcode Scanner Section */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <h3 className="text-lg font-semibold text-gray-700 mb-3">
-          🔍 SKU Scanner {scanningMode && <span className="text-green-600">(Active)</span>}
-        </h3>
-        <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 mb-4">
-          <input
-            type="text"
-            placeholder="Scan or enter SKU..."
-            value={barcodeInput}
-            onChange={handleBarcodeInput}
-            className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            aria-label="SKU input field"
-            autoFocus={scanningMode}
-          />
-          <button
-            onClick={() => searchProductByBarcode(barcodeInput)}
-            disabled={!barcodeInput.trim()}
-            className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-label="Search product by SKU"
-          >
-            Search
-          </button>
-        </div>
-
-        {/* Scanned Product Display */}
-        {scannedProduct && (
-          <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-            <h4 className="font-semibold text-green-800 mb-2">Product Found:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-3">
-              <div><strong>Name:</strong> {scannedProduct.name}</div>
-              <div><strong>SKU:</strong> {scannedProduct.sku}</div>
-              <div><strong>Stock:</strong> {scannedProduct.stock_level}</div>
-              <div><strong>Price:</strong> ₦{parseFloat(scannedProduct.price || 0).toFixed(2)}</div>
-            </div>
-            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-              {canManageInventory && (
-                <button
-                  onClick={() => quickStockAdjustment(1)}
-                  className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
-                  aria-label="Add 1 to stock"
-                >
-                  +1 Stock
-                </button>
-              )}
-              {canManageInventory && (
-                <button
-                  onClick={() => quickStockAdjustment(-1)}
-                  className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
-                  aria-label="Remove 1 from stock"
-                >
-                  -1 Stock
-                </button>
-              )}
-              {canManageInventory && (
-                <button
-                  onClick={() => handleEdit(scannedProduct)}
-                  className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-                  aria-label="Edit product details"
-                >
-                  Edit Product
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 mb-6 sticky top-0 bg-white z-10">
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`py-2 px-6 font-medium text-sm transition-colors duration-200 border-b-2 ${activeTab === 'products'
+            ? 'border-blue-500 text-blue-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+        >
+          📦 Products
+        </button>
+        <button
+          onClick={() => setActiveTab('services')}
+          className={`py-2 px-6 font-medium text-sm transition-colors duration-200 border-b-2 ${activeTab === 'services'
+            ? 'border-blue-500 text-blue-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+        >
+          💇‍♀️ Services
+        </button>
       </div>
 
-      {/* Add/Edit Product Form */}
-      {showAddForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-labelledby="form-title">
-          <div className="bg-white p-4 sm:p-6 rounded-lg shadow-lg w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 id="form-title" className="text-lg font-semibold">
-                {editingProduct ? 'Edit Product' : 'Add New Product'}
-              </h3>
+      {/* Content based on active tab */}
+      {activeTab === 'products' ? (
+        <>
+          {/* Barcode Scanner Section */}
+          <div className="bg-white p-4 rounded-lg shadow mb-6">
+            <h3 className="text-lg font-semibold text-gray-700 mb-3">
+              🔍 SKU Scanner {scanningMode && <span className="text-green-600">(Active)</span>}
+            </h3>
+            <div className="flex flex-col sm:flex-row sm:space-x-3 space-y-3 sm:space-y-0 mb-4">
+              <input
+                type="text"
+                placeholder="Scan or enter SKU..."
+                value={barcodeInput}
+                onChange={handleBarcodeInput}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="SKU input field"
+                autoFocus={scanningMode}
+              />
               <button
-                onClick={resetForm}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close form"
+                onClick={() => searchProductByBarcode(barcodeInput)}
+                disabled={!barcodeInput.trim()}
+                className="px-6 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Search product by SKU"
               >
-                ✕
+                Search
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-4" role="form" aria-label={editingProduct ? 'Edit product form' : 'Add new product form'}>
+            {/* Scanned Product Display */}
+            {scannedProduct && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                <h4 className="font-semibold text-green-800 mb-2">Product Found:</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm mb-3">
+                  <div><strong>Name:</strong> {scannedProduct.name}</div>
+                  <div><strong>SKU:</strong> {scannedProduct.sku}</div>
+                  <div><strong>Stock:</strong> {scannedProduct.stock_level}</div>
+                  <div><strong>Price:</strong> ₦{parseFloat(scannedProduct.price || 0).toFixed(2)}</div>
+                </div>
+                <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
+                  {canManageInventory && (
+                    <button
+                      onClick={() => quickStockAdjustment(1)}
+                      className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
+                      aria-label="Add 1 to stock"
+                    >
+                      +1 Stock
+                    </button>
+                  )}
+                  {canManageInventory && (
+                    <button
+                      onClick={() => quickStockAdjustment(-1)}
+                      className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
+                      aria-label="Remove 1 from stock"
+                    >
+                      -1 Stock
+                    </button>
+                  )}
+                  {canManageInventory && (
+                    <button
+                      onClick={() => handleEdit(scannedProduct)}
+                      className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+                      aria-label="Edit product details"
+                    >
+                      Edit Product
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Products Table */}
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                    <th className="hidden md:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SKU</th>
+                    <th className="hidden sm:table-cell px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {products.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">No products found</td>
+                    </tr>
+                  ) : (
+                    products.map((product) => {
+                      const stockStatus = getStockStatus(product.stock_level);
+                      return (
+                        <tr key={product.id}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                          </td>
+                          <td className="hidden md:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.sku}</td>
+                          <td className="hidden sm:table-cell px-6 py-4 whitespace-nowrap text-sm text-gray-500">{product.category}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{parseFloat(product.price).toLocaleString()}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {product.stock_level}
+                            {product.stock_by_size && Object.keys(product.stock_by_size).length > 0 && (
+                              <div className="text-xs text-gray-400">
+                                {Object.entries(product.stock_by_size)
+                                  .filter(([_, q]) => q > 0)
+                                  .map(([s, q]) => `${s}:${q}`)
+                                  .join(' ')}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>{stockStatus.status}</span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            {canManageInventory && (
+                              <>
+                                <button onClick={() => handleEdit(product)} className="text-blue-600 hover:text-blue-900">Edit</button>
+                                <button onClick={() => {
+                                  const adj = prompt('Adjustment amount (+/-):');
+                                  if (adj) handleStockAdjustment(product.id, adj, 'Manual adjustment');
+                                }} className="text-green-600 hover:text-green-900">Adjust</button>
+                                <button onClick={() => handleDelete(product)} className="text-red-600 hover:text-red-900">Delete</button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      ) : (
+        /* Services Table */
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Service Name</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {services.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No services found</td>
+                  </tr>
+                ) : (
+                  services.map((service) => (
+                    <tr key={service.id}>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-medium text-gray-900">{service.name}</div>
+                        <div className="text-xs text-gray-500 truncate max-w-xs">{service.description}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{service.category}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{parseFloat(service.price).toLocaleString()}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{service.duration} - {service.max_duration || service.duration} mins</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        {canManageInventory && (
+                          <>
+                            <button onClick={() => handleEdit(service)} className="text-blue-600 hover:text-blue-900">Edit</button>
+                            <button onClick={() => handleDelete(service)} className="text-red-600 hover:text-red-900">Delete</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Form Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold">
+                {editingItem ? 'Edit' : 'Add'} {activeTab === 'products' ? 'Product' : 'Service'}
+              </h3>
+              <button onClick={resetForm} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label htmlFor="product-name" className="block text-sm font-medium text-gray-700 mb-1">
-                  Product Name *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Name *</label>
                 <input
-                  id="product-name"
                   type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleInputChange}
-                  required
-                  aria-required="true"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.name ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                  className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.name ? 'border-red-500' : 'border-gray-300'}`}
                 />
-                {formErrors.name && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.name}</p>
-                )}
+                {formErrors.name && <p className="text-xs text-red-500 mt-1">{formErrors.name}</p>}
               </div>
 
-              <div>
-                <label htmlFor="product-sku" className="block text-sm font-medium text-gray-700 mb-1">
-                  SKU *
-                </label>
-                <input
-                  id="product-sku"
-                  type="text"
-                  name="sku"
-                  value={formData.sku}
-                  onChange={handleInputChange}
-                  required
-                  aria-required="true"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.sku ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                />
-                {formErrors.sku && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.sku}</p>
-                )}
-              </div>
+              {activeTab === 'products' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">SKU *</label>
+                  <input
+                    type="text"
+                    name="sku"
+                    value={formData.sku}
+                    onChange={handleInputChange}
+                    className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.sku ? 'border-red-500' : 'border-gray-300'}`}
+                  />
+                  {formErrors.sku && <p className="text-xs text-red-500 mt-1">{formErrors.sku}</p>}
+                </div>
+              )}
 
               <div>
-                <label htmlFor="product-price" className="block text-sm font-medium text-gray-700 mb-1">
-                  Price (₦) *
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Category *</label>
                 <input
-                  id="product-price"
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  required
-                  aria-required="true"
-                  min="0"
-                  step="0.01"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.price ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                />
-                {formErrors.price && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.price}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="product-category" className="block text-sm font-medium text-gray-700 mb-1">
-                  Category *
-                </label>
-                <input
-                  id="product-category"
                   type="text"
                   name="category"
                   value={formData.category}
                   onChange={handleInputChange}
-                  required
-                  aria-required="true"
-                  placeholder="Enter product category"
-                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.category ? 'border-red-500' : 'border-gray-300'
-                    }`}
+                  className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.category ? 'border-red-500' : 'border-gray-300'}`}
                 />
-                {formErrors.category && (
-                  <p className="mt-1 text-sm text-red-600" role="alert">{formErrors.category}</p>
-                )}
+                {formErrors.category && <p className="text-xs text-red-500 mt-1">{formErrors.category}</p>}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Stock Management
-                </label>
-                <div className="flex items-center mb-3">
-                  <input
-                    id="use-size-stock"
-                    type="checkbox"
-                    checked={useSizeStock}
-                    onChange={(e) => setUseSizeStock(e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="use-size-stock" className="ml-2 block text-sm text-gray-900">
-                    Track stock by size (S, M, L, XL)
-                  </label>
-                </div>
+                <label className="block text-sm font-medium text-gray-700">Price (₦) *</label>
+                <input
+                  type="number"
+                  name="price"
+                  value={formData.price}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.price ? 'border-red-500' : 'border-gray-300'}`}
+                />
+                {formErrors.price && <p className="text-xs text-red-500 mt-1">{formErrors.price}</p>}
+              </div>
 
-                {useSizeStock ? (
-                  <div className="grid grid-cols-4 gap-2">
-                    {['S', 'M', 'L', 'XL'].map((size) => (
-                      <div key={size}>
-                        <label htmlFor={`stock-${size}`} className="block text-xs font-medium text-gray-700 mb-1">
-                          Size {size}
-                        </label>
-                        <input
-                          id={`stock-${size}`}
-                          type="number"
-                          value={formData.stock_by_size[size]}
-                          onChange={(e) => handleSizeStockChange(size, e.target.value)}
-                          min="0"
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                        />
-                        {formErrors[`stock_${size}`] && (
-                          <p className="mt-1 text-xs text-red-600">{formErrors[`stock_${size}`]}</p>
-                        )}
-                      </div>
-                    ))}
-                    {formErrors.stock_by_size && (
-                      <div className="col-span-4 mt-1 text-sm text-red-600">{formErrors.stock_by_size}</div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <label htmlFor="product-stock" className="block text-sm font-medium text-gray-700 mb-1">
-                      Stock Level *
-                    </label>
+              {activeTab === 'services' ? (
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700">Duration (min) *</label>
                     <input
-                      id="product-stock"
                       type="number"
-                      name="stock_level"
-                      value={formData.stock_level}
+                      name="duration"
+                      value={formData.duration}
                       onChange={handleInputChange}
-                      required={!useSizeStock}
-                      min="0"
-                      className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors.stock_level ? 'border-red-500' : 'border-gray-300'
-                        }`}
+                      className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.duration ? 'border-red-500' : 'border-gray-300'}`}
                     />
-                    {formErrors.stock_level && (
-                      <p className="mt-1 text-sm text-red-600">{formErrors.stock_level}</p>
-                    )}
+                    {formErrors.duration && <p className="text-xs text-red-500 mt-1">{formErrors.duration}</p>}
                   </div>
-                )}
-              </div>
+                  <div className="flex-1">
+                    <label className="block text-sm font-medium text-gray-700">Max Duration</label>
+                    <input
+                      type="number"
+                      name="max_duration"
+                      value={formData.max_duration}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md mt-1"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Product Stock Section */
+                <div>
+                  <div className="flex items-center mb-2">
+                    <input
+                      type="checkbox"
+                      id="useSize"
+                      checked={useSizeStock}
+                      onChange={(e) => setUseSizeStock(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="useSize" className="ml-2 block text-sm text-gray-900">Track by Size</label>
+                  </div>
+
+                  {useSizeStock ? (
+                    <div className="grid grid-cols-4 gap-2">
+                      {['S', 'M', 'L', 'XL'].map(size => (
+                        <div key={size}>
+                          <label className="text-xs font-semibold">{size}</label>
+                          <input
+                            type="number"
+                            value={formData.stock_by_size[size]}
+                            onChange={(e) => handleSizeStockChange(size, e.target.value)}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Stock Level *</label>
+                      <input
+                        type="number"
+                        name="stock_level"
+                        value={formData.stock_level}
+                        onChange={handleInputChange}
+                        className={`w-full px-3 py-2 border rounded-md mt-1 ${formErrors.stock_level ? 'border-red-500' : 'border-gray-300'}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div>
-                <label htmlFor="product-description" className="block text-sm font-medium text-gray-700 mb-1">
-                  Description
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea
-                  id="product-description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md mt-1"
                 />
               </div>
 
-              <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 pt-4" role="group" aria-label="Form actions">
+              <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className={`flex-1 bg-blue-500 text-white py-2 px-4 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'
-                    }`}
-                  aria-label={editingProduct ? 'Update product information' : 'Add product to inventory'}
+                  className="flex-1 bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {isSubmitting ? (
-                    <span className="flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      {editingProduct ? 'Updating...' : 'Adding...'}
-                    </span>
-                  ) : (
-                    editingProduct ? 'Update Product' : 'Add Product'
-                  )}
+                  {isSubmitting ? 'Saving...' : 'Save Changes'}
                 </button>
                 <button
                   type="button"
                   onClick={resetForm}
-                  disabled={isSubmitting}
-                  className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="Cancel and close form"
+                  className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-md hover:bg-gray-200"
                 >
                   Cancel
                 </button>
@@ -610,127 +731,6 @@ const Inventory = () => {
           </div>
         </div>
       )}
-
-      {/* Products Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden" role="region" aria-label="Inventory products table">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200" role="table" aria-label="Products inventory">
-            <thead className="bg-gray-50">
-              <tr role="row">
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Product
-                </th>
-                <th className="hidden md:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  SKU
-                </th>
-                <th className="hidden sm:table-cell px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Category
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Price
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Stock
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Status
-                </th>
-                <th className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider" role="columnheader" scope="col">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {products.map((product) => {
-                const stockStatus = getStockStatus(product.stock_level);
-                return (
-                  <tr key={product.id} role="row">
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap" role="cell">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                        <div className="text-sm text-gray-500 md:hidden">{product.sku}</div>
-                      </div>
-                    </td>
-                    <td className="hidden md:table-cell px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900" role="cell">
-                      {product.sku}
-                    </td>
-                    <td className="hidden sm:table-cell px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900" role="cell">
-                      {product.category}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900" role="cell">
-                      ₦{product.price}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900" role="cell">
-                      {product.stock_level}
-                      {product.stock_by_size && Object.keys(product.stock_by_size).length > 0 && (
-                        <div className="text-xs text-gray-500 mt-1">
-                          {Object.entries(product.stock_by_size)
-                            .filter(([_, qty]) => qty > 0)
-                            .map(([size, qty]) => `${size}:${qty}`)
-                            .join(', ')}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap" role="cell">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${stockStatus.color}`} role="status" aria-label={`Stock status: ${stockStatus.status}`}>
-                        {stockStatus.status}
-                      </span>
-                    </td>
-                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium" role="cell">
-                      <div role="group" aria-label={`Actions for ${product.name}`}>
-                        {canManageInventory && (
-                          <button
-                            onClick={() => handleEdit(product)}
-                            className="text-indigo-600 hover:text-indigo-900 mr-2 sm:mr-3"
-                            aria-label={`Edit ${product.name}`}
-                          >
-                            Edit
-                          </button>
-                        )}
-                        {canManageInventory && (
-                          <button
-                            onClick={() => {
-                              const adjustment = prompt('Enter stock adjustment (positive to add, negative to remove):');
-                              if (adjustment) {
-                                let size = null;
-                                if (product.stock_by_size && Object.keys(product.stock_by_size).length > 0) {
-                                  size = prompt(`Enter size to adjust (${Object.keys(product.stock_by_size).join(', ')}):`);
-                                  if (!size || !product.stock_by_size.hasOwnProperty(size)) {
-                                    alert('Invalid size selected');
-                                    return;
-                                  }
-                                }
-
-                                const reason = prompt('Enter reason for adjustment:');
-                                if (reason) {
-                                  handleStockAdjustment(product.id, adjustment, reason, size);
-                                }
-                              }
-                            }}
-                            className="text-green-600 hover:text-green-900"
-                            aria-label={`Adjust stock for ${product.name}`}
-                          >
-                            Adjust
-                          </button>
-                        )}
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete(product)}
-                            className="text-red-600 hover:text-red-900 ml-2 sm:ml-3"
-                            aria-label={`Delete ${product.name}`}
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 };
