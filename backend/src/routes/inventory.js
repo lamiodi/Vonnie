@@ -293,8 +293,8 @@ router.post('/adjust/:id', authenticate, authorize(['admin', 'manager']), async 
   }
 });
 
-// Delete product (soft delete - admin only)
-router.delete('/:id', authenticate, authorize(['admin']), async (req, res) => {
+// Delete product (soft delete - admin and manager)
+router.delete('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   const { id } = req.params;
 
   try {

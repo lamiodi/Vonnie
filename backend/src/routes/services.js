@@ -262,7 +262,7 @@ router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, re
 });
 
 // Delete service
-router.delete('/:id', authenticate, authorize(['admin']), async (req, res) => {
+router.delete('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
     const { id } = req.params;
     
