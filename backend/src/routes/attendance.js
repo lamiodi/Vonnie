@@ -13,7 +13,7 @@ const BUSINESS_LOCATION = {
 
 // Work hours configuration (Lagos Time)
 const WORK_HOURS = {
-  RESUMPTION: { HOUR: 8, MINUTE: 30 }, // 8:30 AM
+  RESUMPTION: { HOUR: 9, MINUTE: 0 }, // 9:00 AM
   CLOSING: { HOUR: 20, MINUTE: 30 }   // 8:30 PM
 };
 

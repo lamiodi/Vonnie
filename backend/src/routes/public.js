@@ -170,9 +170,9 @@ router.get('/bookings/available-slots', async (req, res) => {
       endHour = 19;   // 7 PM
       closingTime = new Date(`${date}T19:00:00`);
     } else {
-      // Mon, Wed-Sat: 8:30 AM to 8:30 PM
-      startHour = 8;  // startHour stays 8 for the loop, but minute check will shift
-      startMinute = 30; // 8:30 AM
+      // Mon, Wed-Sat: 9:00 AM to 8:30 PM
+      startHour = 9;  // 9 AM
+      startMinute = 0; // 00 mins
       endHour = 20;   // 8 PM (for loop limit)
       closingTime = new Date(`${date}T20:30:00`);
     }
@@ -233,9 +233,9 @@ router.get('/bookings/available-slots', async (req, res) => {
       startMinute = 0; // 00 mins
       endHour = 19;   // 7 PM
     } else {
-      // Mon, Wed-Sat: 8:30 AM to 8:30 PM
-      startHour = 8;  // 8 AM
-      startMinute = 30; // 30 mins
+      // Mon, Wed-Sat: 9:00 AM to 8:30 PM
+      startHour = 9;  // 9 AM
+      startMinute = 0; // 00 mins
       endHour = 20;   // 8 PM (for loop limit)
     }
 
