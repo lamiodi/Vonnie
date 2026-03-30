@@ -1405,15 +1405,13 @@ const POS = () => {
               <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2">
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs font-semibold text-gray-700">MISCELLANEOUS CHARGES</p>
-                  {(user?.role === 'manager' || user?.role === 'admin') && (
-                    <button
-                      onClick={addMiscCharge}
-                      className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition shadow-sm"
-                      title="Add miscellaneous charge"
-                    >
-                      + Add Charge
-                    </button>
-                  )}
+                  <button
+                    onClick={addMiscCharge}
+                    className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition shadow-sm"
+                    title="Add miscellaneous charge"
+                  >
+                    + Add Charge
+                  </button>
                 </div>
 
                 {miscCharges.length > 0 ? (
@@ -1423,17 +1421,15 @@ const POS = () => {
                         <span className="truncate flex-1">- {charge.name}</span>
                         <div className="flex items-center gap-2">
                           <span className="font-bold text-gray-900">₦{formatPrice(charge.amount || 0)}</span>
-                          {(user?.role === 'manager' || user?.role === 'admin') && (
-                            <button
-                              onClick={() => removeMiscCharge(idx)}
-                              className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition p-1"
-                              title="Remove charge"
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                              </svg>
-                            </button>
-                          )}
+                          <button
+                            onClick={() => removeMiscCharge(idx)}
+                            className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition p-1"
+                            title="Remove charge"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
                         </div>
                       </div>
                     ))}
