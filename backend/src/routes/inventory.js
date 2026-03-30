@@ -91,7 +91,7 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
 });
 
 // Update product stock (quick adjustment)
-router.patch('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.patch('/:id', authenticate, authorize(['admin']), async (req, res) => {
   const { id } = req.params;
   const { stock_level, stock_by_size } = req.body;
 
@@ -150,7 +150,7 @@ router.patch('/:id', authenticate, authorize(['admin', 'manager']), async (req, 
 });
 
 // Full product update
-router.put('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.put('/:id', authenticate, authorize(['admin']), async (req, res) => {
   const { id } = req.params;
   const { name, description, sku, price, category, stock_level, stock_by_size } = req.body;
 
@@ -217,7 +217,7 @@ router.get('/barcode/:barcode', authenticate, async (req, res) => {
 });
 
 // Log stock adjustment
-router.post('/adjust/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+router.post('/adjust/:id', authenticate, authorize(['admin']), async (req, res) => {
   const { id } = req.params;
   const { adjustment, reason, size } = req.body; // Added size parameter
   const client = await getClient();
@@ -298,8 +298,8 @@ router.post('/adjust/:id', authenticate, authorize(['admin', 'manager']), async 
   }
 });
 
-// Delete product (soft delete - admin and manager)
-router.delete('/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+// Delete product (soft delete - admin only)
+router.delete('/:id', authenticate, authorize(['admin']), async (req, res) => {
   const { id } = req.params;
 
   try {

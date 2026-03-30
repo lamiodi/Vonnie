@@ -32,6 +32,7 @@ const Inventory = () => {
   const isAdmin = hasRole('admin');
   const isManager = hasRole('manager');
   const canManageInventory = isAdmin || isManager;
+  const canEditOrDelete = isAdmin;
 
   useEffect(() => {
     fetchProducts();
@@ -218,20 +219,7 @@ const Inventory = () => {
     setShowAddForm(true);
   };
 
-  const handleStockAdjustment = async (productId, adjustment, reason, size = null) => {
-    try {
-      await apiPost(`${API_ENDPOINTS.INVENTORY}/adjust/${productId}`, {
-        adjustment: parseInt(adjustment),
-        reason,
-        size
-      });
-      fetchProducts();
-      alert('Stock adjusted successfully!');
-    } catch (error) {
-      console.error('Error adjusting stock:', error);
-      alert('Error adjusting stock. Please try again.');
-    }
-  };
+              {/* Add/Edit Form Modal logic */}
 
   const handleDelete = async (item) => {
     const type = activeTab === 'products' ? 'product' : 'service';
@@ -312,29 +300,6 @@ const Inventory = () => {
     setScanningMode(!scanningMode);
     setBarcodeInput('');
     setScannedProduct(null);
-  };
-
-  const quickStockAdjustment = async (adjustment) => {
-    if (!scannedProduct) return;
-
-    // Check if product has sizes
-    const hasSizeStock = scannedProduct.stock_by_size && Object.keys(scannedProduct.stock_by_size).length > 0;
-
-    let size = null;
-    if (hasSizeStock) {
-      size = prompt(`Enter size to adjust (${Object.keys(scannedProduct.stock_by_size).join(', ')}):`);
-      if (!size || !scannedProduct.stock_by_size.hasOwnProperty(size)) {
-        alert('Invalid size selected');
-        return;
-      }
-    }
-
-    const reason = prompt('Enter reason for stock adjustment:');
-    if (reason) {
-      await handleStockAdjustment(scannedProduct.id, adjustment, reason, size);
-      setScannedProduct(null);
-      setBarcodeInput('');
-    }
   };
 
   if (loading) {
@@ -448,25 +413,7 @@ const Inventory = () => {
                   <div><strong>Price:</strong> ₦{parseFloat(scannedProduct.price || 0).toFixed(2)}</div>
                 </div>
                 <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                  {canManageInventory && (
-                    <button
-                      onClick={() => quickStockAdjustment(1)}
-                      className="px-3 py-1 bg-green-500 text-white text-sm rounded hover:bg-green-600"
-                      aria-label="Add 1 to stock"
-                    >
-                      +1 Stock
-                    </button>
-                  )}
-                  {canManageInventory && (
-                    <button
-                      onClick={() => quickStockAdjustment(-1)}
-                      className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600"
-                      aria-label="Remove 1 from stock"
-                    >
-                      -1 Stock
-                    </button>
-                  )}
-                  {canManageInventory && (
+                  {canEditOrDelete && (
                     <button
                       onClick={() => handleEdit(scannedProduct)}
                       className="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
@@ -528,13 +475,9 @@ const Inventory = () => {
                             <span className={`px-2 py-1 text-xs rounded-full ${stockStatus.color}`}>{stockStatus.status}</span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                            {canManageInventory && (
+                            {canEditOrDelete && (
                               <>
                                 <button onClick={() => handleEdit(product)} className="text-blue-600 hover:text-blue-900">Edit</button>
-                                <button onClick={() => {
-                                  const adj = prompt('Adjustment amount (+/-):');
-                                  if (adj) handleStockAdjustment(product.id, adj, 'Manual adjustment');
-                                }} className="text-green-600 hover:text-green-900">Adjust</button>
                                 <button onClick={() => handleDelete(product)} className="text-red-600 hover:text-red-900">Delete</button>
                               </>
                             )}
@@ -580,7 +523,7 @@ const Inventory = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₦{parseFloat(service.price).toLocaleString()}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{service.duration} - {service.max_duration || service.duration} mins</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        {canManageInventory && (
+                        {canEditOrDelete && (
                           <>
                             <button onClick={() => handleEdit(service)} className="text-blue-600 hover:text-blue-900">Edit</button>
                             <button onClick={() => handleDelete(service)} className="text-red-600 hover:text-red-900">Delete</button>
