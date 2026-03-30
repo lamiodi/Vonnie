@@ -13,6 +13,7 @@ const Inventory = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [scanningMode, setScanningMode] = useState(false);
   const [scannedProduct, setScannedProduct] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -57,12 +58,23 @@ const Inventory = () => {
     }
   };
 
-  // Update loading state when both are fetched
-  useEffect(() => {
     if (products.length >= 0 && services.length >= 0) {
       setLoading(false);
     }
   }, [products, services]);
+
+  // Derived filtered data
+  const filteredProducts = products.filter(p => 
+    p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredServices = services.filter(s => 
+    s.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.description?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const validateForm = () => {
     const errors = {};
@@ -386,6 +398,15 @@ const Inventory = () => {
         >
           💇‍♀️ Services
         </button>
+        <div className="ml-auto w-1/3 min-w-[200px] pb-2">
+          <input
+            type="text"
+            placeholder={`Search ${activeTab}...`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full px-4 py-2 border rounded-full text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none shadow-sm"
+          />
+        </div>
       </div>
 
       {/* Content based on active tab */}
@@ -475,12 +496,14 @@ const Inventory = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {products.length === 0 ? (
+                  {filteredProducts.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">No products found</td>
+                      <td colSpan="7" className="px-6 py-4 text-center text-gray-500">
+                        {searchTerm ? 'No matches found for your search' : 'No products found'}
+                      </td>
                     </tr>
                   ) : (
-                    products.map((product) => {
+                    filteredProducts.map((product) => {
                       const stockStatus = getStockStatus(product.stock_level);
                       return (
                         <tr key={product.id}>
@@ -540,12 +563,14 @@ const Inventory = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {services.length === 0 ? (
+                {filteredServices.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">No services found</td>
+                    <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
+                      {searchTerm ? 'No matches found for your search' : 'No services found'}
+                    </td>
                   </tr>
                 ) : (
-                  services.map((service) => (
+                  filteredServices.map((service) => (
                     <tr key={service.id}>
                       <td className="px-6 py-4">
                         <div className="text-sm font-medium text-gray-900">{service.name}</div>
