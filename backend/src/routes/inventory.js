@@ -10,7 +10,7 @@ const router = express.Router();
 // Get all products
 router.get('/', authenticate, async (req, res) => {
   try {
-    const result = await query('SELECT * FROM products WHERE is_active = true');
+    const result = await query('SELECT * FROM products WHERE is_active = true ORDER BY name');
     res.json(successResponse(result.rows, 'Products retrieved successfully'));
   } catch (error) {
     console.error('Get products error:', error);
