@@ -59,6 +59,7 @@ const Inventory = () => {
     }
   };
 
+  useEffect(() => {
     if (products.length >= 0 && services.length >= 0) {
       setLoading(false);
     }
