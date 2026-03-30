@@ -1422,6 +1422,48 @@ const POS = () => {
             </div>
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto mb-2 -mx-2 px-2 space-y-2">
+              {/* Miscellaneous Charges Section */}
+              <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg mb-2">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs font-semibold text-gray-700">MISCELLANEOUS CHARGES</p>
+                  {(user?.role === 'manager' || user?.role === 'admin') && (
+                    <button
+                      onClick={addMiscCharge}
+                      className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition shadow-sm"
+                      title="Add miscellaneous charge"
+                    >
+                      + Add Charge
+                    </button>
+                  )}
+                </div>
+
+                {miscCharges.length > 0 ? (
+                  <div className="space-y-1.5">
+                    {miscCharges.map((charge, idx) => (
+                      <div key={idx} className="flex justify-between items-center text-xs text-gray-600 group">
+                        <span className="truncate flex-1">- {charge.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900">₦{formatPrice(charge.amount || 0)}</span>
+                          {(user?.role === 'manager' || user?.role === 'admin') && (
+                            <button
+                              onClick={() => removeMiscCharge(idx)}
+                              className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition p-1"
+                              title="Remove charge"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-gray-400 italic">No miscellaneous charges added</p>
+                )}
+              </div>
+
               {cart.length === 0 && !bookingData ? (
                 <div className="text-center py-2">
                   <svg className="w-10 h-10 mx-auto text-gray-300 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1431,7 +1473,7 @@ const POS = () => {
                   <p className="text-gray-400 text-xs mt-0.5">Add products or services to get started</p>
                 </div>
               ) : (
-                <>
+                <div className="space-y-2">
                   {/* Service from booking */}
                   {bookingData && (
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
@@ -1444,7 +1486,7 @@ const POS = () => {
                           <p className="text-xs text-blue-600 font-medium">Booking: {bookingData.booking_number}</p>
                         </div>
                         <div className="ml-3 text-right">
-                          <p className="text-sm font-bold text-blue-900">₦{formatPrice(bookingData.service_price || 0)}</p>
+                          <p className="text-sm font-bold text-blue-600">₦{formatPrice(bookingData.service_price || 0)}</p>
                         </div>
                       </div>
                     </div>
@@ -1517,49 +1559,7 @@ const POS = () => {
                       </div>
                     </div>
                   ))}
-
-                  {/* Miscellaneous Charges Section */}
-                  <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <p className="text-xs font-semibold text-gray-700">MISCELLANEOUS CHARGES</p>
-                      {(user?.role === 'manager' || user?.role === 'admin') && (
-                        <button
-                          onClick={addMiscCharge}
-                          className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition shadow-sm"
-                          title="Add miscellaneous charge"
-                        >
-                          + Add Charge
-                        </button>
-                      )}
-                    </div>
-
-                    {miscCharges.length > 0 ? (
-                      <div className="space-y-1.5">
-                        {miscCharges.map((charge, idx) => (
-                          <div key={idx} className="flex justify-between items-center text-xs text-gray-600 group">
-                            <span className="truncate flex-1">- {charge.name}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-gray-900">₦{formatPrice(charge.amount || 0)}</span>
-                              {(user?.role === 'manager' || user?.role === 'admin') && (
-                                <button
-                                  onClick={() => removeMiscCharge(idx)}
-                                  className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition p-1"
-                                  title="Remove charge"
-                                >
-                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-                                  </svg>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-gray-400 italic">No miscellaneous charges added</p>
-                    )}
-                  </div>
-                </>
+                </div>
               )}
             </div>
             {/* Coupon and Payment Section */}
@@ -1711,7 +1711,6 @@ const POS = () => {
           </div>
         </div>
       </div>
-      {/* Size Selection Modal */}
       {
         showSizeModal && selectedProductForSize && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -1752,7 +1751,7 @@ const POS = () => {
           </div>
         )
       }
-    </div >
+    </div>
   );
 };
 
