@@ -563,8 +563,36 @@ const POS = () => {
   // PAYMENT HANDLERS
   // ==========================================
 
+  // Paystack Configuration and Initialization - Top Level Hook execution
+  const managerEmail = user?.email || "manager@vonniesalon.com";
+
+  // Memoize config to prevent infinite re-renders while allowing dynamic payment params
+  const paystackConfig = useMemo(() => ({
+    reference: generatePaystackReference(),
+    email: managerEmail,
+    amount: Math.round(getTotal() * 100),
+    publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
+    currency: "NGN",
+    channels: ["card", "bank", "ussd", "qr", "mobile_money"],
+    metadata: {
+      booking_id: bookingData?.id,
+      processed_by_user_id: user?.id,
+      processed_by_email: managerEmail,
+      processed_by_name: user?.name || user?.email,
+      custom_fields: [
+        { display_name: "Customer Name", variable_name: "customer_name", value: customerInfo.name },
+        { display_name: "Customer Phone", variable_name: "customer_phone", value: customerInfo.phone },
+        { display_name: "Booking Number", variable_name: "booking_number", value: bookingData?.booking_number || "Walk-in" },
+        { display_name: "Transaction Type", variable_name: "transaction_type", value: bookingData ? "Booking + Products" : "Products Only" },
+        { display_name: "Cart Items", variable_name: "cart_items", value: cart.map(item => `${item.name} x${item.quantity}`).join(", ") },
+        { display_name: "Processed By", variable_name: "processed_by", value: user?.name || user?.email || "Manager" }
+      ]
+    }
+  }), [getTotal, user, bookingData, customerInfo, cart, managerEmail]);
+
+  const initializePayment = usePaystackPayment(paystackConfig);
+
   // Paystack Payment Function - Manager-operated workflow
-  // This function initiates the Paystack popup for online card payments
   const handlePaystackPayment = useCallback(() => {
     if (!customerInfo.name || !customerInfo.phone) {
       toast.error("Please provide customer name and phone number");
@@ -574,58 +602,9 @@ const POS = () => {
       toast.error("Invalid payment amount");
       return;
     }
-    // Manager processes payment - use authenticated user's email for Paystack
-    const managerEmail = user?.email || "manager@vonniesalon.com"; // Fallback to hardcoded if no user email
 
-    const config = {
-      reference: generatePaystackReference(), // Generate unique reference
-      email: managerEmail,
-      amount: Math.round(getTotal() * 100), // Convert to kobo (Paystack expects smallest currency unit)
-      publicKey: import.meta.env.VITE_PAYSTACK_PUBLIC_KEY,
-      currency: "NGN",
-      channels: ["card", "bank", "ussd", "qr", "mobile_money"],
-      metadata: {
-        // Metadata for backend verification and webhooks
-        booking_id: bookingData?.id,
-        processed_by_user_id: user?.id,
-        processed_by_email: managerEmail,
-        processed_by_name: user?.name || user?.email,
-        custom_fields: [
-          {
-            display_name: "Customer Name",
-            variable_name: "customer_name",
-            value: customerInfo.name
-          },
-          // ... other metadata fields
 
-          {
-            display_name: "Customer Phone",
-            variable_name: "customer_phone",
-            value: customerInfo.phone
-          },
-          {
-            display_name: "Booking Number",
-            variable_name: "booking_number",
-            value: bookingData?.booking_number || "Walk-in"
-          },
-          {
-            display_name: "Transaction Type",
-            variable_name: "transaction_type",
-            value: bookingData ? "Booking + Products" : "Products Only"
-          },
-          {
-            display_name: "Cart Items",
-            variable_name: "cart_items",
-            value: cart.map(item => `${item.name} x${item.quantity}`).join(", ")
-          },
-          {
-            display_name: "Processed By",
-            variable_name: "processed_by",
-            value: user?.name || user?.email || "Manager"
-          }
-        ]
-      }
-    };
+
     const onSuccess = async (response) => {
       try {
         setProcessing(true);
@@ -695,9 +674,9 @@ const POS = () => {
     const onClose = () => {
       toast.error("Payment cancelled by manager");
     };
-    const initializePayment = usePaystackPayment(config);
+
     initializePayment(onSuccess, onClose);
-  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError]);
+  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError, initializePayment]);
   // Bank Transfer / Physical POS Payment Handler (Alternative when Paystack is down)
   const handleCashPayment = useCallback(async () => {
     if (!customerInfo.name || !customerInfo.phone) {
@@ -1596,7 +1575,7 @@ const POS = () => {
                     <svg className="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
-                    <span className="text-green-600 font-medium">Coupon "{appliedCoupon.code}" applied!</span>
+                    <span className="text-green-600 font-medium">Coupon &quot;{appliedCoupon.code}&quot; applied!</span>
                   </div>
                 )}
               </div>

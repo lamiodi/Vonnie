@@ -793,17 +793,29 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
     }
 
-    await client.query('COMMIT');
-    // If booking exists and payment completed, update booking payment/status
-    if (booking && effectivePaymentStatus === 'completed') {
-      await query(
-        `UPDATE bookings
-         SET status = $1, payment_status = $2, payment_method = $3, payment_reference = $4,
-             payment_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
-         WHERE id = $5`,
-        ['completed', 'completed', payment_method, payment_reference || null, booking.id]
-      );
+    // If booking exists, always update the total_amount (which includes products/services/misc charges)
+    // If payment is completed, also update the payment status and completion flags
+    if (booking) {
+      if (effectivePaymentStatus === 'completed') {
+        await client.query(
+          `UPDATE bookings
+           SET status = $1, payment_status = $2, payment_method = $3, payment_reference = $4,
+               total_amount = $5, payment_date = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $6`,
+          ['completed', 'completed', payment_method, payment_reference || null, computed_total, booking.id]
+        );
+      } else {
+        // Pending payments (e.g. Paystack) will later be finalized by webhooks, but we record the accurate total now
+        await client.query(
+          `UPDATE bookings
+           SET total_amount = $1, updated_at = CURRENT_TIMESTAMP
+           WHERE id = $2`,
+          [computed_total, booking.id]
+        );
+      }
     }
+
+    await client.query('COMMIT');
     res.status(201).json(successResponse({
       ...transaction,
       booking_updated: !!booking,
