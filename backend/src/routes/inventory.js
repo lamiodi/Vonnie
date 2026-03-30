@@ -41,8 +41,13 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
     return res.status(400).json(errorResponse('Product name must be a non-empty string', 'INVALID_PRODUCT_NAME', 400));
   }
 
-  if (typeof price !== 'number' || price <= 0) {
+  const numericPrice = Number(price);
+  if (isNaN(numericPrice) || numericPrice <= 0) {
     return res.status(400).json(errorResponse('Product price must be a positive number', 'INVALID_PRODUCT_PRICE', 400));
+  }
+  
+  if (numericPrice > 1000000) {
+    return res.status(400).json(errorResponse('Product price cannot exceed ₦1,000,000', 'INVALID_PRODUCT_PRICE', 400));
   }
 
   if (typeof category !== 'string' || category.trim().length === 0) {

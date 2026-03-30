@@ -150,7 +150,7 @@ const Inventory = () => {
       if (activeTab === 'products') {
         const submitData = {
           ...formData,
-          price: parseFloat(formData.price).toFixed(2),
+          price: parseFloat(formData.price),
           stock_level: useSizeStock
             ? Object.values(formData.stock_by_size).reduce((a, b) => a + b, 0)
             : parseInt(formData.stock_level),

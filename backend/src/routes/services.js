@@ -79,8 +79,8 @@ router.post('/', authenticate, authorize(['admin', 'manager']), async (req, res)
       ));
     }
     
-    // Validate price
-    const priceValidation = validatePrice(price, { min: 0.01, max: 1000 });
+    // Validate price - increased max to 1,000,000
+    const priceValidation = validatePrice(Number(price), { min: 0.01, max: 1000000 });
     if (!priceValidation.isValid) {
       return res.status(400).json(errorResponse(
         `Service price: ${priceValidation.message}`,
