@@ -11,21 +11,21 @@ const router = express.Router();
 // Create POS transaction
 router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin']), async (req, res) => {
   const client = await getClient();
- 
+
   try {
     await client.query('BEGIN');
-   
-    const { 
-      booking_number, 
-      products = [], 
-      items = [], 
-      coupon_code, 
+
+    const {
+      booking_number,
+      products = [],
+      items = [],
+      coupon_code,
       staff_id,
       payment_method = 'cash',
       payment_status = 'completed',
       payment_reference
     } = req.body;
-   
+
     // Validate required fields
     if (staff_id) {
       const staffValidation = validateRequiredFields({ staff_id }, ['staff_id']);
@@ -35,7 +35,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         return res.status(400).json(validationErrorResponse(staffValidation.missingFields, 'Missing required fields'));
       }
     }
-   
+
     // Validate items format if provided
     if (items && items.length > 0) {
       for (const item of items) {
@@ -58,7 +58,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         }
       }
     }
-   
+
     // Validate legacy products format if provided
     if (products && products.length > 0) {
       for (const product of products) {
@@ -72,10 +72,10 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         }
       }
     }
-   
+
     let booking = null;
     let service_amount = 0;
-   
+
     // Get booking if provided
     if (booking_number) {
       const bookingResult = await client.query(
@@ -85,14 +85,14 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
          WHERE b.booking_number = $1`,
         [booking_number]
       );
-     
+
       if (bookingResult.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(404).json(notFoundResponse('Booking', booking_number));
       }
-     
+
       booking = bookingResult.rows[0];
-     
+
       // Validate booking status for POS transactions
       const allowedStatusesForPOS = ['scheduled', 'in-progress', 'completed'];
       if (!allowedStatusesForPOS.includes(booking.status)) {
@@ -104,13 +104,13 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           400
         ));
       }
-     
-      service_amount = booking.service_price;
+
+      service_amount = Number(booking.service_price || 0) + Number(booking.misc_charges_amount || 0);
     }
-   
+
     // Calculate product total and update stock
     let product_amount = 0;
-   
+
     // Handle new items array format (products and services)
     if (items && items.length > 0) {
       for (const item of items) {
@@ -119,72 +119,72 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
             'SELECT price, stock_level, stock_by_size FROM products WHERE id = $1 FOR UPDATE',
             [item.product_id]
           );
-         
+
           if (productResult.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json(notFoundResponse('Product', item.product_id));
           }
-         
+
           const product = productResult.rows[0];
-          
+
           if (item.size) {
             const stockBySize = product.stock_by_size || {};
             const sizeStock = Number(stockBySize[item.size]) || 0;
-            
+
             if (sizeStock < item.quantity) {
-               await client.query('ROLLBACK');
-               return res.status(400).json(errorResponse(
-                 `Insufficient stock for product ${item.product_id} size ${item.size}`,
-                 'INSUFFICIENT_STOCK',
-                 400
-               ));
+              await client.query('ROLLBACK');
+              return res.status(400).json(errorResponse(
+                `Insufficient stock for product ${item.product_id} size ${item.size}`,
+                'INSUFFICIENT_STOCK',
+                400
+              ));
             }
-            
+
             // Deduct from size stock
             stockBySize[item.size] = sizeStock - item.quantity;
-            
+
             // Update product with new size stock and total stock
             await client.query(
               'UPDATE products SET stock_by_size = $1, stock_level = stock_level - $2 WHERE id = $3',
               [stockBySize, item.quantity, item.product_id]
             );
           } else {
-             // Fallback to general stock level if no size specified (legacy behavior or non-sized products)
-             if (product.stock_level < item.quantity) {
-               await client.query('ROLLBACK');
-               return res.status(400).json(errorResponse(
-                 `Insufficient stock for product ${item.product_id}`,
-                 'INSUFFICIENT_STOCK',
-                 400
-               ));
-             }
-             
-             // Update stock
-             await client.query(
-               'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
-               [item.quantity, item.product_id]
-             );
+            // Fallback to general stock level if no size specified (legacy behavior or non-sized products)
+            if (product.stock_level < item.quantity) {
+              await client.query('ROLLBACK');
+              return res.status(400).json(errorResponse(
+                `Insufficient stock for product ${item.product_id}`,
+                'INSUFFICIENT_STOCK',
+                400
+              ));
+            }
+
+            // Update stock
+            await client.query(
+              'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
+              [item.quantity, item.product_id]
+            );
           }
-         
+
           product_amount += product.price * item.quantity;
         } else if (item.type === 'service' && item.service_id) {
           const serviceResult = await client.query(
             'SELECT name, price, duration FROM services WHERE id = $1',
             [item.service_id]
           );
-         
+
           if (serviceResult.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json(notFoundResponse('Service', item.service_id));
           }
-         
+
           const service = serviceResult.rows[0];
           // Use item.price if provided (manual override), otherwise use service price
           const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
-          
+
           if (unitPrice < 0) {
-             await client.query('ROLLBACK');
-             return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
+            await client.query('ROLLBACK');
+            return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
           }
 
           service_amount += unitPrice * item.quantity;
@@ -197,14 +197,14 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           'SELECT price, stock_level FROM products WHERE id = $1 FOR UPDATE',
           [item.product_id]
         );
-       
+
         if (productResult.rows.length === 0) {
           await client.query('ROLLBACK');
           return res.status(404).json(notFoundResponse('Product', item.product_id));
         }
-       
+
         const product = productResult.rows[0];
-       
+
         if (product.stock_level < item.quantity) {
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse(
@@ -213,9 +213,9 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
             400
           ));
         }
-       
+
         product_amount += product.price * item.quantity;
-       
+
         // Update stock
         await client.query(
           'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
@@ -223,31 +223,31 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         );
       }
     }
-   
+
     let total_amount = service_amount + product_amount;
     let discount_amount = 0;
     let coupon_id = null;
-   
+
     // Apply coupon if provided
     if (coupon_code) {
       const couponResult = await client.query(
         'SELECT * FROM coupons WHERE code = $1 FOR UPDATE',
         [coupon_code]
       );
-     
+
       if (couponResult.rows.length > 0) {
         const coupon = couponResult.rows[0];
         coupon_id = coupon.id;
-       
+
         if (coupon.expiry_date > new Date() && coupon.used_count < coupon.usage_limit) {
           if (coupon.discount_percentage) {
             discount_amount = total_amount * (coupon.discount_percentage / 100);
           } else if (coupon.fixed_amount) {
             discount_amount = coupon.fixed_amount;
           }
-         
+
           total_amount -= discount_amount;
-         
+
           // Update coupon usage
           await client.query(
             'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1',
@@ -256,7 +256,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         }
       }
     }
-   
+
     // Create transaction
     const transactionNumber = `TXN-${Date.now()}`;
     const transactionResult = await client.query(
@@ -265,24 +265,24 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
        RETURNING *`,
       [
-        transactionNumber, 
-        booking?.customer_name, 
-        booking?.customer_email, 
-        booking?.customer_phone, 
-        total_amount, 
-        discount_amount, 
-        total_amount, 
-        payment_method, 
+        transactionNumber,
+        booking?.customer_name,
+        booking?.customer_email,
+        booking?.customer_phone,
+        total_amount,
+        discount_amount,
+        total_amount,
+        payment_method,
         payment_status,
         payment_reference || null,
-        coupon_id, 
+        coupon_id,
         staff_id,
         booking?.id || null
       ]
     );
-   
+
     const transaction = transactionResult.rows[0];
-    
+
     // Log coupon usage if coupon was applied
     if (coupon_id && booking?.customer_email) {
       await client.query(
@@ -290,7 +290,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         [coupon_id, booking.customer_email, transaction.id, discount_amount]
       );
     }
-    
+
     // Insert transaction items (products and services)
     if (items && items.length > 0) {
       for (const item of items) {
@@ -301,7 +301,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
             [item.product_id]
           );
           const product = productResult.rows[0];
-         
+
           await client.query(
             'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price, size) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [transaction.id, item.product_id, product.name, item.quantity, product.price, item.quantity * product.price, item.size || null]
@@ -313,7 +313,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
             [item.service_id]
           );
           const service = serviceResult.rows[0];
-         
+
           await client.query(
             'INSERT INTO pos_transaction_items (transaction_id, service_id, service_name, quantity, unit_price, total_price, service_duration) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [transaction.id, item.service_id, service.name, item.quantity, service.price, item.quantity * service.price, service.duration]
@@ -329,26 +329,26 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
           [item.product_id]
         );
         const product = productResult.rows[0];
-       
+
         await client.query(
           'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price) VALUES ($1, $2, $3, $4, $5, $6)',
           [transaction.id, item.product_id, product.name, item.quantity, product.price, item.quantity * product.price]
         );
       }
     }
-   
+
     await client.query('COMMIT');
-   
+
     // Convert total_amount to number for formatting
     const formattedTotalAmount = Number(transaction.total_amount);
-   
+
     // Update booking status to completed if this was a booking transaction
     if (booking) {
       await client.query(
         'UPDATE bookings SET status = $1, payment_status = $2, total_amount = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4',
         ['completed', 'completed', total_amount, booking.id]
       );
-     
+
       // Send completion notification using unified payment confirmation
       if (booking) {
         await sendPaymentConfirmation(
@@ -363,7 +363,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         );
       }
     }
-   
+
     // Send receipt email using unified POS transaction function
     if (booking) {
       await sendPOSTransactionEmail(
@@ -379,13 +379,13 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
         }
       );
     }
-   
+
     res.status(201).json(successResponse({
       ...transaction,
       booking_updated: !!booking,
       new_booking_status: booking ? 'completed' : null
     }, 'POS transaction created successfully', 201));
-   
+
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('POS transaction error:', error);
@@ -411,20 +411,21 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       payment_method = 'cash',
       payment_status, // e.g., 'completed' | 'pending'
       payment_reference,
-      tax = 0
+      tax = 0,
+      misc_charges = [] // Added for miscellaneous charges in POS
     } = req.body;
-   
+
     // Use authenticated user ID if staff_id not provided
     const processed_by = staff_id || req.user.id;
     console.log('Processing checkout by:', processed_by);
-   
+
     // Validate required fields
     if (!processed_by) {
       console.error('Missing staff_id');
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Staff ID is required', 'MISSING_STAFF_ID', 400));
     }
-   
+
     // Validate payment method
     const validPaymentMethods = ['cash', 'card', 'transfer', 'paystack', 'physical_pos', 'bank_transfer_pos'];
     if (!validPaymentMethods.includes(payment_method)) {
@@ -432,14 +433,14 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid payment method. Must be one of: cash, card, transfer, paystack, physical_pos, bank_transfer_pos', 'INVALID_PAYMENT_METHOD', 400));
     }
-   
+
     // Validate payment status if provided
     if (payment_status && !['completed', 'pending'].includes(payment_status)) {
       console.error('Invalid payment status:', payment_status);
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid payment status. Must be "completed" or "pending"', 'INVALID_PAYMENT_STATUS', 400));
     }
-   
+
     // Validate items format if provided
     if (items && items.length > 0) {
       for (const item of items) {
@@ -465,7 +466,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         }
       }
     }
-   
+
     // Validate legacy products format if provided
     if (products && products.length > 0) {
       for (const product of products) {
@@ -479,13 +480,13 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         }
       }
     }
-   
+
     // Validate customer info if provided
     if (customer_info.email && !/^[\w\.-]+@[\w\.-]+\.\w+$/.test(customer_info.email)) {
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid customer email format', 'INVALID_CUSTOMER_EMAIL', 400));
     }
-   
+
     // Validate tax amount
     if (tax < 0) {
       await client.query('ROLLBACK');
@@ -522,6 +523,36 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
       service_amount = Number(booking.service_price || 0);
     }
+    let booking_misc_amount = 0;
+    if (booking) {
+      booking_misc_amount = Number(booking.misc_charges_amount || 0);
+
+      // Handle NEW misc charges being added at POS (manager/admin only)
+      if (misc_charges && misc_charges.length > 0) {
+        for (const charge of misc_charges) {
+          // If the charge is newly added (e.g. from POS), we save it to the database
+          if (!charge.id) {
+            await client.query(
+              'INSERT INTO misc_charges (booking_id, name, amount, created_by) VALUES ($1, $2, $3, $4)',
+              [booking.id, charge.name, charge.amount, processed_by]
+            );
+            booking_misc_amount += Number(charge.amount);
+          }
+        }
+
+        // Update the booking's total misc charges amount
+        await client.query(
+          'UPDATE bookings SET misc_charges_amount = $1 WHERE id = $2',
+          [booking_misc_amount, booking.id]
+        );
+      }
+    } else if (misc_charges && misc_charges.length > 0) {
+      // If there is no booking (walk-in), still track the misc charges for the transaction
+      for (const charge of misc_charges) {
+        booking_misc_amount += Number(charge.amount);
+      }
+    }
+
     // Calculate product total and update stock
     let product_amount = 0;
     // Handle new items array format (products and services)
@@ -537,44 +568,44 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             return res.status(404).json(notFoundResponse('Product', item.product_id));
           }
           const product = productResult.rows[0];
-          
+
           if (item.size) {
             const stockBySize = product.stock_by_size || {};
             const sizeStock = Number(stockBySize[item.size]) || 0;
-            
+
             if (sizeStock < item.quantity) {
-               await client.query('ROLLBACK');
-               return res.status(400).json(errorResponse(
-                 `Insufficient stock for product ${item.product_id} size ${item.size}`,
-                 'INSUFFICIENT_STOCK',
-                 400
-               ));
+              await client.query('ROLLBACK');
+              return res.status(400).json(errorResponse(
+                `Insufficient stock for product ${item.product_id} size ${item.size}`,
+                'INSUFFICIENT_STOCK',
+                400
+              ));
             }
-            
+
             // Deduct from size stock
             stockBySize[item.size] = sizeStock - item.quantity;
-            
+
             // Update product with new size stock and total stock
             await client.query(
               'UPDATE products SET stock_by_size = $1, stock_level = stock_level - $2 WHERE id = $3',
               [stockBySize, item.quantity, item.product_id]
             );
           } else {
-             // Fallback to general stock level if no size specified
-             if (product.stock_level < item.quantity) {
-               await client.query('ROLLBACK');
-               return res.status(400).json(errorResponse(
-                 `Insufficient stock for product ${item.product_id}`,
-                 'INSUFFICIENT_STOCK',
-                 400
-               ));
-             }
-             
-             // Update stock
-             await client.query(
-               'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
-               [item.quantity, item.product_id]
-             );
+            // Fallback to general stock level if no size specified
+            if (product.stock_level < item.quantity) {
+              await client.query('ROLLBACK');
+              return res.status(400).json(errorResponse(
+                `Insufficient stock for product ${item.product_id}`,
+                'INSUFFICIENT_STOCK',
+                400
+              ));
+            }
+
+            // Update stock
+            await client.query(
+              'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
+              [item.quantity, item.product_id]
+            );
           }
 
           product_amount += Number(product.price) * Number(item.quantity);
@@ -583,19 +614,19 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             'SELECT name, price, duration FROM services WHERE id = $1',
             [item.service_id]
           );
-         
+
           if (serviceResult.rows.length === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json(notFoundResponse('Service', item.service_id));
           }
-         
+
           const service = serviceResult.rows[0];
           // Use item.price if provided (manual override), otherwise use service price
           const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
-          
+
           if (unitPrice < 0) {
-             await client.query('ROLLBACK');
-             return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
+            await client.query('ROLLBACK');
+            return res.status(400).json(errorResponse('Price cannot be negative', 'INVALID_PRICE', 400));
           }
 
           service_amount += unitPrice * Number(item.quantity);
@@ -608,14 +639,14 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           'SELECT name, price, stock_level FROM products WHERE id = $1 FOR UPDATE',
           [item.product_id]
         );
-       
+
         if (productResult.rows.length === 0) {
           await client.query('ROLLBACK');
           return res.status(404).json(notFoundResponse('Product', item.product_id));
         }
-       
+
         const product = productResult.rows[0];
-       
+
         if (product.stock_level < item.quantity) {
           await client.query('ROLLBACK');
           return res.status(400).json(errorResponse(
@@ -624,9 +655,9 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             400
           ));
         }
-       
+
         product_amount += Number(product.price) * Number(item.quantity);
-       
+
         await client.query(
           'UPDATE products SET stock_level = stock_level - $1 WHERE id = $2',
           [item.quantity, item.product_id]
@@ -634,7 +665,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
     }
     // Compute amounts server-side
-    let subtotal_amount = service_amount + product_amount;
+    let subtotal_amount = service_amount + product_amount + booking_misc_amount;
     let discount_amount = 0;
     let coupon_id = null;
     // Apply coupon if provided
@@ -643,11 +674,11 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         'SELECT * FROM coupons WHERE code = $1 FOR UPDATE',
         [coupon_code]
       );
-     
+
       if (couponResult.rows.length > 0) {
         const coupon = couponResult.rows[0];
         coupon_id = coupon.id;
-       
+
         const now = new Date();
         if (coupon.expiry_date > now && coupon.used_count < coupon.usage_limit) {
           if (coupon.discount_percentage) {
@@ -655,7 +686,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           } else if (coupon.fixed_amount) {
             discount_amount = Number(coupon.fixed_amount);
           }
-         
+
           // Update coupon usage count (usage record inserted after transaction creation)
           await client.query(
             'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1',
@@ -668,7 +699,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
 
     // Determine payment status and transaction status BEFORE insertion
     let effectivePaymentStatus = payment_status;
-    
+
     if (!effectivePaymentStatus) {
       if (payment_method === 'bank_transfer') {
         effectivePaymentStatus = 'pending';
@@ -678,7 +709,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         effectivePaymentStatus = 'completed'; // Cash/Card/POS defaults to completed
       }
     }
-    
+
     const effectiveTransactionStatus = effectivePaymentStatus === 'completed' ? 'completed' : 'pending';
 
     // Create transaction
@@ -705,9 +736,9 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         payment_reference || null
       ]
     );
-   
+
     const transaction = transactionResult.rows[0];
-    
+
     // Log coupon usage if coupon was applied
     if (coupon_id && (booking?.customer_email || customer_info.email)) {
       const customerEmail = booking?.customer_email || customer_info.email;
@@ -716,7 +747,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         [coupon_id, customerEmail, transaction.id, discount_amount]
       );
     }
-    
+
     // Insert transaction items
     if (items && items.length > 0) {
       for (const item of items) {
@@ -726,7 +757,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             [item.product_id]
           );
           const product = productResult.rows[0];
-         
+
           await client.query(
             'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price, size) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [transaction.id, item.product_id, product.name, item.quantity, product.price, Number(item.quantity) * Number(product.price), item.size || null]
@@ -737,10 +768,10 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             [item.service_id]
           );
           const service = serviceResult.rows[0];
-          
+
           // Use item.price if provided (manual override), otherwise use service price
           const unitPrice = item.price !== undefined ? Number(item.price) : Number(service.price);
-         
+
           await client.query(
             'INSERT INTO pos_transaction_items (transaction_id, service_id, service_name, quantity, unit_price, total_price, service_duration) VALUES ($1, $2, $3, $4, $5, $6, $7)',
             [transaction.id, item.service_id, service.name, item.quantity, unitPrice, Number(item.quantity) * unitPrice, service.duration]
@@ -754,14 +785,14 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           [item.product_id]
         );
         const product = productResult.rows[0];
-       
+
         await client.query(
           'INSERT INTO pos_transaction_items (transaction_id, product_id, product_name, quantity, unit_price, total_price) VALUES ($1, $2, $3, $4, $5, $6)',
           [transaction.id, item.product_id, product.name, item.quantity, product.price, Number(item.quantity) * Number(product.price)]
         );
       }
     }
-    
+
     await client.query('COMMIT');
     // If booking exists and payment completed, update booking payment/status
     if (booking && effectivePaymentStatus === 'completed') {
@@ -816,11 +847,11 @@ router.post('/payment/initialize', authenticate, async (req, res) => {
         }
       }
     );
-   
+
     res.json(response.data);
   } catch (error) {
     console.error('POS payment verification error:', error);
-    res.status(400).json({ 
+    res.status(400).json({
       success: false,
       error: 'Payment verification failed',
       message: error.message,
@@ -835,7 +866,7 @@ router.post('/payment/initialize', authenticate, async (req, res) => {
 // Verify Paystack payment
 router.post('/payment/verify', authenticate, async (req, res) => {
   const { reference } = req.body;
- 
+
   try {
     const response = await axios.get(
       `https://api.paystack.co/transaction/verify/${reference}`,
@@ -845,10 +876,10 @@ router.post('/payment/verify', authenticate, async (req, res) => {
         }
       }
     );
-   
+
     // Note: Database updates are handled by the dedicated webhook service (payment-webhooks.js)
     // to prevent race conditions. This endpoint only verifies the status with Paystack.
-    
+
     res.json(response.data);
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -860,7 +891,7 @@ router.get('/transactions', authenticate, authorize(['staff', 'manager', 'admin'
   try {
     const { page = 1, limit = 20, start_date, end_date, staff_id } = req.query;
     const offset = (page - 1) * limit;
-   
+
     let queryString = `
       SELECT pt.*, u.name as staff_name, u.name as created_by_name, u.email as staff_email,
              v.name as verified_by_name,
@@ -871,58 +902,58 @@ router.get('/transactions', authenticate, authorize(['staff', 'manager', 'admin'
       LEFT JOIN coupons c ON pt.coupon_id = c.id
       WHERE 1=1
     `;
-   
+
     const params = [];
     let paramIndex = 1;
-   
+
     if (start_date) {
       queryString += ` AND pt.created_at >= $${paramIndex}`;
       params.push(start_date);
       paramIndex++;
     }
-   
+
     if (end_date) {
       queryString += ` AND pt.created_at <= $${paramIndex}`;
       params.push(end_date);
       paramIndex++;
     }
-   
+
     if (staff_id) {
       queryString += ` AND pt.created_by = $${paramIndex}`;
       params.push(staff_id);
       paramIndex++;
     }
-   
+
     queryString += ` ORDER BY pt.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     params.push(limit, offset);
-   
+
     const result = await query(queryString, params);
-   
+
     // Get total count for pagination
     let countQueryString = `SELECT COUNT(*) FROM pos_transactions pt WHERE 1=1`;
     const countParams = [];
     let countParamIndex = 1;
-   
+
     if (start_date) {
       countQueryString += ` AND pt.created_at >= $${countParamIndex}`;
       countParams.push(start_date);
       countParamIndex++;
     }
-   
+
     if (end_date) {
       countQueryString += ` AND pt.created_at <= $${countParamIndex}`;
       countParams.push(end_date);
       countParamIndex++;
     }
-   
+
     if (staff_id) {
       countQueryString += ` AND pt.created_by = $${countParamIndex}`;
       countParams.push(staff_id);
     }
-   
+
     const countResult = await query(countQueryString, countParams);
     const total = parseInt(countResult.rows[0].count);
-   
+
     res.json({
       transactions: result.rows,
       pagination: {
@@ -983,7 +1014,7 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
     if (!id || typeof id !== 'string' || !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
       return res.status(400).json({ error: 'Invalid transaction id format' });
     }
-   
+
     // Get transaction details
     const transactionResult = await query(`
       SELECT pt.*, u.name as staff_name, u.email as staff_email,
@@ -995,13 +1026,13 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
       LEFT JOIN coupons c ON pt.coupon_id = c.id
       WHERE pt.id = $1
     `, [id]);
-   
+
     if (transactionResult.rows.length === 0) {
       return res.status(404).json({ error: 'Transaction not found' });
     }
-   
+
     const transaction = transactionResult.rows[0];
-   
+
     // Get transaction items (both products and services)
     // FIX: Using alias for ambiguous columns like id, name, created_at
     const itemsResult = await query(`
@@ -1024,9 +1055,9 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
       LEFT JOIN services s ON pti.service_id = s.id
       WHERE pti.transaction_id = $1
     `, [id]);
-   
+
     transaction.items = itemsResult.rows;
-   
+
     res.json(transaction);
   } catch (error) {
     console.error('Get transaction error:', error);
@@ -1102,7 +1133,7 @@ router.post('/transactions/:id/verify-payment', authenticate, authorize(['manage
     });
   } catch (error) {
     console.error('Manual payment verification error:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       error: 'Manual payment verification failed',
       message: error.message,

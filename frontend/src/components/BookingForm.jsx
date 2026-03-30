@@ -1,6 +1,6 @@
 // Fixed BookingForm.jsx (added validation for fields, fixed customer_type to 'walk-in', improved accessibility)
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import { apiGet, apiPost, apiPut } from '../utils/api';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
@@ -34,7 +34,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
     customer_name: '',
     customer_email: '',
     customer_phone: '',
-    notes: ''
+    notes: '',
+    misc_charges: []
   });
   const [isWalkInMode, setIsWalkInMode] = useState(isWalkIn);
   const [loading, setLoading] = useState(false);
@@ -76,7 +77,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         customer_name: booking.customer_name,
         customer_email: booking.customer_email,
         customer_phone: booking.customer_phone,
-        notes: booking.notes || ''
+        notes: booking.notes || '',
+        misc_charges: booking.misc_charges || []
       });
     }
   }, [booking]);
@@ -114,10 +116,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   const fetchServices = async () => {
     try {
       setServicesLoading(true);
-      const response = await axios.get(servicesEndpoint);
-      // Ensure response.data is an array, fallback to empty array if not
-      const servicesData = Array.isArray(response.data) ? response.data :
-        (response.data && Array.isArray(response.data.services) ? response.data.services : []);
+      const data = await apiGet(servicesEndpoint);
+      // Ensure data is an array, fallback to empty array if not
+      const servicesData = Array.isArray(data) ? data :
+        (data && Array.isArray(data.services) ? data.services : []);
       setServices(servicesData);
       setFilteredServices(servicesData);
       const uniqueCategories = ['All', ...new Set(servicesData.map(s => s.category || 'Other'))];
@@ -132,10 +134,10 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
   const fetchWorkers = async () => {
     try {
       setWorkersLoading(true);
-      const response = await axios.get(workersEndpoint);
-      // Ensure response.data is an array, fallback to empty array if not
-      const workersData = Array.isArray(response.data) ? response.data :
-        (response.data && Array.isArray(response.data.workers) ? response.data.workers : []);
+      const data = await apiGet(workersEndpoint);
+      // Ensure data is an array, fallback to empty array if not
+      const workersData = Array.isArray(data) ? data :
+        (data && Array.isArray(data.workers) ? data.workers : []);
       setWorkers(workersData);
     } catch (error) {
       handleError('Failed to load workers', error);
@@ -149,9 +151,9 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       const dateStr = formData.booking_date.toLocaleDateString('en-CA');
       const workerIds = Array.isArray(formData.workers) ? formData.workers.map(w => w.worker_id).join(',') : '';
       const url = `${availableSlotsEndpoint}?worker_id=${workerIds}&date=${dateStr}&service_ids=${formData.service_ids.join(',')}`;
-      const response = await axios.get(url);
-      const data = Array.isArray(response.data) ? response.data : [];
-      setAvailableSlots(data);
+      const data = await apiGet(url);
+      const slotsData = Array.isArray(data) ? data : [];
+      setAvailableSlots(slotsData);
     } catch (error) {
       handleError(error, 'Failed to load available time slots');
     }
@@ -379,16 +381,16 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           // booking_number removed - now generated server-side
         };
       }
-      let response;
+      let responseData;
       if (isEditing && booking) {
         // Update existing booking
-        response = await axios.put(`${updateBookingEndpoint}/${booking.id}`, payload);
+        responseData = await apiPut(`${updateBookingEndpoint}/${booking.id}`, payload);
 
         // Assign multiple workers if provided (simplified - no roles)
         if (formData.workers && formData.workers.length > 0) {
           try {
             const workers = formData.workers.map(w => ({ worker_id: w.worker_id }));
-            await axios.post(`/api/bookings/${booking.id}/assign-workers`, {
+            await apiPost(`/api/bookings/${booking.id}/assign-workers`, {
               workers: workers
             });
           } catch (workerError) {
@@ -400,13 +402,13 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         handleSuccess('Booking updated successfully!');
       } else {
         // Create new booking
-        response = await axios.post(createBookingEndpoint, payload);
+        responseData = await apiPost(createBookingEndpoint, payload);
 
         // Assign multiple workers if provided (simplified - no roles)
         if (formData.workers && formData.workers.length > 0) {
           try {
             const workers = formData.workers.map(w => ({ worker_id: w.worker_id }));
-            await axios.post(`/api/bookings/${response.data.id}/assign-workers`, {
+            await apiPost(`/api/bookings/${responseData.id}/assign-workers`, {
               workers: workers
             });
           } catch (workerError) {
@@ -419,7 +421,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       }
 
       if (onSubmit) {
-        onSubmit(response.data);
+        onSubmit(responseData);
       }
       // Reset form only for new bookings
       if (!isEditing) {
@@ -432,7 +434,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
           customer_name: '',
           customer_email: '',
           customer_phone: '',
-          notes: ''
+          notes: '',
+          misc_charges: []
         });
       }
     } catch (error) {
@@ -775,6 +778,66 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       </div>
     )
   }
+  {/* Miscellaneous Charges */}
+  <div className="border-t border-gray-100 pt-4 mt-4">
+    <div className="flex justify-between items-center mb-2">
+      <label className="block text-sm font-medium text-gray-700">
+        Miscellaneous Charges
+      </label>
+      <button
+        type="button"
+        onClick={() => setFormData(prev => ({
+          ...prev,
+          misc_charges: [...prev.misc_charges, { name: '', amount: '' }]
+        }))}
+        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+      >
+        + Add Charge
+      </button>
+    </div>
+    {formData.misc_charges.map((charge, index) => (
+      <div key={index} className="flex gap-2 mb-2 items-center">
+        <input
+          type="text"
+          placeholder="Charge Description (e.g., Extra Glue)"
+          value={charge.name}
+          onChange={(e) => {
+            const newCharges = [...formData.misc_charges];
+            newCharges[index].name = e.target.value;
+            setFormData(prev => ({ ...prev, misc_charges: newCharges }));
+          }}
+          className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm"
+        />
+        <input
+          type="number"
+          placeholder="Amount (₦)"
+          value={charge.amount}
+          onChange={(e) => {
+            const newCharges = [...formData.misc_charges];
+            newCharges[index].amount = e.target.value;
+            setFormData(prev => ({ ...prev, misc_charges: newCharges }));
+          }}
+          className="w-32 px-3 py-2 border border-gray-300 rounded-md text-sm"
+          min="0"
+          step="100"
+        />
+        <button
+          type="button"
+          onClick={() => {
+            const newCharges = formData.misc_charges.filter((_, i) => i !== index);
+            setFormData(prev => ({ ...prev, misc_charges: newCharges }));
+          }}
+          className="text-red-500 hover:text-red-700 font-bold px-2"
+        >
+          &times;
+        </button>
+      </div>
+    ))}
+    {formData.misc_charges.length === 0 && (
+      <p className="text-sm text-gray-500 italic">No miscellaneous charges added.</p>
+    )}
+  </div>
+
   {/* Notes */ }
   <div>
     <label htmlFor="booking-notes" className="block text-sm font-medium text-gray-700 mb-2">

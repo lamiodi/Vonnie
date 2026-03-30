@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { apiGet, apiPost, apiDelete, apiPatch, API_ENDPOINTS, isAuthenticated, API_BASE_URL } from '../utils/api';
+import { apiGet, apiPost, apiDelete, apiPatch, apiPut, API_ENDPOINTS, isAuthenticated, API_BASE_URL } from '../utils/api';
 
 export const useBookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -48,7 +48,15 @@ export const useBookings = () => {
       if (!isAuthenticated()) {
         throw new Error('Authentication required to update bookings');
       }
-      const updatedBooking = await apiPatch(`${API_ENDPOINTS.BOOKINGS}/${id}`, updatedData);
+      
+      let updatedBooking;
+      // If updating status only, use PATCH. If updating details, use PUT.
+      if (Object.keys(updatedData).length === 1 && updatedData.status) {
+        updatedBooking = await apiPatch(`${API_ENDPOINTS.BOOKINGS}/${id}`, updatedData);
+      } else {
+        updatedBooking = await apiPut(`${API_ENDPOINTS.BOOKINGS}/${id}`, updatedData);
+      }
+      
       setBookings(prev => prev.map(booking => 
         booking.id === id ? updatedBooking : booking
       ));

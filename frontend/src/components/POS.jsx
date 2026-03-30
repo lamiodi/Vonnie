@@ -12,7 +12,7 @@ const POS = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
-  
+
   // Initialize cart from localStorage
   const [cart, setCart] = useState(() => {
     try {
@@ -30,7 +30,7 @@ const POS = () => {
   const [selectedServiceCategory, setSelectedServiceCategory] = useState('');
   const [skuInput, setSkuInput] = useState('');
   const [scanningMode, setScanningMode] = useState(false);
-  
+
   // Size Selection Modal State
   const [showSizeModal, setShowSizeModal] = useState(false);
   const [selectedProductForSize, setSelectedProductForSize] = useState(null);
@@ -44,7 +44,7 @@ const POS = () => {
   const [apiOnline, setApiOnline] = useState(true);
   const [paystackReference, setPaystackReference] = useState("");
   const [bookingNumber, setBookingNumber] = useState('');
-  
+
   // Initialize bookingData from localStorage
   const [bookingData, setBookingData] = useState(() => {
     try {
@@ -56,7 +56,7 @@ const POS = () => {
   });
 
   const [bookingLoading, setBookingLoading] = useState(false);
-  
+
   // Initialize customerInfo from localStorage
   const [customerInfo, setCustomerInfo] = useState(() => {
     try {
@@ -89,6 +89,7 @@ const POS = () => {
   }, [customerInfo]);
 
   const [activeTab, setActiveTab] = useState('products');
+  const [miscCharges, setMiscCharges] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Helper function to format prices without showing .00
@@ -104,8 +105,8 @@ const POS = () => {
   const filteredProducts = useMemo(() => {
     return products.filter(product => {
       const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                           (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
+        (product.sku && product.sku.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (product.barcode && product.barcode.toLowerCase().includes(searchTerm.toLowerCase()));
       const matchesCategory = selectedCategory === '' || product.category === selectedCategory;
       return matchesSearch && matchesCategory;
     });
@@ -115,7 +116,7 @@ const POS = () => {
   const filteredServices = useMemo(() => {
     return services.filter(service => {
       const matchesSearch = service.name.toLowerCase().includes(serviceSearchTerm.toLowerCase()) ||
-                           (service.description && service.description.toLowerCase().includes(serviceSearchTerm.toLowerCase()));
+        (service.description && service.description.toLowerCase().includes(serviceSearchTerm.toLowerCase()));
       const matchesCategory = selectedServiceCategory === '' || service.category === selectedServiceCategory;
       return matchesSearch && matchesCategory;
     });
@@ -155,11 +156,11 @@ const POS = () => {
   useEffect(() => {
     const bookingId = searchParams.get('booking_id');
     const customerId = searchParams.get('customer_id');
-  
+
     if (bookingId) {
       // Fetch booking by ID
       fetchBookingById(bookingId);
-    
+
       // Clear URL parameters after loading
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete('booking_id');
@@ -171,18 +172,18 @@ const POS = () => {
     try {
       setBookingLoading(true);
       const response = await apiGet(`${API_ENDPOINTS.BOOKINGS}/${bookingId}`);
-    
+
       if (response) {
         const booking = response;
         // Allow bookings with statuses aligned to backend schema
         const allowedStatuses = ['scheduled', 'in-progress', 'completed'];
-      
+
         if (!allowedStatuses.includes(booking.status)) {
           handleError(null, `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'Scheduled', 'In Progress', or 'Completed' can be processed through POS.`);
           setBookingData(null);
           return;
         }
-      
+
         setBookingData(booking);
         setBookingNumber(booking.booking_number || '');
         setCustomerInfo({
@@ -190,7 +191,7 @@ const POS = () => {
           email: booking.customer_email || '',
           phone: booking.customer_phone || ''
         });
-      
+
         // Auto-update status to 'in-progress' for walk-in customers
         const isWalkIn = booking.customer_type === 'walk_in' || booking.customer_type === 'walk-in';
         if (isWalkIn && booking.status === 'scheduled') {
@@ -247,9 +248,9 @@ const POS = () => {
       const response = await apiGet(API_ENDPOINTS.BOOKINGS, { booking_number: bookingNumber });
       // Handle both array and single object responses
       const booking = Array.isArray(response) ? (response.length > 0 ? response[0] : null) : response;
-    
+
       if (booking) {
-      
+
         // Allow bookings with statuses aligned to backend schema
         const allowedStatuses = ['scheduled', 'in-progress', 'completed'];
         if (!allowedStatuses.includes(booking.status)) {
@@ -258,14 +259,14 @@ const POS = () => {
           setBookingLoading(false);
           return;
         }
-      
+
         setBookingData(booking);
         setCustomerInfo({
           name: booking.customer_name || '',
           email: booking.customer_email || '',
           phone: booking.customer_phone || ''
         });
-      
+
         // Auto-update status to 'in-progress' for walk-in customers
         const isWalkIn = booking.customer_type === 'walk_in' || booking.customer_type === 'walk-in';
         if (isWalkIn && booking.status === 'scheduled') {
@@ -313,12 +314,14 @@ const POS = () => {
     setAppliedCoupon(null);
     setCouponCode('');
     setPaymentConfirmed(false);
+    setMiscCharges([]);
   }, []);
   const clearBooking = useCallback(() => {
     setBookingData(null);
     setBookingNumber('');
     setCustomerInfo({ name: '', email: '', phone: '' });
     setPaymentConfirmed(false);
+    setMiscCharges([]);
   }, []);
   // ==========================================
   // CART MANAGEMENT LOGIC
@@ -329,13 +332,17 @@ const POS = () => {
     const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
     // Include service price from loaded booking if applicable
     const serviceTotal = bookingData ? parseFloat(bookingData.service_price || 0) : 0;
-    return cartTotal + serviceTotal;
-  }, [cart, bookingData]);
+
+    // Include miscellaneous charges from local state
+    const miscTotal = miscCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
+
+    return cartTotal + serviceTotal + miscTotal;
+  }, [cart, bookingData, miscCharges]);
 
   // Calculate discount based on coupon type (percentage vs fixed)
   const getDiscount = useCallback(() => {
     if (!appliedCoupon) return 0;
-  
+
     const subtotal = getSubtotal();
     if (appliedCoupon.discount_type === 'percentage') {
       return (subtotal * appliedCoupon.discount_value) / 100;
@@ -362,7 +369,7 @@ const POS = () => {
     if (paymentConfirmed) {
       setPaymentConfirmed(false);
     }
-  
+
     // Check if product has sizes and no size is selected yet
     if (type === 'product' && !size && item.stock_by_size && Object.keys(item.stock_by_size).length > 0) {
       setSelectedProductForSize(item);
@@ -372,7 +379,7 @@ const POS = () => {
 
     const cartItemId = size ? `${item.id}-${size}` : item.id;
     const existingItem = cart.find(cartItem => cartItem.cartItemId === cartItemId && cartItem.type === type);
-  
+
     if (type === 'service') {
       // Services can be added multiple times (quantity increases)
       if (existingItem) {
@@ -387,7 +394,7 @@ const POS = () => {
     } else {
       // Product logic: Check stock levels before adding
       let availableStock = item.stock_level;
-      
+
       if (size) {
         availableStock = item.stock_by_size[size] || 0;
       }
@@ -396,7 +403,7 @@ const POS = () => {
         handleError(null, `Product "${item.name}" ${size ? `(Size ${size})` : ''} is out of stock`);
         return;
       }
-      
+
       if (existingItem) {
         if (existingItem.quantity < availableStock) {
           setCart(cart.map(cartItem =>
@@ -418,20 +425,20 @@ const POS = () => {
       removeFromCart(cartItemId, itemType);
       return;
     }
-    
+
     setCart(cart.map(item => {
       if (item.cartItemId === cartItemId && item.type === itemType) {
         if (itemType === 'product') {
-           const product = products.find(p => p.id === item.id);
-           let availableStock = product.stock_level;
-           if (item.size && product.stock_by_size) {
-             availableStock = product.stock_by_size[item.size] || 0;
-           }
-           
-           if (newQuantity > availableStock) {
-             handleError(null, 'Not enough stock available');
-             return item;
-           }
+          const product = products.find(p => p.id === item.id);
+          let availableStock = product.stock_level;
+          if (item.size && product.stock_by_size) {
+            availableStock = product.stock_by_size[item.size] || 0;
+          }
+
+          if (newQuantity > availableStock) {
+            handleError(null, 'Not enough stock available');
+            return item;
+          }
         }
         return { ...item, quantity: newQuantity };
       }
@@ -445,8 +452,8 @@ const POS = () => {
       handleError(null, 'Invalid price');
       return;
     }
-    
-    setCart(cart.map(item => 
+
+    setCart(cart.map(item =>
       (item.cartItemId === cartItemId && item.type === itemType)
         ? { ...item, price: price }
         : item
@@ -456,10 +463,37 @@ const POS = () => {
   const removeFromCart = useCallback((cartItemId, itemType = 'product') => {
     setCart(cart.filter(item => !(item.cartItemId === cartItemId && item.type === itemType)));
   }, [cart]);
+
+  // Misc Charge Management
+  const addMiscCharge = useCallback(() => {
+    const name = prompt("Enter charge name (e.g. Hair Dye Upgrade):");
+    if (!name) return;
+    const amount = prompt("Enter amount (₦):");
+    if (!amount || isNaN(parseFloat(amount))) {
+      if (amount) toast.error("Invalid amount");
+      return;
+    }
+
+    setMiscCharges(prev => [...prev, { name, amount: parseFloat(amount) }]);
+    toast.success(`Miscellaneous charge "${name}" added`);
+  }, []);
+
+  const removeMiscCharge = useCallback((index) => {
+    setMiscCharges(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  // Sync misc charges when booking is loaded
+  useEffect(() => {
+    if (bookingData && bookingData.misc_charges) {
+      setMiscCharges(bookingData.misc_charges);
+    } else if (!bookingData) {
+      setMiscCharges([]);
+    }
+  }, [bookingData]);
   const handleSkuInput = useCallback((e) => {
     const sku = e.target.value;
     setSkuInput(sku);
-  
+
     if (sku.length >= 3 && /^[\dA-Za-z]+$/.test(sku)) {
       searchProductBySku(sku);
     }
@@ -467,7 +501,7 @@ const POS = () => {
   const searchProductBySku = useCallback(async (sku) => {
     try {
       const response = await apiGet(API_ENDPOINTS.INVENTORY_BARCODE(sku));
-    
+
       if (response) {
         const product = response;
         if (scanningMode) {
@@ -542,7 +576,7 @@ const POS = () => {
     }
     // Manager processes payment - use authenticated user's email for Paystack
     const managerEmail = user?.email || "manager@vonniesalon.com"; // Fallback to hardcoded if no user email
-  
+
     const config = {
       reference: generatePaystackReference(), // Generate unique reference
       email: managerEmail,
@@ -595,7 +629,7 @@ const POS = () => {
     const onSuccess = async (response) => {
       try {
         setProcessing(true);
-      
+
         // Create complete POS transaction after Paystack payment
         const transactionData = {
           booking_number: bookingData?.booking_number || null,
@@ -610,42 +644,43 @@ const POS = () => {
           staff_id: user?.id,
           coupon_code: appliedCoupon?.code || null,
           tax: getTaxAmount(),
+          misc_charges: miscCharges,
           payment_reference: response.reference,
           payment_method: 'paystack',
           payment_status: 'completed'
         };
         // Process the complete transaction
         const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-      
+
         // Handle different response structures
         const responseData = transactionResponse.data || transactionResponse;
         const isSuccess = transactionResponse.success !== false && responseData;
-      
+
         if (isSuccess) {
           setPaymentConfirmed(true);
           toast.success("Payment processed and transaction completed successfully!");
-        
+
           const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
           let successMessage = `Transaction completed! ID: ${transactionNumber}`;
-        
+
           if (responseData.booking_updated && bookingData) {
             successMessage += `\n\nBooking ${bookingData.booking_number} updated to COMPLETED.`;
             successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
             successMessage += `\nTotal: ₦${formatPrice(getTotal())}`;
           }
-        
+
           handleSuccess(successMessage);
-        
-        
+
+
           // Refresh booking data after successful payment
           if (bookingData?.booking_number) {
             fetchBookingByNumber(bookingData.booking_number);
           }
-        
+
           // Clear cart and refresh inventory
           clearCart();
           fetchProducts();
-        
+
           // Receipt modal removed; success already shown via toast and handleSuccess
         } else {
           throw new Error("Transaction processing failed");
@@ -689,48 +724,49 @@ const POS = () => {
         staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
+        misc_charges: miscCharges,
         payment_reference: generatePOSReference(),
         payment_method: 'bank_transfer_pos',
         payment_status: 'completed'
       };
       // Process the complete transaction
       const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-    
+
       // Handle different response structures
       const responseData = transactionResponse.data || transactionResponse;
       const isSuccess = transactionResponse.success !== false && responseData;
-    
+
       if (isSuccess) {
         setPaymentConfirmed(true);
-      
+
         // Note: Backend automatically handles booking status updates via payment webhooks
         // No need for manual booking status update here - backend will sync automatically
-      
+
         if (bookingData && bookingData.id) {
           console.log('Payment processed for booking:', bookingData.booking_number);
           // Backend will automatically update booking status via payment confirmation logic
         }
-      
+
         // Show success message
         const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
         let successMessage = `Bank Transfer/Physical POS payment successful! Transaction ID: ${transactionNumber}`;
-      
+
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
           successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
         }
-      
+
         handleSuccess(successMessage);
-      
-      
+
+
         // Clear cart and reset state
         setCart([]);
         setAppliedCoupon(null);
         setCouponCode('');
-      
+
         // Receipt modal removed; success already shown via toast and handleSuccess
-      
+
       } else {
         handleError(null, 'Payment processing failed. Please try again.');
       }
@@ -772,44 +808,45 @@ const POS = () => {
         staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
+        misc_charges: miscCharges,
         payment_reference: generateBankTransferReference(),
         payment_method: 'bank_transfer_pos',
         payment_status: 'completed'
       };
       // Process the complete transaction
       const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-    
+
       // Handle different response structures
       const responseData = transactionResponse.data || transactionResponse;
       const isSuccess = transactionResponse.success !== false && responseData;
-    
+
       if (isSuccess) {
         setPaymentConfirmed(true);
-      
+
         // Backend will handle all booking status updates via webhooks
         // No frontend status updates to prevent conflicts with auto-completion logic
-      
+
         // Show success message
         const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
         let successMessage = `Bank transfer payment recorded! Transaction ID: ${transactionNumber}`;
-      
+
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
           successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
           successMessage += `\n\nPlease confirm transfer receipt before completing service.`;
         }
-      
+
         handleSuccess(successMessage);
-      
-      
+
+
         // Clear cart and reset state
         setCart([]);
         setAppliedCoupon(null);
         setCouponCode('');
-      
+
         // Receipt modal removed; success already shown via toast and handleSuccess
-      
+
       } else {
         handleError(null, 'Payment processing failed. Please try again.');
       }
@@ -835,7 +872,7 @@ const POS = () => {
     try {
       // Simulate POS terminal processing delay
       await new Promise(resolve => setTimeout(resolve, 3000));
-    
+
       // Create complete POS transaction for POS terminal payment
       const transactionData = {
         booking_number: bookingData?.booking_number || null,
@@ -850,43 +887,44 @@ const POS = () => {
         staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
         tax: getTaxAmount(),
+        misc_charges: miscCharges,
         payment_reference: generatePOSReference(),
         payment_method: 'physical_pos',
         payment_status: 'completed'
       };
       // Process the complete transaction
       const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-    
+
       // Handle different response structures
       const responseData = transactionResponse.data || transactionResponse;
       const isSuccess = transactionResponse.success !== false && responseData;
-    
+
       if (isSuccess) {
         setPaymentConfirmed(true);
-      
+
         // Backend will handle all booking status updates via webhooks
         // No frontend status updates to prevent conflicts with auto-completion logic
-      
+
         // Show success message
         const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
         let successMessage = `POS Terminal payment successful! Transaction ID: ${transactionNumber}`;
-      
+
         if (bookingData) {
           successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
           successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
           successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
         }
-      
+
         handleSuccess(successMessage);
-      
-      
+
+
         // Clear cart and reset state
         setCart([]);
         setAppliedCoupon(null);
         setCouponCode('');
-      
+
         // Receipt modal removed; success already shown via toast and handleSuccess
-      
+
       } else {
         handleError(null, 'Payment processing failed. Please try again.');
       }
@@ -906,7 +944,7 @@ const POS = () => {
       handleError(null, 'Please provide customer name and phone number');
       return;
     }
-    
+
     // Validate inventory availability before checkout
     const inventoryErrors = [];
     cart.forEach(item => {
@@ -921,12 +959,12 @@ const POS = () => {
         }
       }
     });
-    
+
     if (inventoryErrors.length > 0) {
       handleError(null, `Inventory issues: ${inventoryErrors.join(', ')}`);
       return;
     }
-    
+
     setProcessing(true);
     try {
       const transactionData = {
@@ -941,16 +979,17 @@ const POS = () => {
         customer_info: customerInfo,
         staff_id: user?.id,
         coupon_code: appliedCoupon?.code || null,
-        tax: getTaxAmount()
+        tax: getTaxAmount(),
+        misc_charges: miscCharges
       };
       const response = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-    
+
       // Handle different response structures
       const responseData = response.data || response;
       const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
-    
+
       let successMessage = `Transaction completed successfully! Transaction ID: ${transactionNumber}`;
-     
+
       if (responseData.booking_updated || response.booking_updated) {
         successMessage += `\n\nBooking ${bookingData.booking_number} has been marked as COMPLETED.`;
         successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
@@ -958,11 +997,11 @@ const POS = () => {
         const formattedAmount = formatPrice(totalAmount);
         successMessage += `\nTotal Amount: ₦${formattedAmount}`;
       }
-    
+
       handleSuccess(successMessage);
-    
+
       // Receipt modal removed; success already shown via toast and handleSuccess
-    
+
       // Reset all state after successful checkout
       setCart([]);
       setAppliedCoupon(null);
@@ -970,7 +1009,7 @@ const POS = () => {
       setPaymentConfirmed(false);
       clearBooking();
       fetchProducts();
-    
+
     } catch (error) {
       console.error('Error processing transaction:', error);
       handleError(error, 'Error processing transaction. Please try again.');
@@ -981,7 +1020,7 @@ const POS = () => {
 
   // Socket.IO Integration for Real-time Payment Updates
   const bookingIdRef = useRef(null);
-  
+
   useEffect(() => {
     bookingIdRef.current = bookingData?.id;
   }, [bookingData]);
@@ -991,17 +1030,17 @@ const POS = () => {
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5010/api';
     // Remove /api from the end to get the root URL
     const SOCKET_URL = API_URL.replace(/\/api$/, '');
-    
+
     console.log('🔌 Connecting to socket server at:', SOCKET_URL);
     const socket = io(SOCKET_URL);
-    
+
     socket.on('connect', () => {
       console.log('✅ Connected to socket server');
     });
 
     socket.on('payment-verified', (data) => {
       console.log('💰 Payment verified event received:', data);
-      
+
       // Check if this payment matches the current booking
       // We use ref to access the latest booking ID without re-running effect
       if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
@@ -1009,7 +1048,7 @@ const POS = () => {
           handleSuccess(`Payment verified via Webhook! Reference: ${data.reference}`);
           setPaymentConfirmed(true);
           setPaystackReference(data.reference);
-          
+
           // Clear cart and reset state as requested
           setCart([]);
           setAppliedCoupon(null);
@@ -1021,9 +1060,9 @@ const POS = () => {
     });
 
     socket.on('payment-failed', (data) => {
-       if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
-         handleError(null, `Payment failed via Webhook. Reference: ${data.reference}`);
-       }
+      if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
+        handleError(null, `Payment failed via Webhook. Reference: ${data.reference}`);
+      }
     });
 
     return () => {
@@ -1096,7 +1135,7 @@ const POS = () => {
                   )}
                 </div>
               </div>
-            
+
               {bookingData && (
                 <div className="mt-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
                   <div className="flex items-start justify-between mb-3">
@@ -1122,12 +1161,11 @@ const POS = () => {
                     </div>
                     <div className="flex items-center">
                       <span className="text-gray-600 font-medium">Status:</span>
-                      <span className={`ml-2 px-2.5 py-1 rounded-full text-xs font-medium ${
-                        bookingData.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
-                        bookingData.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
-                        bookingData.status === 'completed' ? 'bg-green-100 text-green-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
+                      <span className={`ml-2 px-2.5 py-1 rounded-full text-xs font-medium ${bookingData.status === 'scheduled' ? 'bg-blue-100 text-blue-800' :
+                          bookingData.status === 'in-progress' ? 'bg-yellow-100 text-yellow-800' :
+                            bookingData.status === 'completed' ? 'bg-green-100 text-green-800' :
+                              'bg-gray-100 text-gray-800'
+                        }`}>
                         {bookingData.status.replace('_', ' ').toUpperCase()}
                       </span>
                     </div>
@@ -1148,21 +1186,19 @@ const POS = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => setActiveTab('products')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                    activeTab === 'products'
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${activeTab === 'products'
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   📦 Products
                 </button>
                 <button
                   onClick={() => setActiveTab('services')}
-                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${
-                    activeTab === 'services'
+                  className={`flex-1 px-4 py-2.5 rounded-lg font-medium transition-all ${activeTab === 'services'
                       ? 'bg-blue-600 text-white shadow-md'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }`}
+                    }`}
                 >
                   🔧 Services
                 </button>
@@ -1179,11 +1215,10 @@ const POS = () => {
                 </h3>
                 <button
                   onClick={toggleScanningMode}
-                  className={`px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${
-                    scanningMode
+                  className={`px-4 py-2 rounded-lg font-medium transition-all shadow-sm ${scanningMode
                       ? 'bg-red-500 text-white hover:bg-red-600'
                       : 'bg-green-500 text-white hover:bg-green-600'
-                  }`}
+                    }`}
                 >
                   {scanningMode ? '⏹ Stop Scanning' : '▶ Start Scanning'}
                 </button>
@@ -1194,11 +1229,10 @@ const POS = () => {
                   placeholder="Scan or enter SKU..."
                   value={skuInput}
                   onChange={handleSkuInput}
-                  className={`w-full px-4 py-3 pr-12 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${
-                    scanningMode
+                  className={`w-full px-4 py-3 pr-12 border-2 rounded-lg focus:outline-none focus:ring-2 transition ${scanningMode
                       ? 'border-green-300 focus:ring-green-500 bg-green-50'
                       : 'border-gray-300 focus:ring-blue-500 bg-white'
-                  }`}
+                    }`}
                 />
                 {scanningMode && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1306,25 +1340,23 @@ const POS = () => {
                   <div
                     key={product.id}
                     onClick={() => addToCart(product, 'product')}
-                    className={`bg-white rounded-xl shadow-sm border p-4 hover:shadow-lg transition-all cursor-pointer group ${
-                      product.stock_level <= 0 
-                        ? 'border-red-200 opacity-60 cursor-not-allowed' 
-                        : product.stock_level <= 5 
-                          ? 'border-yellow-200 hover:border-yellow-300' 
+                    className={`bg-white rounded-xl shadow-sm border p-4 hover:shadow-lg transition-all cursor-pointer group ${product.stock_level <= 0
+                        ? 'border-red-200 opacity-60 cursor-not-allowed'
+                        : product.stock_level <= 5
+                          ? 'border-yellow-200 hover:border-yellow-300'
                           : 'border-gray-200 hover:border-blue-300'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-start justify-between mb-3">
                       <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center group-hover:bg-blue-200 transition">
                         <span className="text-xl">📦</span>
                       </div>
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        product.stock_level <= 0 
-                          ? 'bg-red-100 text-red-700' 
-                          : product.stock_level <= 5 
-                            ? 'bg-yellow-100 text-yellow-700' 
+                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${product.stock_level <= 0
+                          ? 'bg-red-100 text-red-700'
+                          : product.stock_level <= 5
+                            ? 'bg-yellow-100 text-yellow-700'
                             : 'bg-gray-100 text-gray-600'
-                      }`}>
+                        }`}>
                         {product.stock_level <= 0 ? 'Out of Stock' : `${product.stock_level} in stock`}
                       </span>
                     </div>
@@ -1369,21 +1401,21 @@ const POS = () => {
                   type="text"
                   placeholder="Customer Name *"
                   value={customerInfo.name}
-                  onChange={(e) => setCustomerInfo({...customerInfo, name: e.target.value})}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
                 <input
                   type="tel"
                   placeholder="Phone Number *"
                   value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({...customerInfo, phone: e.target.value})}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
                 <input
                   type="email"
                   placeholder="Email (optional)"
                   value={customerInfo.email}
-                  onChange={(e) => setCustomerInfo({...customerInfo, email: e.target.value})}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
               </div>
@@ -1415,9 +1447,50 @@ const POS = () => {
                           <p className="text-sm font-bold text-blue-900">₦{formatPrice(bookingData.service_price || 0)}</p>
                         </div>
                       </div>
+                      {/* Miscellaneous Charges Section */}
+                      <div className="mt-2 pt-2 border-t border-blue-200">
+                        <div className="flex justify-between items-center mb-1">
+                          <p className="text-xs font-semibold text-blue-800">Misc Charges:</p>
+                          {(user?.role === 'manager' || user?.role === 'admin') && (
+                            <button
+                              onClick={addMiscCharge}
+                              className="text-[10px] bg-blue-600 text-white px-1.5 py-0.5 rounded hover:bg-blue-700 transition"
+                              title="Add miscellaneous charge"
+                            >
+                              + Add
+                            </button>
+                          )}
+                        </div>
+
+                        {miscCharges.length > 0 ? (
+                          <div className="space-y-1">
+                            {miscCharges.map((charge, idx) => (
+                              <div key={idx} className="flex justify-between items-center text-xs text-blue-700 group">
+                                <span className="truncate flex-1">- {charge.name}</span>
+                                <div className="flex items-center gap-1.5 no-shrink">
+                                  <span className="font-medium">₦{formatPrice(charge.amount || 0)}</span>
+                                  {(user?.role === 'manager' || user?.role === 'admin') && (
+                                    <button
+                                      onClick={() => removeMiscCharge(idx)}
+                                      className="text-red-500 hover:text-red-700 opacity-0 group-hover:opacity-100 transition"
+                                      title="Remove charge"
+                                    >
+                                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                      </svg>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[10px] text-blue-400 italic">No miscellaneous charges added</p>
+                        )}
+                      </div>
                     </div>
                   )}
-                
+
                   {/* Regular cart items */}
                   {cart.map(item => (
                     <div key={`${item.type}-${item.id}`} className="p-2 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition">
@@ -1432,7 +1505,7 @@ const POS = () => {
                           <div className="flex items-center space-x-1">
                             <p className="text-xs text-gray-500">₦{formatPrice(item.price)} each</p>
                             {item.type === 'service' && (
-                              <button 
+                              <button
                                 onClick={() => {
                                   const newPrice = prompt("Enter new price:", item.price);
                                   if (newPrice !== null) {
@@ -1546,7 +1619,7 @@ const POS = () => {
                   </div>
                   */}
                 </div>
-              
+
                 <div className="pt-2 border-t-2 border-gray-200">
                   <div className="flex justify-between items-center mb-3">
                     <span className="text-base font-bold text-gray-900">Total</span>
@@ -1588,7 +1661,7 @@ const POS = () => {
                           </span>
                         )}
                       </button>
-                      
+
                       {/* Alternative Payment Methods (Bank Transfer / Physical POS) */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
@@ -1598,7 +1671,7 @@ const POS = () => {
                           <span className="px-2 bg-white text-gray-500">or use when Paystack is down</span>
                         </div>
                       </div>
-                      
+
                       {/* Bank Transfer / Physical POS Button */}
                       <button
                         onClick={handleCashPayment}
@@ -1608,8 +1681,8 @@ const POS = () => {
                         {processing ? (
                           <span className="flex items-center gap-2">
                             <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
                             Processing...
                           </span>
@@ -1637,31 +1710,31 @@ const POS = () => {
           </div>
         </div>
       </div>
-    {/* Size Selection Modal */}
+      {/* Size Selection Modal */}
       {showSizeModal && selectedProductForSize && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-4">Select Size for {selectedProductForSize.name}</h3>
-            
+
             <div className="grid grid-cols-2 gap-3 mb-6">
               {Object.entries(selectedProductForSize.stock_by_size || {})
                 .filter(([_, stock]) => stock > 0)
                 .map(([size, stock]) => (
-                <button
-                  key={size}
-                  onClick={() => {
-                    addToCart(selectedProductForSize, 'product', size);
-                    setShowSizeModal(false);
-                    setSelectedProductForSize(null);
-                  }}
-                  className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
-                >
-                  <span className="text-lg font-bold text-gray-800">{size}</span>
-                  <span className="text-xs text-gray-500">{stock} available</span>
-                </button>
-              ))}
+                  <button
+                    key={size}
+                    onClick={() => {
+                      addToCart(selectedProductForSize, 'product', size);
+                      setShowSizeModal(false);
+                      setSelectedProductForSize(null);
+                    }}
+                    className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
+                  >
+                    <span className="text-lg font-bold text-gray-800">{size}</span>
+                    <span className="text-xs text-gray-500">{stock} available</span>
+                  </button>
+                ))}
             </div>
-            
+
             <div className="flex justify-end">
               <button
                 onClick={() => {

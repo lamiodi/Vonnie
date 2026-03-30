@@ -289,6 +289,7 @@ router.get('/', authenticate, async (req, res) => {
         u.name as worker_name,
         svc.service_names,
         svc.service_price,
+        (SELECT json_agg(json_build_object('name', bmc.name, 'amount', bmc.amount)) FROM booking_misc_charges bmc WHERE bmc.booking_id = b.id) as misc_charges,
         COALESCE(
           json_agg(
             json_build_object(
@@ -561,6 +562,7 @@ router.get('/:id', authenticate, async (req, res) => {
         u.name as worker_name,
         svc.service_names,
         svc.service_price,
+        (SELECT json_agg(json_build_object('name', bmc.name, 'amount', bmc.amount)) FROM booking_misc_charges bmc WHERE bmc.booking_id = b.id) as misc_charges,
         COALESCE(
           json_agg(
             json_build_object(
@@ -598,6 +600,137 @@ router.get('/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Get booking by ID error:', error);
     res.status(400).json(errorResponse(error.message, 'BOOKING_RETRIEVAL_ERROR', 400));
+  }
+});
+
+// Update booking details completely (requires authentication)
+router.put('/:id', authenticate, async (req, res) => {
+  const client = await getClient();
+  try {
+    const { id } = req.params;
+    const { customer_name, customer_email, customer_phone, scheduled_time, service_ids, notes, misc_charges } = req.body;
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    await client.query('BEGIN');
+
+    // Get current booking details
+    const currentBookingRes = await client.query('SELECT * FROM bookings WHERE id = $1 FOR UPDATE', [id]);
+    if (currentBookingRes.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json(notFoundResponse('Booking not found'));
+    }
+    const booking = currentBookingRes.rows[0];
+
+    // Recalculate duration and price from services
+    let totalDuration = 60;
+    let totalPrice = 0;
+    let services = [];
+
+    if (service_ids && Array.isArray(service_ids) && service_ids.length > 0) {
+      const servicesResult = await client.query(
+        'SELECT id, name, price, duration, max_duration FROM services WHERE id = ANY($1)',
+        [service_ids]
+      );
+      
+      services = servicesResult.rows;
+      totalPrice = services.reduce((sum, s) => sum + parseFloat(s.price), 0);
+      totalDuration = services.reduce((sum, s) => sum + (s.max_duration ? parseInt(s.max_duration) : parseInt(s.duration || 0)), 0);
+    }
+
+    // Handle miscellaneous charges
+    let totalMiscCharges = 0;
+    if (misc_charges && Array.isArray(misc_charges)) {
+      // First, delete existing misc charges for this booking
+      await client.query('DELETE FROM booking_misc_charges WHERE booking_id = $1', [id]);
+      
+      // Insert new ones
+      for (const charge of misc_charges) {
+        const amount = parseFloat(charge.amount) || 0;
+        if (amount > 0 && charge.name) {
+          await client.query(
+            'INSERT INTO booking_misc_charges (booking_id, name, amount, created_by) VALUES ($1, $2, $3, $4)',
+            [id, charge.name, amount, userId]
+          );
+          totalMiscCharges += amount;
+        }
+      }
+    } else {
+      // If none provided, calculate existing ones to keep total_amount accurate
+      const existingMiscRes = await client.query('SELECT SUM(amount) as sum FROM booking_misc_charges WHERE booking_id = $1', [id]);
+      totalMiscCharges = parseFloat(existingMiscRes.rows[0].sum || 0);
+    }
+
+    // Update the booking details
+    const finalTotalAmount = totalPrice + totalMiscCharges;
+    
+    // Calculate new scheduled time or keep existing
+    let formattedScheduledTime = booking.scheduled_time;
+    if (scheduled_time) {
+      const dateObj = new Date(scheduled_time);
+      if (!isNaN(dateObj.getTime())) {
+        formattedScheduledTime = dateObj.toISOString();
+      }
+    }
+
+    await client.query(
+      `UPDATE bookings 
+       SET customer_name = COALESCE($1, customer_name), 
+           customer_email = COALESCE($2, customer_email), 
+           customer_phone = COALESCE($3, customer_phone), 
+           scheduled_time = COALESCE($4, scheduled_time), 
+           duration = $5, 
+           total_amount = $6, 
+           misc_charges_amount = $7,
+           notes = COALESCE($8, notes),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $9`,
+      [
+        customer_name, 
+        customer_email, 
+        customer_phone, 
+        formattedScheduledTime, 
+        totalDuration, 
+        finalTotalAmount, 
+        totalMiscCharges,
+        notes, 
+        id
+      ]
+    );
+
+    // Update booking_services
+    if (service_ids && Array.isArray(service_ids)) {
+      await client.query('DELETE FROM booking_services WHERE booking_id = $1', [id]);
+      for (const service of services) {
+        await client.query(
+          'INSERT INTO booking_services (booking_id, service_id, unit_price, total_price) VALUES ($1, $2, $3, $4)',
+          [id, service.id, service.price, service.price]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+
+    // Fetch the updated booking with services
+    const result = await query(
+      `SELECT b.*, 
+        (SELECT json_agg(json_build_object('name', bmc.name, 'amount', bmc.amount)) FROM booking_misc_charges bmc WHERE bmc.booking_id = b.id) as misc_charges,
+        array_agg(s.name ORDER BY s.name) as service_names
+       FROM bookings b
+       LEFT JOIN booking_services bs ON bs.booking_id = b.id
+       LEFT JOIN services s ON bs.service_id = s.id
+       WHERE b.id = $1
+       GROUP BY b.id`,
+      [id]
+    );
+
+    res.json(successResponse(result.rows[0], 'Booking updated successfully'));
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update booking details error:', error);
+    res.status(400).json(errorResponse(error.message, 'BOOKING_UPDATE_ERROR', 400));
+  } finally {
+    client.release();
   }
 });
 
