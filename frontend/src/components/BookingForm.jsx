@@ -348,14 +348,14 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       if (isWalkInMode) {
         // For walk-in customers, use current date/time
         const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
+        const dateStr = now.toLocaleDateString('en-CA'); // YYYY-MM-DD in local time
         const timeStr = now.toTimeString().slice(0, 8); // HH:MM:SS format
 
         payload = {
           ...formData,
           service_ids: formData.service_ids, // Send array of service IDs
           service_id: formData.service_ids[0], // Keep for backward compatibility
-          scheduled_time: `${dateStr}T${timeStr}`,
+          scheduled_time: `${dateStr}T${timeStr}+01:00`,
           booking_date: dateStr,
           booking_time: timeStr.slice(0, 5), // HH:MM format
           notes: formData.notes || 'Walk-in customer',
@@ -364,19 +364,19 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         };
       } else {
         // For regular bookings, use selected date/time
+        const dateStr = formData.booking_date.toLocaleDateString('en-CA');
         const bookingData = {
           ...formData,
           service_ids: formData.service_ids, // Send array of service IDs
           service_id: formData.service_ids[0], // Keep for backward compatibility
-          booking_date: formData.booking_date.toISOString().split('T')[0]
+          booking_date: dateStr
         };
 
         // Compose scheduled_time from selected date and time if available
-        const dateStr = formData.booking_date.toISOString().split('T')[0];
         const timeStr = formData.booking_time.length === 5 ? `${formData.booking_time}:00` : formData.booking_time;
         payload = {
           ...bookingData,
-          scheduled_time: `${dateStr}T${timeStr}`,
+          scheduled_time: `${dateStr}T${timeStr}+01:00`,
           customer_type: 'pre_booked'
           // booking_number removed - now generated server-side
         };
