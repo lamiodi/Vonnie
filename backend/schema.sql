@@ -75,6 +75,17 @@ CREATE TABLE public.bookings (
   CONSTRAINT bookings_pkey PRIMARY KEY (id),
   CONSTRAINT bookings_worker_id_fkey FOREIGN KEY (worker_id) REFERENCES public.users(id)
 );
+CREATE TABLE public.booking_misc_charges (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  booking_id uuid NOT NULL,
+  name character varying NOT NULL,
+  amount numeric NOT NULL,
+  created_by uuid,
+  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT booking_misc_charges_pkey PRIMARY KEY (id),
+  CONSTRAINT booking_misc_charges_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id) ON DELETE CASCADE,
+  CONSTRAINT booking_misc_charges_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
+);
 CREATE TABLE public.coupon_usage (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
   coupon_id uuid NOT NULL,
@@ -184,6 +195,15 @@ CREATE TABLE public.payments (
   CONSTRAINT payments_pkey PRIMARY KEY (id),
   CONSTRAINT payments_booking_id_fkey FOREIGN KEY (booking_id) REFERENCES public.bookings(id),
   CONSTRAINT payments_pos_transaction_id_fkey FOREIGN KEY (pos_transaction_id) REFERENCES public.pos_transactions(id)
+);
+CREATE TABLE public.pos_misc_charges (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  transaction_id uuid NOT NULL,
+  name character varying NOT NULL,
+  amount numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT pos_misc_charges_pkey PRIMARY KEY (id),
+  CONSTRAINT pos_misc_charges_transaction_id_fkey FOREIGN KEY (transaction_id) REFERENCES public.pos_transactions(id) ON DELETE CASCADE
 );
 CREATE TABLE public.pos_transaction_items (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),

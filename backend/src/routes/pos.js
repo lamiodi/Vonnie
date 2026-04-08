@@ -533,7 +533,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
           // If the charge is newly added (e.g. from POS), we save it to the database
           if (!charge.id) {
             await client.query(
-              'INSERT INTO misc_charges (booking_id, name, amount, created_by) VALUES ($1, $2, $3, $4)',
+              'INSERT INTO booking_misc_charges (booking_id, name, amount, created_by) VALUES ($1, $2, $3, $4)',
               [booking.id, charge.name, charge.amount, processed_by]
             );
             booking_misc_amount += Number(charge.amount);
@@ -746,6 +746,18 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         'INSERT INTO coupon_usage (coupon_id, customer_email, used_at, transaction_id, discount_amount) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4)',
         [coupon_id, customerEmail, transaction.id, discount_amount]
       );
+    }
+
+    // If there are misc charges and no booking (or even with booking), we should save them
+    // For bookings, they are already inserted into misc_charges (booking_misc_charges) above.
+    // For walk-ins (no booking), insert them into pos_misc_charges
+    if (!booking && misc_charges && misc_charges.length > 0) {
+      for (const charge of misc_charges) {
+        await client.query(
+          'INSERT INTO pos_misc_charges (transaction_id, name, amount) VALUES ($1, $2, $3)',
+          [transaction.id, charge.name, charge.amount]
+        );
+      }
     }
 
     // Insert transaction items
@@ -1069,6 +1081,21 @@ router.get('/transactions/:id', authenticate, authorize(['staff', 'manager', 'ad
     `, [id]);
 
     transaction.items = itemsResult.rows;
+
+    // Get miscellaneous charges (from booking_misc_charges or pos_misc_charges)
+    if (transaction.booking_id) {
+      const miscChargesResult = await query(`
+        SELECT * FROM booking_misc_charges
+        WHERE booking_id = $1
+      `, [transaction.booking_id]);
+      transaction.misc_charges = miscChargesResult.rows;
+    } else {
+      const posMiscChargesResult = await query(`
+        SELECT * FROM pos_misc_charges
+        WHERE transaction_id = $1
+      `, [id]);
+      transaction.misc_charges = posMiscChargesResult.rows;
+    }
 
     res.json(transaction);
   } catch (error) {

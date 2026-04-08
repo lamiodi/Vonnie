@@ -372,6 +372,17 @@ const TransactionManagement = () => {
                                     </span>
                                   </li>
                                 ))}
+                                {/* Render Miscellaneous Charges if any */}
+                                {transactionDetails.misc_charges && transactionDetails.misc_charges.map((charge, index) => (
+                                  <li key={`misc-${index}`} className="flex justify-between text-sm">
+                                    <span className="text-gray-700">
+                                      1x {charge.name} (Misc Charge)
+                                    </span>
+                                    <span className="text-gray-900 font-medium">
+                                      {formatCurrency(charge.amount)}
+                                    </span>
+                                  </li>
+                                ))}
                               </ul>
                             ) : (
                               <p className="text-sm text-gray-500 text-center">No items found</p>
@@ -592,6 +603,35 @@ const TransactionManagement = () => {
                                   No items found
                                 </td>
                               </tr>
+                            )}
+                            {/* Render Miscellaneous Charges if any */}
+                            {transactionDetails.misc_charges && transactionDetails.misc_charges.length > 0 && (
+                              <>
+                                <tr className="bg-gray-50">
+                                  <td colSpan="5" className="px-4 py-2 text-xs font-semibold text-gray-700 uppercase">
+                                    Miscellaneous Charges
+                                  </td>
+                                </tr>
+                                {transactionDetails.misc_charges.map((charge, index) => (
+                                  <tr key={`misc-${index}`} className="bg-gray-50">
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                      {charge.name}
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                      Misc Charge
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                      1
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                                      {formatCurrency(charge.amount)}
+                                    </td>
+                                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
+                                      {formatCurrency(charge.amount)}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </>
                             )}
                           </tbody>
                         </table>
