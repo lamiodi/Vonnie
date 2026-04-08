@@ -2,6 +2,7 @@ import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
 import { handleError } from '../utils/errorHandler';
+import api from '../utils/api';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -16,6 +17,7 @@ const Login = () => {
   const [resetEmail, setResetEmail] = useState('');
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
   
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
@@ -47,24 +49,23 @@ const Login = () => {
 
   const handlePasswordReset = async (e) => {
     e.preventDefault();
-    if (!formData.email.trim()) {
-      setError('Please enter your email address');
+    if (!resetEmail.trim()) {
+      setResetError('Please enter your email address');
       return;
     }
 
-    setLoading(true);
-    setError('');
+    setResetLoading(true);
+    setResetError('');
 
     try {
-      // This would call a backend endpoint for password reset
-      // For now, we'll simulate the functionality
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Call backend endpoint for password reset
+      await api.post('/api/auth/forgot-password', { email: resetEmail });
       
-      setError('Password reset instructions sent to your email');
+      setResetSuccess(true);
     } catch (err) {
-      setError('Failed to send reset instructions. Please try again.');
+      setResetError(err.response?.data?.message || err.response?.data?.error || 'Failed to send reset instructions. Please try again.');
     } finally {
-      setLoading(false);
+      setResetLoading(false);
     }
   };
 
@@ -268,6 +269,7 @@ const Login = () => {
                     setShowForgotPassword(false);
                     setResetEmail('');
                     setResetSuccess(false);
+                    setResetError('');
                   }}
                   className="text-gray-400 hover:text-gray-600"
                 >
@@ -305,16 +307,19 @@ const Login = () => {
                       />
                     </div>
 
-                    {error && (
+                    {resetError && (
                       <div className="mb-4 p-2 bg-red-100 border border-red-300 rounded-md">
-                        <p className="text-sm text-red-700">{error}</p>
+                        <p className="text-sm text-red-700">{resetError}</p>
                       </div>
                     )}
 
                     <div className="flex gap-3">
                       <button
                         type="button"
-                        onClick={() => setShowForgotPassword(false)}
+                        onClick={() => {
+                          setShowForgotPassword(false);
+                          setResetError('');
+                        }}
                         className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md font-medium"
                         disabled={resetLoading}
                       >

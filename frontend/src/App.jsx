@@ -13,6 +13,7 @@ import Dashboard from './pages/Dashboard';
 import Bookings from './pages/Bookings';
 import POSPage from './pages/POSPage';
 import Coupons from './pages/Coupons';
+import ResetPassword from './pages/ResetPassword';
 
 import Inventory from './components/Inventory';
 import Workers from './pages/Workers';
@@ -30,6 +31,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/setup-admin" element={<SetupAdmin />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/public-booking" element={<PublicBooking />} />
         <Route path="/walk-in-booking" element={<WalkInBooking />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />

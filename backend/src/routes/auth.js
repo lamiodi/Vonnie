@@ -2,7 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
-import { query } from '../config/db.js';
+import { query, getClient } from '../config/db.js';
 import { authenticate } from '../middleware/auth.js';
 import { loginLimiter } from '../middleware/rateLimiter.js';
 import { sendEmail, sendPasswordResetEmail } from '../services/email.js';
@@ -296,9 +296,16 @@ router.post('/forgot-password', loginLimiter, async (req, res) => {
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
     const resetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
+    // Invalidate any existing unused tokens for this user
     await query(
-      'UPDATE users SET reset_password_token = $1, reset_password_expires = $2 WHERE id = $3',
-      [resetTokenHash, resetExpires, user.id]
+      'UPDATE password_reset_tokens SET used = true WHERE user_id = $1 AND used = false',
+      [user.id]
+    );
+
+    // Insert new token
+    await query(
+      'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)',
+      [user.id, resetTokenHash, resetExpires]
     );
 
     // Send email
@@ -307,6 +314,64 @@ router.post('/forgot-password', loginLimiter, async (req, res) => {
     res.status(200).json(successResponse(null, 'If your email is registered, you will receive a password reset link.'));
   } catch (error) {
     console.error('Forgot password error:', error);
+    res.status(500).json(errorResponse('Internal server error', 'SERVER_ERROR', 500));
+  }
+});
+
+// Reset Password
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword) {
+      return res.status(400).json(errorResponse('Token and new password are required', 'MISSING_FIELDS', 400));
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json(errorResponse('Password must be at least 6 characters long', 'INVALID_PASSWORD', 400));
+    }
+
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find the token in the database
+    const tokenResult = await query(
+      'SELECT * FROM password_reset_tokens WHERE token_hash = $1 AND used = false AND expires_at > NOW()',
+      [resetTokenHash]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(400).json(errorResponse('Invalid or expired reset token', 'INVALID_TOKEN', 400));
+    }
+
+    const resetTokenRecord = tokenResult.rows[0];
+    const userId = resetTokenRecord.user_id;
+
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // Update user password and mark token as used in a transaction
+    const client = await getClient();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE users SET password_hash = $1 WHERE id = $2',
+        [hashedPassword, userId]
+      );
+      await client.query(
+        'UPDATE password_reset_tokens SET used = true WHERE id = $1',
+        [resetTokenRecord.id]
+      );
+      await client.query('COMMIT');
+    } catch (txError) {
+      await client.query('ROLLBACK');
+      throw txError;
+    } finally {
+      client.release();
+    }
+
+    res.status(200).json(successResponse(null, 'Password has been successfully reset.'));
+  } catch (error) {
+    console.error('Reset password error:', error);
     res.status(500).json(errorResponse('Internal server error', 'SERVER_ERROR', 500));
   }
 });
