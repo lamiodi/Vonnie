@@ -81,8 +81,8 @@ const Layout = () => {
         to={item.href}
         onClick={onClick}
         className={`${isCurrentPage(item.href)
-            ? 'bg-blue-100 text-blue-900'
-            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            ? 'bg-[#1f1f1f] text-white'
+            : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
           } group flex items-center px-3 py-2.5 text-sm font-medium rounded-lg transition-colors duration-150`}
         aria-current={isCurrentPage(item.href) ? 'page' : undefined}
       >
@@ -107,11 +107,14 @@ const Layout = () => {
           {/* Sidebar panel */}
           <div className="fixed inset-y-0 left-0 flex flex-col w-72 max-w-[80vw] bg-white shadow-xl transform transition-transform duration-300 ease-in-out">
             {/* Sidebar header */}
-            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0">
-              <h1 className="text-lg font-bold text-gray-900">Vonne X2X</h1>
+            <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 flex-shrink-0 bg-white">
+              <div className="flex items-center gap-2">
+                <img src="/logo.png" alt="X2X Logo" className="h-8 w-8 object-cover rounded-md" onError={(e) => { e.target.style.display = 'none'; }} />
+                <h1 className="text-lg font-bold text-[#1f1f1f]">Vonne X2X</h1>
+              </div>
               <button
                 type="button"
-                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors"
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-[#1f1f1f] transition-colors"
                 onClick={() => setSidebarOpen(false)}
                 aria-label="Close sidebar"
               >
@@ -131,8 +134,8 @@ const Layout = () => {
             {/* User info + logout */}
             <div className="flex-shrink-0 border-t border-gray-200 p-4" role="region" aria-label="User account">
               <div className="flex items-center">
-                <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
-                  <UserIcon className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                <div className="flex-shrink-0 bg-gray-100 rounded-full p-2">
+                  <UserIcon className="h-5 w-5 text-[#1f1f1f]" aria-hidden="true" />
                 </div>
                 <div className="ml-3 flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-700 truncate">{user?.name}</p>
@@ -157,8 +160,9 @@ const Layout = () => {
         <div className="flex flex-col w-64">
           <div className="flex flex-col h-0 flex-1 bg-white border-r border-gray-200" role="complementary" aria-label="Main navigation sidebar">
             <div className="flex-1 flex flex-col pt-5 pb-4 overflow-y-auto">
-              <div className="flex items-center flex-shrink-0 px-4">
-                <h1 className="text-xl font-bold text-gray-900">Vonne X2X</h1>
+              <div className="flex items-center flex-shrink-0 px-4 gap-2">
+                <img src="/logo.png" alt="X2X Logo" className="h-8 w-8 object-cover rounded-md" onError={(e) => { e.target.style.display = 'none'; }} />
+                <h1 className="text-xl font-bold text-[#1f1f1f]">Vonne X2X</h1>
               </div>
               <nav className="mt-5 flex-1 px-3 space-y-1" role="navigation" aria-label="Main navigation">
                 {navigation.map((item) => (
@@ -168,8 +172,8 @@ const Layout = () => {
             </div>
             <div className="flex-shrink-0 flex border-t border-gray-200 p-4" role="region" aria-label="User account information">
               <div className="flex items-center w-full">
-                <div className="flex-shrink-0 bg-blue-100 rounded-full p-2">
-                  <UserIcon className="h-5 w-5 text-blue-600" aria-hidden="true" />
+                <div className="flex-shrink-0 bg-gray-100 rounded-full p-2">
+                  <UserIcon className="h-5 w-5 text-[#1f1f1f]" aria-hidden="true" />
                 </div>
                 <div className="ml-3 flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-700 truncate">{user?.name}</p>
@@ -195,7 +199,7 @@ const Layout = () => {
         <header className="relative z-10 flex-shrink-0 flex h-14 sm:h-16 bg-white shadow" role="banner">
           <button
             type="button"
-            className="px-3 sm:px-4 border-r border-gray-200 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 md:hidden transition-colors"
+            className="px-3 sm:px-4 border-r border-gray-200 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[#1f1f1f] md:hidden transition-colors"
             onClick={() => setSidebarOpen(true)}
             aria-label="Open sidebar"
           >
@@ -243,7 +247,7 @@ const Layout = () => {
                   <button
                     key={item.name}
                     onClick={item.action}
-                    className="flex flex-col items-center justify-center flex-1 h-full py-1 text-gray-500 hover:text-blue-600 transition-colors"
+                    className="flex flex-col items-center justify-center flex-1 h-full py-1 text-gray-500 hover:text-[#1f1f1f] transition-colors"
                     aria-label={item.name}
                   >
                     <Icon className="h-5 w-5" aria-hidden="true" />
@@ -257,14 +261,14 @@ const Layout = () => {
                   key={item.name}
                   to={item.href}
                   className={`flex flex-col items-center justify-center flex-1 h-full py-1 transition-colors ${isActive
-                      ? 'text-blue-600'
-                      : 'text-gray-500 hover:text-blue-600'
+                      ? 'text-[#1f1f1f]'
+                      : 'text-gray-500 hover:text-[#1f1f1f]'
                     }`}
                   aria-current={isActive ? 'page' : undefined}
                   aria-label={item.name}
                 >
-                  <Icon className={`h-5 w-5 ${isActive ? 'text-blue-600' : ''}`} aria-hidden="true" />
-                  <span className={`text-[10px] mt-0.5 font-medium ${isActive ? 'text-blue-600' : ''}`}>{item.name}</span>
+                  <Icon className={`h-5 w-5 ${isActive ? 'text-[#1f1f1f]' : ''}`} aria-hidden="true" />
+                  <span className={`text-[10px] mt-0.5 font-medium ${isActive ? 'text-[#1f1f1f]' : ''}`}>{item.name}</span>
                 </Link>
               );
             })}

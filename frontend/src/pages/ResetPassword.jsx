@@ -62,10 +62,21 @@ const ResetPassword = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 py-6 px-4">
-      <div className="max-w-md w-full bg-white p-8 rounded-3xl shadow-2xl border border-gray-100">
+    <div className="min-h-screen flex items-center justify-center bg-[#1f1f1f] py-6 px-4">
+      <div className="max-w-md w-full bg-[#ffffff] p-8 rounded-3xl shadow-2xl border border-gray-100">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          <div className="mx-auto h-24 w-24 mb-6 flex items-center justify-center rounded-full overflow-hidden shadow-xl">
+            <img 
+              src="/logo.png" 
+              alt="X2X Logo" 
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://via.placeholder.com/150?text=X2X';
+              }}
+            />
+          </div>
+          <h2 className="text-3xl font-extrabold text-[#1f1f1f]">
             Reset Password
           </h2>
           <p className="text-gray-500 mt-2">Create a new password for your account</p>
@@ -112,7 +123,7 @@ const ResetPassword = () => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold rounded-xl hover:from-purple-600 hover:to-pink-600 focus:ring-2 focus:ring-purple-500 disabled:opacity-50 transition-all shadow-lg"
+              className="w-full py-3 px-4 bg-[#1f1f1f] text-white font-bold rounded-xl hover:bg-black focus:ring-2 focus:ring-gray-900 disabled:opacity-50 transition-all shadow-lg"
             >
               {loading ? 'Resetting...' : 'Reset Password'}
             </button>

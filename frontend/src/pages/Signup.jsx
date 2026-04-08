@@ -174,29 +174,29 @@ const Signup = () => {
   // If signups are disabled, show disabled message
   if (signupStatus && !signupStatus.is_enabled) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 py-6 px-4 sm:py-12 sm:px-6 lg:px-8">
+      <div className="min-h-screen flex items-center justify-center bg-[#1f1f1f] py-6 px-4 sm:py-12 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-6">
           <div className="text-center">
-            <div className="mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-r from-gray-500 to-gray-600 shadow-2xl">
-              <svg
-                className="h-12 w-12 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
+            <div className="mx-auto h-24 w-24 mb-6 flex items-center justify-center rounded-full overflow-hidden shadow-xl">
+              <img 
+                src="/logo.png" 
+                alt="X2X Logo" 
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = 'https://via.placeholder.com/150?text=X2X';
+                }}
+              />
             </div>
-            <h1 className="mt-6 text-4xl font-extrabold bg-gradient-to-r from-gray-600 to-gray-700 bg-clip-text text-transparent">
+            <h1 className="mt-6 text-4xl font-extrabold text-white">
               Signups Disabled
             </h1>
-            <p className="mt-4 text-lg text-gray-600 font-medium">
+            <p className="mt-4 text-lg text-gray-400 font-medium">
               {signupStatus.message || 'New registrations are currently not available.'}
             </p>
           </div>
 
-          <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100 text-center">
+          <div className="bg-[#ffffff] rounded-3xl shadow-2xl p-8 border border-gray-100 text-center">
             <div className="text-6xl mb-4">🔒</div>
             <p className="text-gray-600 mb-6">
               Please contact your administrator if you need access to the system.
@@ -214,31 +214,31 @@ const Signup = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-pink-50 to-indigo-50 py-6 px-4 sm:py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-[#1f1f1f] py-6 px-4 sm:py-12 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-6 sm:space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-20 w-20 flex items-center justify-center rounded-full bg-gradient-to-r from-purple-500 to-pink-500 shadow-2xl transform hover:scale-105 transition-transform duration-300">
-            <svg
-              className="h-12 w-12 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-            </svg>
+          <div className="mx-auto h-24 w-24 flex items-center justify-center rounded-full overflow-hidden shadow-2xl transform hover:scale-105 transition-transform duration-300">
+            <img 
+              src="/logo.png" 
+              alt="X2X Logo" 
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://via.placeholder.com/150?text=X2X';
+              }}
+            />
           </div>
-          <h1 className="mt-6 text-4xl font-extrabold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+          <h1 className="mt-6 text-4xl font-extrabold text-white">
             Join Our Team
           </h1>
-          <p className="mt-2 text-lg text-gray-600 font-medium">
+          <p className="mt-2 text-lg text-gray-400 font-medium">
             Vonne X2X Management System
           </p>
         </div>
 
         {/* Signup Form */}
-        <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-100">
+        <div className="bg-[#ffffff] rounded-3xl shadow-2xl p-8 border border-gray-100">
           <form className="space-y-6" onSubmit={handleSubmit}>
             {/* Name Field */}
             <div>
@@ -516,7 +516,7 @@ const Signup = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-base font-bold rounded-xl text-white bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                className="group relative w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent text-base font-bold rounded-xl text-white bg-[#1f1f1f] hover:bg-black focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-900 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
               >
                 {loading ? (
                   <>
@@ -544,7 +544,7 @@ const Signup = () => {
               Already have an account?{' '}
               <Link
                 to="/login"
-                className="font-semibold text-purple-600 hover:text-purple-500 transition-colors"
+                className="font-semibold text-[#1f1f1f] hover:text-black transition-colors"
               >
                 Sign in here
               </Link>
@@ -554,15 +554,15 @@ const Signup = () => {
 
         {/* Footer */}
         <div className="text-center space-y-2">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-400">
             © {new Date().getFullYear()} Vonne X2X. All rights reserved.
           </p>
           <div className="flex items-center justify-center gap-4 text-xs text-gray-500">
-            <a href="#" className="hover:text-purple-600 transition-colors">Privacy Policy</a>
+            <a href="#" className="hover:text-white transition-colors">Privacy Policy</a>
             <span>•</span>
-            <a href="#" className="hover:text-purple-600 transition-colors">Terms of Service</a>
+            <a href="#" className="hover:text-white transition-colors">Terms of Service</a>
             <span>•</span>
-            <a href="#" className="hover:text-purple-600 transition-colors">Support</a>
+            <a href="#" className="hover:text-white transition-colors">Support</a>
           </div>
         </div>
       </div>
