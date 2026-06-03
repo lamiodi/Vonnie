@@ -25,7 +25,7 @@ router.get('/', authenticate, async (req, res) => {
           WHERE bw.worker_id = u.id
           AND bw.status = 'active'
           AND (
-            b.status = 'in-progress'
+            (b.status = 'in-progress' AND DATE(b.scheduled_time) = CURRENT_DATE)
             OR (
               b.status = 'scheduled' 
               AND b.scheduled_time <= CURRENT_TIMESTAMP 

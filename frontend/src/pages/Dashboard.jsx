@@ -16,6 +16,7 @@ const Dashboard = () => {
     activeCoupons: 0
   });
   const [recentBookings, setRecentBookings] = useState([]);
+  const [unprocessedAlerts, setUnprocessedAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [signupStatus, setSignupStatus] = useState({
@@ -120,6 +121,16 @@ const Dashboard = () => {
         activeCoupons: couponsData.active_coupons || couponsData.activeCoupons || 0
       });
 
+      const unprocessedPast = bookingsResponse.data.filter(booking => {
+        if (!booking.scheduled_time && !booking.created_at && !booking.booking_date) return false;
+        const bookingDate = new Date(booking.scheduled_time || booking.created_at || booking.booking_date).toISOString().split('T')[0];
+        const isPast = bookingDate < today;
+        const isUnprocessed = ['scheduled', 'in-progress', 'pending_confirmation'].includes(booking.status);
+        const hasWorker = booking.worker_id || (booking.workers && booking.workers.length > 0);
+        return isPast && isUnprocessed && hasWorker;
+      });
+      setUnprocessedAlerts(unprocessedPast);
+
       setRecentBookings(bookingsResponse.data.slice(0, 5));
     } catch (error) {
       console.error('Dashboard data fetch error:', error);
@@ -131,6 +142,7 @@ const Dashboard = () => {
         lowStockItems: 0,
         activeCoupons: 0
       });
+      setUnprocessedAlerts([]);
       setRecentBookings([]);
     } finally {
       setLoading(false);
@@ -236,6 +248,30 @@ const Dashboard = () => {
   try {
     return (
       <div className="p-6">
+        {/* Alerts Section */}
+        {unprocessedAlerts.length > 0 && (user?.role === 'admin' || user?.role === 'manager') && (
+          <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r-lg shadow-sm">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-500" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Action Required: Unprocessed Bookings</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>There are {unprocessedAlerts.length} booking(s) from previous days assigned to workers that are still marked as In-Progress or Scheduled. Please review them and mark as Completed or Cancelled.</p>
+                </div>
+                <div className="mt-3">
+                  <Link to="/bookings" className="text-sm font-medium text-red-800 hover:text-red-900 underline">
+                    Go to Bookings
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Welcome Header */}
         <header className="mb-8 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
           <div className="flex items-center justify-between">
