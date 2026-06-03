@@ -551,16 +551,16 @@ export default function Workers() {
       </div>
 
       {showCreate && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-2xl">
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <WorkerForm value={form} onChange={setForm} onSubmit={handleCreate} onCancel={() => setShowCreate(false)} canEdit={canManage} title="Add Worker" submitting={submitting} />
           </div>
         </div>
       )}
 
       {showEdit && (
-        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-2xl">
+        <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <WorkerForm value={form} onChange={setForm} onSubmit={handleEdit} onCancel={() => setShowEdit(false)} canEdit={canManage} title="Edit Worker" submitting={submitting} />
           </div>
         </div>
