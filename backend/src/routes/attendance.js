@@ -357,7 +357,7 @@ router.post('/verify-location', authenticate, async (req, res) => {
 // ...
 
 // Enroll fingerprint template
-router.post('/enroll-fingerprint', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.post('/enroll-fingerprint', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
     const { worker_id, fingerprint_template } = req.body;
     if (!worker_id || !fingerprint_template) {
@@ -456,7 +456,7 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
 });
 
 // Kiosk Mode: Auto Check-in or Check-out via fingerprint
-router.post('/kiosk-scan', authenticate, authorize('admin', 'manager'), async (req, res) => {
+router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
     const { worker_id, fingerprint_template } = req.body;
     
