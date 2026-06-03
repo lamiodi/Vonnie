@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { handleError, handleSuccess } from '../utils/errorHandler';
@@ -76,11 +77,24 @@ const AdminAttendanceView = () => {
   const presentWorkers = workers.filter(w => checkedInWorkerIds.has(w.id));
   const absentWorkers = workers.filter(w => !checkedInWorkerIds.has(w.id) && w.status !== 'inactive');
 
+  const navigate = useNavigate();
+
   return (
     <div className="p-3 sm:p-4 md:p-6">
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
-        <p className="text-sm sm:text-base text-gray-600">Track and monitor worker attendance records</p>
+      <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">Attendance Management</h1>
+          <p className="text-sm sm:text-base text-gray-600">Track and monitor worker attendance records</p>
+        </div>
+        <button
+          onClick={() => navigate('/attendance-kiosk')}
+          className="bg-gray-900 text-white px-5 py-2.5 rounded-lg hover:bg-black font-medium shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95"
+        >
+          <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 008 4.07M3 15.364c.64-1.319 1-2.8 1-4.364 0-1.457.39-2.823 1.07-4" />
+          </svg>
+          Open Kiosk Mode
+        </button>
       </div>
 
       {/* Today's Snapshot */}
@@ -570,6 +584,35 @@ const WorkerAttendanceView = () => {
     }
   };
 
+  const handleFingerprintCheckIn = async () => {
+    try {
+      setCheckingIn(true);
+      setLocationError('');
+      
+      // 1. Capture the live finger from the local bridge
+      const localResponse = await fetch('http://127.0.0.1:8080/api/capture');
+      if (!localResponse.ok) {
+        throw new Error('Could not connect to local fingerprint scanner');
+      }
+      
+      const captureData = await localResponse.json();
+
+      // For this implementation, we are sending the worker ID to verify. 
+      // A more advanced bridge could match it locally.
+      const response = await apiPost('/attendance/verify-fingerprint', {
+        worker_id: user.id,
+        fingerprint_data: captureData.template
+      });
+
+      handleSuccess('Check-in via fingerprint successful');
+      fetchAttendanceRecords();
+    } catch (error) {
+      handleError(error, 'Fingerprint Check-in failed. Is the ZKTeco bridge running?');
+    } finally {
+      setCheckingIn(false);
+    }
+  };
+
   const verifyLocation = async () => {
     try {
       setLocationLoading(true);
@@ -727,13 +770,26 @@ const WorkerAttendanceView = () => {
         {/* Action Buttons */}
         <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-3">
           {!todayAttendance?.check_in_time && (
-            <button
-              onClick={handleCheckIn}
-              disabled={checkingIn || locationLoading}
-              className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
-            >
-              {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In'}
-            </button>
+            <>
+              <button
+                onClick={handleCheckIn}
+                disabled={checkingIn || locationLoading}
+                className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
+              >
+                {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In via GPS'}
+              </button>
+              
+              {/* Desktop / Shop PC Biometric Option */}
+              {!isMobileDevice && (
+                <button
+                  onClick={handleFingerprintCheckIn}
+                  disabled={checkingIn}
+                  className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform mt-2"
+                >
+                  Scan Fingerprint (Shop PC)
+                </button>
+              )}
+            </>
           )}
 
           {todayAttendance?.check_in_time && (

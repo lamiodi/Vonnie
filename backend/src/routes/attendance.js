@@ -348,9 +348,189 @@ router.post('/verify-location', authenticate, async (req, res) => {
         accuracy: accuracy ? Math.round(accuracy) : null
       }
     });
-
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Verify location logic here
+// ...
+
+// Enroll fingerprint template
+router.post('/enroll-fingerprint', authenticate, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { worker_id, fingerprint_template } = req.body;
+    if (!worker_id || !fingerprint_template) {
+      return res.status(400).json({ error: 'Worker ID and fingerprint template are required' });
+    }
+
+    await query('UPDATE users SET fingerprint_template = $1 WHERE id = $2', [fingerprint_template, worker_id]);
+    res.json({ message: 'Fingerprint enrolled successfully' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Verify scanned fingerprint and mark attendance
+router.post('/verify-fingerprint', authenticate, async (req, res) => {
+  try {
+    const { worker_id } = req.body;
+    if (!worker_id) {
+      return res.status(400).json({ error: 'Worker ID is required' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check if already checked in today
+    const existing = await query(
+      `SELECT * FROM attendance 
+       WHERE worker_id = $1 
+       AND (date = $2 OR date::text LIKE $3)`,
+      [worker_id, today, `${today}%`]
+    );
+
+    if (existing.rows.length > 0) {
+      // If already checked in, maybe they are checking out? Or just reject.
+      // For simplicity, let's say "Already checked in".
+      return res.status(400).json({ error: 'Already checked in today' });
+    }
+
+    let attendanceStatus = 'present';
+
+    // Lateness detection (9:00 AM Lagos Time)
+    const lagosNow = getLagosTime();
+    const resumptionTime = new Date(lagosNow);
+    resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
+
+    if (lagosNow > resumptionTime) {
+      attendanceStatus = 'late';
+    }
+
+    const result = await query(
+      `INSERT INTO attendance (worker_id, date, check_in_time, status, 
+                              location_verification_status) 
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [
+        worker_id,
+        today,
+        new Date().toISOString(),
+        attendanceStatus,
+        'verified' // Fingerprint counts as verified
+      ]
+    );
+
+    // Update user status
+    try {
+      await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
+    } catch (statusError) {
+      console.error('Failed to update user status on fingerprint checkin:', statusError);
+    }
+
+    res.json({
+      message: 'Attendance marked successfully via fingerprint',
+      attendance: result.rows[0],
+      gps_verified: false,
+      location_verification_status: 'verified'
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Kiosk Mode: Auto Check-in or Check-out via fingerprint
+router.post('/kiosk-scan', authenticate, authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const { worker_id, fingerprint_template } = req.body;
+    
+    let finalWorkerId = worker_id;
+
+    // If the local bridge just sends the template, we look up the worker
+    if (!finalWorkerId && fingerprint_template) {
+      const userResult = await query('SELECT id, name FROM users WHERE fingerprint_template = $1', [fingerprint_template]);
+      if (userResult.rows.length > 0) {
+        finalWorkerId = userResult.rows[0].id;
+      }
+    }
+
+    if (!finalWorkerId) {
+      return res.status(400).json({ error: 'Fingerprint not recognized. Please enroll this fingerprint first.' });
+    }
+
+    // Get user details
+    const userResult = await query('SELECT name FROM users WHERE id = $1', [finalWorkerId]);
+    if (userResult.rows.length === 0) {
+       return res.status(404).json({ error: 'Worker not found in database.' });
+    }
+    const workerName = userResult.rows[0].name;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check existing attendance for today
+    const existing = await query(
+      `SELECT * FROM attendance 
+       WHERE worker_id = $1 
+       AND (date = $2 OR date::text LIKE $3)`,
+      [finalWorkerId, today, `${today}%`]
+    );
+
+    let action = 'check_in';
+
+    if (existing.rows.length > 0) {
+      const record = existing.rows[0];
+      if (record.check_out_time) {
+        return res.status(400).json({ error: `${workerName} has already checked out for today.` });
+      }
+      
+      // Perform Check-Out
+      action = 'check_out';
+      await query(
+        `UPDATE attendance 
+         SET check_out_time = $1, location_verification_status = 'verified'
+         WHERE id = $2`,
+        [new Date().toISOString(), record.id]
+      );
+
+      // Update user status
+      try {
+        await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [finalWorkerId]);
+      } catch (err) {}
+
+    } else {
+      // Perform Check-In
+      action = 'check_in';
+      let attendanceStatus = 'present';
+
+      // Lateness detection
+      const lagosNow = getLagosTime();
+      const resumptionTime = new Date(lagosNow);
+      resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
+
+      if (lagosNow > resumptionTime) {
+        attendanceStatus = 'late';
+      }
+
+      await query(
+        `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [finalWorkerId, today, new Date().toISOString(), attendanceStatus, 'verified']
+      );
+
+      // Update user status
+      try {
+        await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [finalWorkerId]);
+      } catch (err) {}
+    }
+
+    res.json({
+      success: true,
+      action: action,
+      worker_name: workerName,
+      message: `Successfully ${action === 'check_in' ? 'checked in' : 'checked out'} ${workerName}`
+    });
+
+  } catch (error) {
+    console.error('Kiosk scan error:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 

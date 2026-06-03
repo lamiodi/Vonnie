@@ -160,6 +160,34 @@ function WorkerForm({ value, onChange, onSubmit, onCancel, canEdit, title, submi
 function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, changeLog, schedule }) {
   const roleClass = worker.role === 'manager' ? 'bg-blue-100 text-blue-800' : worker.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800';
   const availabilityClass = worker.current_status === 'busy' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+  const [enrolling, setEnrolling] = useState(false);
+
+  const handleEnrollFingerprint = async () => {
+    try {
+      setEnrolling(true);
+      // 1. Ask the local ZKTeco bridge to turn on the scanner and capture the finger
+      // Ensure the bridge app is running on the shop PC
+      const localResponse = await fetch('http://127.0.0.1:8080/api/capture');
+      
+      if (!localResponse.ok) {
+        throw new Error('Could not connect to local fingerprint scanner');
+      }
+
+      const data = await localResponse.json();
+      
+      // 2. Send the captured fingerprint string to your Render backend
+      await apiPost('/attendance/enroll-fingerprint', {
+        worker_id: worker.id,
+        fingerprint_template: data.template
+      });
+      handleSuccess('Fingerprint enrolled successfully!');
+    } catch (err) {
+      handleError(err, 'Scanner not detected. Is the ZKTeco bridge running on this PC?');
+    } finally {
+      setEnrolling(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-gray-800 bg-opacity-50 flex justify-end z-50">
       <div className="w-full sm:w-[520px] bg-white h-full shadow-xl overflow-y-auto">
@@ -171,6 +199,7 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
           <div className="flex items-center gap-2 flex-wrap">
             <Badge text={worker.role} className={roleClass} />
             <Badge text={worker.current_status === 'busy' ? 'Busy' : 'Available'} className={availabilityClass} />
+            {worker.fingerprint_template && <Badge text="Biometric Enrolled" className="bg-teal-100 text-teal-800" />}
           </div>
           <div className="grid grid-cols-1 gap-2 text-sm">
             <div className="text-gray-600">Email</div>
@@ -178,6 +207,21 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
             <div className="text-gray-600">Phone</div>
             <div className="font-medium">{worker.phone || '-'}</div>
           </div>
+          {canEdit && (
+            <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
+              <div className="text-sm font-medium text-gray-800 mb-2">Biometric Enrollment</div>
+              <p className="text-xs text-gray-500 mb-3">
+                Enroll a fingerprint for this worker using the local ZKTeco USB scanner.
+              </p>
+              <button 
+                onClick={handleEnrollFingerprint}
+                disabled={enrolling}
+                className="px-3 py-1.5 bg-teal-600 text-white text-sm rounded hover:bg-teal-700 disabled:opacity-50"
+              >
+                {enrolling ? 'Scanning...' : 'Enroll Fingerprint'}
+              </button>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div className="border rounded-md p-3">
               <div className="text-sm text-gray-600">Completion Rate</div>

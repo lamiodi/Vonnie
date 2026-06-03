@@ -354,7 +354,8 @@ export const sendContactFormResponse = async (email, name, message, replyMessage
 
 export const sendPasswordResetEmail = async (email, resetToken) => {
   const subject = '🔒 Password Reset Request - Vonne X2X';
-  const resetLink = `https://vonneex2x.store/reset-password?token=${resetToken}`;
+  const frontendUrl = process.env.FRONTEND_URL || 'https://vonneex2x.store';
+  const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
   
   const content = `
       <!-- Header -->
@@ -497,6 +498,93 @@ export const sendInventoryAlert = async (alertDetails) => {
   
   const html = getEmailWrapper(content);
   return await sendEmail(recipientEmail, subject, '', html);
+};
+
+export const sendDailyAttendanceReport = async (adminEmail, reportData) => {
+  const { date, totalWorkers, presentCount, lateCount, absentCount, workers } = reportData;
+  const subject = `📅 Daily Attendance Report - ${date}`;
+
+  // Generate table rows for each worker
+  const workerRowsHtml = workers.map(w => `
+    <tr>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-weight: 500;">
+        ${w.name} <span style="color: #6b7280; font-size: 12px; font-weight: normal;">(${w.role})</span>
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+        <span style="display: inline-block; padding: 4px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600;
+          ${w.status === 'present' ? 'background-color: #d1fae5; color: #065f46;' : 
+            w.status === 'late' ? 'background-color: #fef3c7; color: #92400e;' : 
+            'background-color: #fee2e2; color: #991b1b;'}">
+          ${w.status.toUpperCase()}
+        </span>
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #374151;">
+        ${w.checkInTime || '-'}
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 13px;">
+        ${w.verificationMethod || '-'}
+      </td>
+    </tr>
+  `).join('');
+
+  const content = `
+      <!-- Header -->
+      <div style="background: linear-gradient(135deg, #0ea5e9 0%, #1e3a8a 100%); padding: 40px 32px; text-align: center; color: white;">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px;">Daily Attendance Report</h1>
+        <p style="margin: 12px 0 0 0; font-size: 18px; opacity: 0.95; font-weight: 500;">${date}</p>
+      </div>
+      
+      <!-- Content -->
+      <div style="padding: 40px 32px;">
+        
+        <!-- Summary Cards -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 32px;">
+          <div style="background: #f3f4f6; padding: 16px; border-radius: 12px; text-align: center; border-top: 4px solid #3b82f6;">
+            <div style="font-size: 24px; font-weight: 800; color: #1d4ed8;">${totalWorkers}</div>
+            <div style="font-size: 12px; color: #4b5563; text-transform: uppercase; font-weight: 700; margin-top: 4px;">Total</div>
+          </div>
+          <div style="background: #ecfdf5; padding: 16px; border-radius: 12px; text-align: center; border-top: 4px solid #10b981;">
+            <div style="font-size: 24px; font-weight: 800; color: #047857;">${presentCount}</div>
+            <div style="font-size: 12px; color: #065f46; text-transform: uppercase; font-weight: 700; margin-top: 4px;">On Time</div>
+          </div>
+          <div style="background: #fffbeb; padding: 16px; border-radius: 12px; text-align: center; border-top: 4px solid #f59e0b;">
+            <div style="font-size: 24px; font-weight: 800; color: #b45309;">${lateCount}</div>
+            <div style="font-size: 12px; color: #92400e; text-transform: uppercase; font-weight: 700; margin-top: 4px;">Late</div>
+          </div>
+          <div style="background: #fef2f2; padding: 16px; border-radius: 12px; text-align: center; border-top: 4px solid #ef4444;">
+            <div style="font-size: 24px; font-weight: 800; color: #b91c1c;">${absentCount}</div>
+            <div style="font-size: 12px; color: #991b1b; text-transform: uppercase; font-weight: 700; margin-top: 4px;">Absent</div>
+          </div>
+        </div>
+        
+        <!-- Detailed Table -->
+        <h3 style="color: #1f2937; font-size: 18px; font-weight: 700; margin: 0 0 16px 0;">Worker Breakdown</h3>
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+            <thead>
+              <tr style="background: #f9fafb;">
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Name</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Status</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Check-In</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Verified Via</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${workerRowsHtml}
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="text-align: center; margin-top: 32px; padding: 12px; background: #f8fafc; border-radius: 8px;">
+          <p style="margin: 0; color: #64748b; font-size: 12px;">
+            This is an automated report generated at 10:00 AM.
+          </p>
+        </div>
+      </div>
+  `;
+  
+  const html = getEmailWrapper(content);
+  return await sendEmail(adminEmail, subject, '', html);
 };
 
 export const sendPOSTransactionEmail = async (email, transactionDetails) => {

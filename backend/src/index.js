@@ -23,6 +23,7 @@ import adminRoutes from './routes/admin.js';
 import queueRoutes from './routes/queue.js';
 import paymentWebhooks from './routes/payment-webhooks.js';
 import { scheduleWeeklyReport } from './cron/weeklyReport.js';
+import { scheduleDailyAttendanceReport } from './cron/dailyAttendanceReport.js';
 
 
 
@@ -328,6 +329,7 @@ if (isMainModule()) {
     
     // Initialize Cron Jobs
     scheduleWeeklyReport();
+    scheduleDailyAttendanceReport();
   });
 } else {
   console.log('Server not started - module check failed');

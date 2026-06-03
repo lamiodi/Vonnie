@@ -19,6 +19,7 @@ import Inventory from './components/Inventory';
 import Workers from './pages/Workers';
 import Reports from './pages/Reports';
 import Attendance from './pages/Attendance';
+import AttendanceKiosk from './pages/AttendanceKiosk';
 import TransactionManagement from './components/TransactionManagement';
 import AdminSettings from './pages/AdminSettings';
 
@@ -35,6 +36,13 @@ function App() {
         <Route path="/public-booking" element={<PublicBooking />} />
         <Route path="/walk-in-booking" element={<WalkInBooking />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />
+        
+        {/* Kiosk Route (Requires Auth but runs full screen) */}
+        <Route path="/attendance-kiosk" element={
+          <ProtectedRoute>
+            <AttendanceKiosk />
+          </ProtectedRoute>
+        } />
           
           {/* Protected Routes */}
           <Route path="/" element={
