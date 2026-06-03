@@ -7,8 +7,14 @@ import axios from 'axios';
 
 const getApiUrl = () => {
   // Simple check for Vite environment variable
-  if (import.meta.env && import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL;
+  try {
+    const getMeta = new Function('return import.meta.env');
+    const env = getMeta();
+    if (env && env.VITE_API_URL) {
+      return env.VITE_API_URL;
+    }
+  } catch (e) {
+    // import.meta not supported in this environment (e.g. CommonJS/Jest)
   }
   
   // Fallback for non-Vite environments (like Jest) or default

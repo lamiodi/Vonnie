@@ -374,9 +374,27 @@ router.post('/enroll-fingerprint', authenticate, authorize('admin', 'manager'), 
 // Verify scanned fingerprint and mark attendance
 router.post('/verify-fingerprint', authenticate, async (req, res) => {
   try {
-    const { worker_id } = req.body;
+    const { worker_id, fingerprint_data } = req.body;
     if (!worker_id) {
       return res.status(400).json({ error: 'Worker ID is required' });
+    }
+    if (!fingerprint_data) {
+      return res.status(400).json({ error: 'Fingerprint data is required' });
+    }
+
+    // Check database for enrolled template
+    const userResult = await query('SELECT fingerprint_template FROM users WHERE id = $1', [worker_id]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    const enrolledTemplate = userResult.rows[0].fingerprint_template;
+    if (!enrolledTemplate) {
+      return res.status(400).json({ error: 'No fingerprint enrolled for this worker. Please enroll first.' });
+    }
+
+    if (enrolledTemplate !== fingerprint_data) {
+      return res.status(400).json({ error: 'Fingerprint mismatch. Verification failed.' });
     }
 
     const today = new Date().toISOString().split('T')[0];

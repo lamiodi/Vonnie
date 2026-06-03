@@ -59,7 +59,7 @@ const Login = () => {
 
     try {
       // Call backend endpoint for password reset
-      await api.post('/api/auth/forgot-password', { email: resetEmail });
+      await api.post('/auth/forgot-password', { email: resetEmail });
       
       setResetSuccess(true);
     } catch (err) {

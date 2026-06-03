@@ -203,7 +203,9 @@ const PublicBooking = () => {
     if (!validateForm()) {
       // Scroll to first error
       const firstError = document.querySelector('.error-message');
-      if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      if (firstError && typeof firstError.scrollIntoView === 'function') {
+        firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
       return;
     }
 
@@ -287,7 +289,7 @@ const PublicBooking = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
+        <form onSubmit={handleSubmit} noValidate className="bg-white rounded-3xl shadow-xl overflow-hidden border border-gray-100">
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-0">
 

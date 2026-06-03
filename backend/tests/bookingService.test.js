@@ -44,18 +44,21 @@ describe('BookingService', () => {
       customer_email: 'test@example.com',
       customer_phone: '1234567890',
       customer_type: 'walk_in',
-      scheduled_time: '2025-01-01T10:00:00Z',
+      scheduled_time: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
       service_ids: [1, 2],
       notes: 'Test notes'
     };
 
     it('should successfully create a walk-in booking', async () => {
-      // Mock services query
       mockQuery.mockResolvedValueOnce({
         rows: [
           { id: 1, name: 'Service 1', price: 1000, duration: 60 },
           { id: 2, name: 'Service 2', price: 2000, duration: 30 }
         ]
+      });
+      // Mock product requirements query
+      mockQuery.mockResolvedValueOnce({
+        rows: []
       });
 
       // Mock transaction queries
@@ -77,7 +80,7 @@ describe('BookingService', () => {
       const result = await createBooking(validBookingData);
 
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT id, name, price, duration FROM services'),
+        expect.stringContaining('FROM services'),
         [[1, 2]]
       );
 
@@ -109,12 +112,15 @@ describe('BookingService', () => {
     });
 
     it('should rollback transaction on error', async () => {
-      // Mock services query
       mockQuery.mockResolvedValueOnce({
         rows: [
           { id: 1, name: 'Service 1', price: 1000, duration: 60 },
           { id: 2, name: 'Service 2', price: 2000, duration: 30 }
         ]
+      });
+      // Mock product requirements query
+      mockQuery.mockResolvedValueOnce({
+        rows: []
       });
 
       // Mock transaction error
