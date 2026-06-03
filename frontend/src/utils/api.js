@@ -18,7 +18,7 @@ const getApiUrl = () => {
   }
   
   // Fallback for non-Vite environments (like Jest) or default
-  return (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) || 'http://localhost:5010/api';
+  return (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) || 'http://localhost:5057/api';
 };
 
 // Base API configuration
