@@ -309,7 +309,14 @@ router.post('/forgot-password', loginLimiter, async (req, res) => {
     );
 
     // Send email
-    await sendPasswordResetEmail(email, resetToken);
+    const emailResult = await sendPasswordResetEmail(email, resetToken);
+    
+    if (!emailResult.success) {
+      // If email sending fails, we should not pretend it succeeded.
+      // But we also shouldn't leak whether the email exists. So we return a generic error.
+      console.error('Failed to send reset email:', emailResult.error);
+      return res.status(500).json(errorResponse('Failed to send reset instructions. Please try again later.', 'EMAIL_SEND_FAILED', 500));
+    }
 
     res.status(200).json(successResponse(null, 'If your email is registered, you will receive a password reset link.'));
   } catch (error) {

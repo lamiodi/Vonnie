@@ -39,7 +39,7 @@ const Login = () => {
       await login(formData.email, formData.password);
       navigate('/dashboard');
     } catch (err) {
-      const message = err.response?.data?.message || 'Login failed. Please check your credentials and try again.';
+      const message = err.error?.message || err.message || 'Login failed. Please check your credentials and try again.';
       setError(message);
       handleError(err, message);
     } finally {
@@ -63,7 +63,8 @@ const Login = () => {
       
       setResetSuccess(true);
     } catch (err) {
-      setResetError(err.response?.data?.message || err.response?.data?.error || 'Failed to send reset instructions. Please try again.');
+      const message = err.error?.message || err.message || 'Failed to send reset instructions. Please try again.';
+      setResetError(message);
     } finally {
       setResetLoading(false);
     }
