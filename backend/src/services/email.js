@@ -354,7 +354,13 @@ export const sendContactFormResponse = async (email, name, message, replyMessage
 
 export const sendPasswordResetEmail = async (email, resetToken) => {
   const subject = '🔒 Password Reset Request - Vonne X2X';
-  const frontendUrl = process.env.FRONTEND_URL || 'https://vonneex2x.store';
+  
+  // Use environment variable, but correct it if it's mistakenly set to the backend API URL
+  let frontendUrl = process.env.FRONTEND_URL || 'https://www.vonneex2x.store';
+  if (frontendUrl.includes('/api') || frontendUrl.includes('vercel.app')) {
+    frontendUrl = 'https://www.vonneex2x.store';
+  }
+  
   const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
   
   const content = `
