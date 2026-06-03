@@ -6,7 +6,7 @@
 import axios from 'axios';
 
 const getApiUrl = () => {
-  // Simple check for Vite environment variable
+  // 1. Check Vite environment variable (baked in at build time)
   try {
     const getMeta = new Function('return import.meta.env');
     const env = getMeta();
@@ -17,8 +17,22 @@ const getApiUrl = () => {
     // import.meta not supported in this environment (e.g. CommonJS/Jest)
   }
   
-  // Fallback for non-Vite environments (like Jest) or default
-  return (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) || 'http://localhost:5057/api';
+  // 2. Check process.env (for Node/Jest environments)
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
+    return process.env.VITE_API_URL;
+  }
+
+  // 3. Smart fallback: if running in a browser on a non-localhost domain, use production URL
+  if (typeof window !== 'undefined' && window.location) {
+    const hostname = window.location.hostname;
+    if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+      // We're on a deployed site — use the production API
+      return 'https://vonnie.onrender.com/api';
+    }
+  }
+
+  // 4. Local development fallback
+  return 'http://localhost:5057/api';
 };
 
 // Base API configuration
