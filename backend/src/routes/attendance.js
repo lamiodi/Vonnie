@@ -378,25 +378,8 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
     if (!worker_id) {
       return res.status(400).json({ error: 'Worker ID is required' });
     }
-    if (!fingerprint_data) {
-      return res.status(400).json({ error: 'Fingerprint data is required' });
-    }
-
-    // Check database for enrolled template
-    const userResult = await query('SELECT fingerprint_template FROM users WHERE id = $1', [worker_id]);
-    if (userResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Worker not found' });
-    }
-
-    const enrolledTemplate = userResult.rows[0].fingerprint_template;
-    if (!enrolledTemplate) {
-      return res.status(400).json({ error: 'No fingerprint enrolled for this worker. Please enroll first.' });
-    }
-
-    if (enrolledTemplate !== fingerprint_data) {
-      return res.status(400).json({ error: 'Fingerprint mismatch. Verification failed.' });
-    }
-
+    // Verification is now handled by the local ZKBridge SDK via the frontend.
+    // The frontend sends the matched worker_id directly after identifying them.
     const today = new Date().toISOString().split('T')[0];
 
     // Check if already checked in today
@@ -455,29 +438,19 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
   }
 });
 
-// Kiosk Mode: Auto Check-in or Check-out via fingerprint
+// Kiosk Mode: Auto Check-in or Check-out via fingerprint (now verified by local SDK bridge)
 router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
-    const { worker_id, fingerprint_template } = req.body;
+    const { worker_id } = req.body;
     
-    let finalWorkerId = worker_id;
-
-    // If the local bridge just sends the template, we look up the worker
-    if (!finalWorkerId && fingerprint_template) {
-      const userResult = await query('SELECT id, name FROM users WHERE fingerprint_template = $1', [fingerprint_template]);
-      if (userResult.rows.length > 0) {
-        finalWorkerId = userResult.rows[0].id;
-      }
-    }
-
-    if (!finalWorkerId) {
-      return res.status(400).json({ error: 'Fingerprint not recognized. Please enroll this fingerprint first.' });
+    if (!worker_id) {
+      return res.status(400).json({ error: 'Worker ID is required. Fingerprint matching must occur locally.' });
     }
 
     // Get user details
-    const userResult = await query('SELECT name FROM users WHERE id = $1', [finalWorkerId]);
+    const userResult = await query('SELECT name FROM users WHERE id = $1 AND is_active = true', [worker_id]);
     if (userResult.rows.length === 0) {
-       return res.status(404).json({ error: 'Worker not found in database.' });
+       return res.status(404).json({ error: 'Worker not found or inactive.' });
     }
     const workerName = userResult.rows[0].name;
 
@@ -487,8 +460,9 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
     const existing = await query(
       `SELECT * FROM attendance 
        WHERE worker_id = $1 
-       AND (date = $2 OR date::text LIKE $3)`,
-      [finalWorkerId, today, `${today}%`]
+       AND (date = $2 OR date::text LIKE $3)
+       ORDER BY created_at DESC LIMIT 1`,
+      [worker_id, today, `${today}%`]
     );
 
     let action = 'check_in';
@@ -510,7 +484,7 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
 
       // Update user status
       try {
-        await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [finalWorkerId]);
+        await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
       } catch (err) {}
 
     } else {
@@ -530,12 +504,12 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
       await query(
         `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
          VALUES ($1, $2, $3, $4, $5)`,
-        [finalWorkerId, today, new Date().toISOString(), attendanceStatus, 'verified']
+        [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
       );
 
       // Update user status
       try {
-        await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [finalWorkerId]);
+        await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
       } catch (err) {}
     }
 
@@ -548,6 +522,16 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
 
   } catch (error) {
     console.error('Kiosk scan error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get all enrolled fingerprint templates for the local bridge to match against
+router.get('/templates', async (req, res) => {
+  try {
+    const result = await query("SELECT id, fingerprint_template as template FROM users WHERE fingerprint_template IS NOT NULL AND is_active = true");
+    res.json(result.rows);
+  } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });

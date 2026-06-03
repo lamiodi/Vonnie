@@ -165,9 +165,11 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
   const handleEnrollFingerprint = async () => {
     try {
       setEnrolling(true);
-      // 1. Ask the local ZKTeco bridge to turn on the scanner and capture the finger
+      // 1. Ask the local ZKTeco bridge to perform enrollment (requires 3 scans)
       // Ensure the bridge app is running on the shop PC
-      const localResponse = await fetch('http://127.0.0.1:8080/api/capture');
+      handleSuccess('Please scan the same finger 3 times. Wait for the green light each time.');
+      
+      const localResponse = await fetch('http://127.0.0.1:8080/api/enroll');
       
       if (!localResponse.ok) {
         throw new Error('Could not connect to local fingerprint scanner');
@@ -175,14 +177,18 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
 
       const data = await localResponse.json();
       
-      // 2. Send the captured fingerprint string to your Render backend
+      if (data.error) {
+        throw new Error(data.error);
+      }
+      
+      // 2. Send the captured fingerprint merged template string to your Render backend
       await apiPost('/attendance/enroll-fingerprint', {
         worker_id: worker.id,
         fingerprint_template: data.template
       });
       handleSuccess('Fingerprint enrolled successfully!');
     } catch (err) {
-      handleError(err, 'Scanner not detected. Is the ZKTeco bridge running on this PC?');
+      handleError(err, 'Enrollment failed. Ensure the ZKTeco bridge is running and you scanned 3 times.');
     } finally {
       setEnrolling(false);
     }

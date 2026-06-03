@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiPost } from '../utils/api';
+import { apiPost, apiGet } from '../utils/api';
 
 const AttendanceKiosk = () => {
   const [time, setTime] = useState(new Date());
@@ -18,25 +18,55 @@ const AttendanceKiosk = () => {
   const handleScan = async () => {
     try {
       setScanning(true);
-      setMessage('Waiting for fingerprint...');
       setMessageType('info');
 
-      // 1. Call the local ZKTeco bridge on the shop PC
+      // 1. Fetch templates from Render backend
+      setMessage('Loading database...');
+      let templates = [];
+      try {
+        const tResp = await apiGet('/attendance/templates');
+        templates = tResp.data || tResp;
+      } catch (err) {
+        throw new Error('Failed to load fingerprint database.');
+      }
+
+      // 2. Call the local ZKTeco bridge on the shop PC
+      setMessage('Waiting for fingerprint...');
       let captureData;
       try {
         const localResponse = await fetch('http://127.0.0.1:8080/api/capture');
         if (!localResponse.ok) throw new Error('Bridge error');
         captureData = await localResponse.json();
+        
+        if (captureData.error) throw new Error(captureData.error);
       } catch (err) {
-        throw new Error('Scanner not detected. Ensure the ZKTeco bridge is running on this PC.');
+        throw new Error(err.message === 'Failed to fetch' ? 'Scanner not detected. Ensure the ZKTeco bridge is running on this PC.' : err.message);
       }
 
-      // 2. Send the captured data to the backend to identify and toggle attendance
+      // 3. Ask local bridge to match
       setMessage('Identifying...');
+      let identifyData;
+      try {
+        const matchResp = await fetch('http://127.0.0.1:8080/api/identify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            verTemplate: captureData.template,
+            regTemplates: templates
+          })
+        });
+        identifyData = await matchResp.json();
+      } catch (err) {
+        throw new Error('Failed to identify fingerprint locally.');
+      }
+
+      if (!identifyData.match || !identifyData.worker_id) {
+        throw new Error('Fingerprint not recognized. Score: ' + (identifyData.score || 0));
+      }
+
+      // 4. Send the matched data to the backend to toggle attendance
       const response = await apiPost('/attendance/kiosk-scan', {
-        fingerprint_template: captureData.template,
-        // If the bridge returns an ID directly instead of a template, you would pass it here:
-        // worker_id: captureData.worker_id 
+        worker_id: identifyData.worker_id 
       });
 
       const responseData = response.data || response;
