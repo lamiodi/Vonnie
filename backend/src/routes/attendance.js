@@ -624,4 +624,25 @@ router.get('/templates', async (req, res) => {
   }
 });
 
+// Get today's attendance for the kiosk display
+router.get('/today', async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const result = await query(
+      `SELECT a.id, a.worker_id, a.check_in_time, a.check_out_time, a.status, a.location_verification_status, u.name as worker_name
+       FROM attendance a
+       JOIN users u ON a.worker_id = u.id
+       WHERE DATE(a.check_in_time) = $1
+       ORDER BY a.check_in_time ASC`,
+      [today]
+    );
+    
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching today\'s attendance:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

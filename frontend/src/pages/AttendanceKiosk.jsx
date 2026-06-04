@@ -7,6 +7,8 @@ const AttendanceKiosk = () => {
   const [scanning, setScanning] = useState(false);
   const [message, setMessage] = useState(null);
   const [messageType, setMessageType] = useState('info'); // 'info', 'success', 'error'
+  const [attendanceData, setAttendanceData] = useState([]);
+  const [loadingAttendance, setLoadingAttendance] = useState(true);
   const navigate = useNavigate();
 
   // Update clock every second
@@ -14,6 +16,78 @@ const AttendanceKiosk = () => {
     const timer = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Fetch attendance data
+  const fetchAttendance = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const response = await apiGet(`/attendance/today`);
+      const data = response.data || response;
+      setAttendanceData(data || []);
+    } catch (error) {
+      console.error('Error fetching attendance:', error);
+      setAttendanceData([]);
+    } finally {
+      setLoadingAttendance(false);
+    }
+  };
+
+  // Initial load and auto-refresh
+  useEffect(() => {
+    fetchAttendance();
+    const refreshInterval = setInterval(fetchAttendance, 30000); // Refresh every 30 seconds
+    return () => clearInterval(refreshInterval);
+  }, []);
+
+  // Helper functions for display
+  const formatTime = (timeString) => {
+    const date = new Date(timeString);
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: true 
+    });
+  };
+
+  const getStatusBadge = (status, hasCheckedOut) => {
+    if (hasCheckedOut) {
+      return (
+        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-900/50 text-green-400 border border-green-600/50">
+          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+          </svg>
+          Checked Out
+        </span>
+      );
+    }
+    
+    switch (status) {
+      case 'present':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-900/50 text-blue-400 border border-blue-600/50">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Present
+          </span>
+        );
+      case 'late':
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-yellow-900/50 text-yellow-400 border border-yellow-600/50">
+            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            Late
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-700 text-gray-400 border border-gray-600">
+            {status}
+          </span>
+        );
+    }
+  };
 
   const handleScan = async () => {
     try {
@@ -165,6 +239,66 @@ const AttendanceKiosk = () => {
               </div>
             </button>
           )}
+        </div>
+
+        {/* Attendance Display */}
+        <div className="border-t border-gray-700 bg-gray-850/50">
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-200 flex items-center gap-2">
+                <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Today's Attendance
+              </h3>
+              <span className="text-sm text-gray-400">
+                {attendanceData.length} {attendanceData.length === 1 ? 'person' : 'people'}
+              </span>
+            </div>
+
+            {loadingAttendance ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-400"></div>
+                <span className="ml-3 text-gray-400">Loading attendance...</span>
+              </div>
+            ) : attendanceData.length === 0 ? (
+              <div className="text-center py-8 text-gray-400">
+                <svg className="w-12 h-12 mx-auto mb-3 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                </svg>
+                <p>No attendance records yet</p>
+                <p className="text-sm mt-1">First check-in will appear here</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {attendanceData.map((record) => (
+                  <div key={record.id} className="flex items-center justify-between p-4 bg-gray-800/50 rounded-lg border border-gray-700 hover:bg-gray-700/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-teal-900/30 rounded-full flex items-center justify-center border border-teal-600/30">
+                        <span className="text-teal-400 font-medium text-sm">
+                          {record.worker_name ? record.worker_name.split(' ').map(n => n[0]).join('').toUpperCase() : 'U'}
+                        </span>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-white">{record.worker_name || 'Unknown Worker'}</h4>
+                        <p className="text-sm text-gray-400">
+                          Checked in at {formatTime(record.check_in_time)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {getStatusBadge(record.status, !!record.check_out_time)}
+                      {record.check_out_time && (
+                        <span className="text-sm text-gray-400">
+                          Out at {formatTime(record.check_out_time)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
