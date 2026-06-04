@@ -6,23 +6,12 @@
 import axios from 'axios';
 
 const getApiUrl = () => {
-  // 1. Check Vite environment variable (baked in at build time)
-  try {
-    const getMeta = new Function('return import.meta.env');
-    const env = getMeta();
-    if (env && env.VITE_API_URL) {
-      return env.VITE_API_URL;
-    }
-  } catch (e) {
-    // import.meta not supported in this environment (e.g. CommonJS/Jest)
-  }
-  
-  // 2. Check process.env (for Node/Jest environments)
+  // 1. Check process.env (for Node/Jest environments)
   if (typeof process !== 'undefined' && process.env && process.env.VITE_API_URL) {
     return process.env.VITE_API_URL;
   }
 
-  // 3. Smart fallback: if running in a browser on a non-localhost domain, use production URL
+  // 2. Smart fallback: if running in a browser on a non-localhost domain, use production URL
   if (typeof window !== 'undefined' && window.location) {
     const hostname = window.location.hostname;
     if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
@@ -31,7 +20,7 @@ const getApiUrl = () => {
     }
   }
 
-  // 4. Local development fallback
+  // 3. Local development fallback
   return 'http://localhost:5057/api';
 };
 
