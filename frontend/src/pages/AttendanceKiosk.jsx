@@ -65,7 +65,7 @@ const AttendanceKiosk = () => {
       }
 
       // 4. Send the matched data to the backend to toggle attendance
-      const response = await apiPost('/attendance/kiosk-scan', {
+      const response = await apiPost('/attendance/public-kiosk-scan', {
         worker_id: identifyData.worker_id 
       });
 

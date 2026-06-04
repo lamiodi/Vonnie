@@ -526,6 +526,94 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
   }
 });
 
+// Public Kiosk Mode: Auto Check-in or Check-out via fingerprint (no auth required)
+router.post('/public-kiosk-scan', async (req, res) => {
+  try {
+    const { worker_id } = req.body;
+    
+    if (!worker_id) {
+      return res.status(400).json({ error: 'Worker ID is required. Fingerprint matching must occur locally.' });
+    }
+
+    // Get user details
+    const userResult = await query('SELECT name FROM users WHERE id = $1 AND is_active = true', [worker_id]);
+    if (userResult.rows.length === 0) {
+       return res.status(404).json({ error: 'Worker not found or inactive.' });
+    }
+    const workerName = userResult.rows[0].name;
+
+    const today = new Date().toISOString().split('T')[0];
+
+    // Check existing attendance for today
+    const existing = await query(
+      `SELECT * FROM attendance 
+       WHERE worker_id = $1 
+       AND (date = $2 OR date::text LIKE $3)
+       ORDER BY created_at DESC LIMIT 1`,
+      [worker_id, today, `${today}%`]
+    );
+
+    let action = 'check_in';
+
+    if (existing.rows.length > 0) {
+      const record = existing.rows[0];
+      if (record.check_out_time) {
+        return res.status(400).json({ error: `${workerName} has already checked out for today.` });
+      }
+      
+      // Perform Check-Out
+      action = 'check_out';
+      await query(
+        `UPDATE attendance 
+         SET check_out_time = $1, location_verification_status = 'verified'
+         WHERE id = $2`,
+        [new Date().toISOString(), record.id]
+      );
+
+      // Update user status
+      try {
+        await query("UPDATE users SET current_status = 'offline' WHERE id = $1", [worker_id]);
+      } catch (err) {}
+
+    } else {
+      // Perform Check-In
+      action = 'check_in';
+      let attendanceStatus = 'present';
+
+      // Lateness detection
+      const lagosNow = getLagosTime();
+      const resumptionTime = new Date(lagosNow);
+      resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
+
+      if (lagosNow > resumptionTime) {
+        attendanceStatus = 'late';
+      }
+
+      await query(
+        `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
+         VALUES ($1, $2, $3, $4, $5)`,
+        [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
+      );
+
+      // Update user status
+      try {
+        await query("UPDATE users SET current_status = 'available' WHERE id = $1 AND current_status != 'busy'", [worker_id]);
+      } catch (err) {}
+    }
+
+    res.json({
+      success: true,
+      action: action,
+      worker_name: workerName,
+      message: `Successfully ${action === 'check_in' ? 'checked in' : 'checked out'} ${workerName}`
+    });
+
+  } catch (error) {
+    console.error('Public kiosk scan error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get all enrolled fingerprint templates for the local bridge to match against
 router.get('/templates', async (req, res) => {
   try {
