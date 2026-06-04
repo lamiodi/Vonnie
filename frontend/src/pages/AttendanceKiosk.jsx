@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiPost, apiGet } from '../utils/api';
+import { apiPost, apiGet, API_BASE_URL } from '../utils/api';
 
 const AttendanceKiosk = () => {
   const [time, setTime] = useState(new Date());
@@ -65,11 +65,22 @@ const AttendanceKiosk = () => {
       }
 
       // 4. Send the matched data to the backend to toggle attendance
-      const response = await apiPost('/attendance/public-kiosk-scan', {
-        worker_id: identifyData.worker_id 
+      // Use direct fetch to avoid auth headers for public endpoint
+      const response = await fetch(`${API_BASE_URL}/attendance/public-kiosk-scan`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          worker_id: identifyData.worker_id 
+        })
       });
-
-      const responseData = response.data || response;
+      
+      if (!response.ok) {
+        throw new Error(`Backend request failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const responseData = await response.json();
       
       setMessageType('success');
       setMessage(`Success! ${responseData.worker_name} has been ${responseData.action === 'check_in' ? 'Checked In' : 'Checked Out'}.`);
