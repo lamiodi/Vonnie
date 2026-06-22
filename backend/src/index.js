@@ -25,6 +25,8 @@ import paymentWebhooks from './routes/payment-webhooks.js';
 import expenseRoutes from './routes/expenses.js';
 import auditRoutes from './routes/audit.js';
 import syncRoutes from './routes/sync.js';
+import ecommerceRoutes from './routes/ecommerce.js';
+import ecommerceWebhooks from './routes/ecommerce-webhooks.js';
 import { scheduleWeeklyReport } from './cron/weeklyReport.js';
 import { scheduleDailyAttendanceReport } from './cron/dailyAttendanceReport.js';
 
@@ -101,6 +103,9 @@ app.use(cors({
 // This ensures they get the raw body for signature verification
 app.use('/api/webhooks', paymentWebhooks);
 
+// Ecommerce webhook routes (Paystack) - must be before body parsing
+app.use('/api/webhooks/ecommerce', ecommerceWebhooks);
+
 // Then add body parsing middleware for all other routes
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -123,6 +128,7 @@ app.use('/api/queue', queueRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/sync', syncRoutes);
+app.use('/api/v1/ecommerce', ecommerceRoutes);
 
 
 
