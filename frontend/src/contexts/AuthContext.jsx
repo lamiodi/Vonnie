@@ -17,6 +17,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(localStorage.getItem('token'));
+  const loginInProgress = React.useRef(false);
 
   // Configure axios defaults
   useEffect(() => {
@@ -87,7 +88,13 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
+    // Prevent multiple simultaneous login attempts
+    if (loginInProgress.current) {
+      return { success: false, message: 'Login already in progress' };
+    }
+    
     try {
+      loginInProgress.current = true;
       setLoading(true);
       const response = await api.post('/auth/login', {
         email,
@@ -111,7 +118,8 @@ export const AuthProvider = ({ children }) => {
           api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         }
         
-        toast.success('Login successful!');
+        // Use toast ID to prevent duplicate toasts
+        toast.success('Login successful!', { id: 'login-success' });
         return { success: true };
       } else {
         // Handle case where backend returns unexpected response structure
@@ -126,6 +134,7 @@ export const AuthProvider = ({ children }) => {
       return { success: false, message };
     } finally {
       setLoading(false);
+      loginInProgress.current = false;
     }
   };
 
