@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import OfflineIndicator from './OfflineIndicator';
 import {
   HomeIcon,
   CalendarIcon,
@@ -15,7 +16,9 @@ import {
   MenuIcon,
   XIcon,
   UserIcon,
-  CogIcon
+  CogIcon,
+  ShieldCheckIcon,
+  CurrencyDollarIcon
 } from '@heroicons/react/outline';
 
 const Layout = () => {
@@ -53,7 +56,9 @@ const Layout = () => {
     { name: 'Coupons', href: '/coupons', icon: TicketIcon },
     { name: 'Reports', href: '/reports', icon: DocumentReportIcon },
     { name: 'Transactions', href: '/transactions', icon: DocumentReportIcon },
+    { name: 'Expenses', href: '/expenses', icon: CurrencyDollarIcon },
     ...(isAdmin ? [{ name: 'Admin Settings', href: '/admin-settings', icon: CogIcon }] : []),
+    ...(isAdmin ? [{ name: 'Fraud Review', href: '/fraud-review', icon: ShieldCheckIcon }] : []),
   ];
 
   // Bottom nav shows most-used items for quick mobile access
@@ -65,7 +70,14 @@ const Layout = () => {
     { name: 'More', href: null, icon: MenuIcon, action: () => setSidebarOpen(true) },
   ];
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear offline data on logout for security
+    try {
+      const { clearAllOfflineData } = await import('../services/offlineStore');
+      await clearAllOfflineData();
+    } catch (e) {
+      console.error('Error clearing offline data:', e);
+    }
     logout();
     navigate('/login');
   };
@@ -212,6 +224,7 @@ const Layout = () => {
               </h2>
             </div>
             <div className="flex items-center gap-2 sm:gap-4" role="region" aria-label="User actions">
+              <OfflineIndicator />
               <span className="text-xs sm:text-sm text-gray-700 hidden sm:inline truncate max-w-[200px]" aria-label={`Welcome message for ${user?.name}`}>
                 Welcome, {user?.name}
               </span>

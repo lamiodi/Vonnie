@@ -231,7 +231,7 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
     // Apply coupon if provided
     if (coupon_code) {
       const couponResult = await client.query(
-        'SELECT * FROM coupons WHERE code = $1 FOR UPDATE',
+        'SELECT * FROM coupons WHERE code = $1 AND is_active = true FOR UPDATE',
         [coupon_code]
       );
 
@@ -248,11 +248,15 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
 
           total_amount -= discount_amount;
 
-          // Update coupon usage
-          await client.query(
-            'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1',
+          // Atomic coupon usage update to prevent race conditions
+          const updateResult = await client.query(
+            'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1 AND used_count < usage_limit RETURNING *',
             [coupon.id]
           );
+          if (updateResult.rows.length === 0) {
+            discount_amount = 0;
+            coupon_id = null;
+          }
         }
       }
     }
@@ -481,11 +485,16 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       }
     }
 
-    // Validate customer info if provided
+    // Validate and sanitize customer info if provided
     if (customer_info.email && !/^[\w\.-]+@[\w\.-]+\.\w+$/.test(customer_info.email)) {
       await client.query('ROLLBACK');
       return res.status(400).json(errorResponse('Invalid customer email format', 'INVALID_CUSTOMER_EMAIL', 400));
     }
+
+    // Sanitize customer info to prevent excessively long inputs
+    if (customer_info.name) customer_info.name = String(customer_info.name).trim().slice(0, 100);
+    if (customer_info.email) customer_info.email = String(customer_info.email).trim().slice(0, 255).toLowerCase();
+    if (customer_info.phone) customer_info.phone = String(customer_info.phone).trim().slice(0, 20);
 
     // Validate tax amount
     if (tax < 0) {
@@ -671,7 +680,7 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     // Apply coupon if provided
     if (coupon_code) {
       const couponResult = await client.query(
-        'SELECT * FROM coupons WHERE code = $1 FOR UPDATE',
+        'SELECT * FROM coupons WHERE code = $1 AND is_active = true FOR UPDATE',
         [coupon_code]
       );
 
@@ -687,11 +696,15 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
             discount_amount = Number(coupon.fixed_amount);
           }
 
-          // Update coupon usage count (usage record inserted after transaction creation)
-          await client.query(
-            'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1',
+          // Atomic coupon usage update to prevent race conditions
+          const updateResult = await client.query(
+            'UPDATE coupons SET used_count = used_count + 1 WHERE id = $1 AND used_count < usage_limit RETURNING *',
             [coupon.id]
           );
+          if (updateResult.rows.length === 0) {
+            discount_amount = 0;
+            coupon_id = null;
+          }
         }
       }
     }
@@ -874,13 +887,13 @@ router.post('/payment/initialize', authenticate, async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error('POS payment verification error:', error);
+    console.error('POS payment initialization error:', error);
     res.status(400).json({
       success: false,
-      error: 'Payment verification failed',
+      error: 'Payment initialization failed',
       message: error.message,
       details: {
-        reference: reference,
+        reference: req.body.reference || 'N/A',
         error_type: error.name,
         stack_trace: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }
@@ -1185,4 +1198,156 @@ router.post('/transactions/:id/verify-payment', authenticate, authorize(['manage
   }
 });
 // (Route moved above the dynamic :id route to prevent shadowing)
+
+// Process refund for a POS transaction
+router.post('/transactions/:id/refund', authenticate, authorize(['manager', 'admin']), async (req, res) => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+
+    const { id } = req.params;
+    const { reason, refund_type = 'full' } = req.body;
+    const processed_by = req.user.id;
+
+    // Validate UUID
+    if (!id || typeof id !== 'string' || !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
+      return res.status(400).json({ error: 'Invalid transaction id format' });
+    }
+
+    // Get the original transaction
+    const txnResult = await client.query(
+      'SELECT * FROM pos_transactions WHERE id = $1',
+      [id]
+    );
+
+    if (txnResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Transaction not found' });
+    }
+
+    const originalTxn = txnResult.rows[0];
+
+    // Check if already refunded
+    if (originalTxn.status === 'refunded') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Transaction has already been refunded' });
+    }
+
+    // Check if transaction was completed
+    if (originalTxn.payment_status !== 'completed') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Only completed transactions can be refunded' });
+    }
+
+    // Get original transaction items to restore stock
+    const itemsResult = await client.query(
+      'SELECT * FROM pos_transaction_items WHERE transaction_id = $1',
+      [id]
+    );
+
+    // Restore product stock
+    for (const item of itemsResult.rows) {
+      if (item.product_id) {
+        if (item.size) {
+          // Restore size-specific stock
+          const productResult = await client.query(
+            'SELECT stock_by_size FROM products WHERE id = $1 FOR UPDATE',
+            [item.product_id]
+          );
+          if (productResult.rows.length > 0) {
+            const stockBySize = productResult.rows[0].stock_by_size || {};
+            stockBySize[item.size] = (Number(stockBySize[item.size]) || 0) + item.quantity;
+            await client.query(
+              'UPDATE products SET stock_by_size = $1, stock_level = stock_level + $2 WHERE id = $3',
+              [stockBySize, item.quantity, item.product_id]
+            );
+          }
+        } else {
+          await client.query(
+            'UPDATE products SET stock_level = stock_level + $1 WHERE id = $2',
+            [item.quantity, item.product_id]
+          );
+        }
+      }
+    }
+
+    // Mark original transaction as refunded
+    await client.query(
+      `UPDATE pos_transactions
+       SET status = 'refunded',
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1`,
+      [id]
+    );
+
+    // Create refund transaction record
+    const refundNumber = `REF-${Date.now()}`;
+    const refundResult = await client.query(
+      `INSERT INTO pos_transactions
+       (transaction_number, customer_name, customer_email, customer_phone, subtotal, discount_amount, total_amount, payment_method, payment_status, status, created_by, booking_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        refundNumber,
+        originalTxn.customer_name,
+        originalTxn.customer_email,
+        originalTxn.customer_phone,
+        -originalTxn.subtotal,
+        -originalTxn.discount_amount,
+        -originalTxn.total_amount,
+        originalTxn.payment_method,
+        'refunded',
+        'refunded',
+        processed_by,
+        originalTxn.booking_id
+      ]
+    );
+
+    // Log the refund in audit log
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
+       VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
+      [
+        processed_by,
+        'refund',
+        'pos_transaction',
+        id,
+        JSON.stringify({
+          original_transaction: originalTxn.transaction_number,
+          refund_transaction: refundNumber,
+          amount: originalTxn.total_amount,
+          reason: reason || 'No reason provided',
+          refund_type
+        })
+      ]
+    );
+
+    // If there was a linked booking, update its status
+    if (originalTxn.booking_id) {
+      await client.query(
+        `UPDATE bookings
+         SET payment_status = 'refunded',
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [originalTxn.booking_id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.json(successResponse({
+      refund: refundResult.rows[0],
+      original_transaction_id: id,
+      stock_restored: true
+    }, 'Refund processed successfully'));
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Refund error:', error);
+    res.status(400).json(errorResponse(error.message, 'REFUND_ERROR', 400));
+  } finally {
+    client.release();
+  }
+});
+
 export default router;

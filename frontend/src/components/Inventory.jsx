@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete, API_ENDPOINTS } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import toast, { Toaster } from 'react-hot-toast';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { queueInventoryAdjustment, getCachedProducts, updateCachedProductStock, getPendingInventoryAdjustments } from '../services/offlineStore';
 
 const Inventory = () => {
   const { user, hasRole } = useAuth();
+  const { isOnline } = useNetworkStatus();
   const [activeTab, setActiveTab] = useState('products');
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
@@ -27,6 +31,16 @@ const Inventory = () => {
   });
   const [useSizeStock, setUseSizeStock] = useState(false);
   const [formErrors, setFormErrors] = useState({});
+
+  // Movement history state
+  const [movements, setMovements] = useState([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+  const [movementFilter, setMovementFilter] = useState('');
+  const [movementTypeFilter, setMovementTypeFilter] = useState('');
+
+  // Channel selector state
+  const [formChannels, setFormChannels] = useState([]);
+  const AVAILABLE_CHANNELS = ['walk-in', 'pos', 'online', 'booking'];
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isAdmin = hasRole('admin');
@@ -56,6 +70,21 @@ const Inventory = () => {
       console.error('Error fetching services:', error);
     } finally {
       if (activeTab === 'services') setLoading(false);
+    }
+  };
+
+  const fetchMovements = async () => {
+    setMovementsLoading(true);
+    try {
+      let url = `${API_ENDPOINTS.INVENTORY_MOVEMENTS}?limit=50`;
+      if (movementTypeFilter) url += `&movement_type=${movementTypeFilter}`;
+      const response = await apiGet(url);
+      setMovements(response.movements || response || []);
+    } catch (error) {
+      console.error('Error fetching movements:', error);
+      toast.error('Failed to load movement history');
+    } finally {
+      setMovementsLoading(false);
     }
   };
 
@@ -182,10 +211,10 @@ const Inventory = () => {
       }
 
       resetForm();
-      alert(`${activeTab === 'products' ? 'Product' : 'Service'} saved successfully!`);
+      toast.success(`${activeTab === 'products' ? 'Product' : 'Service'} saved successfully!`);
     } catch (error) {
       console.error('Error saving:', error);
-      alert(error.error?.message || 'Error saving. Please try again.');
+      toast.error(error.error?.message || 'Error saving. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -196,6 +225,7 @@ const Inventory = () => {
     if (activeTab === 'products') {
       const hasSizeStock = item.stock_by_size && Object.keys(item.stock_by_size).length > 0;
       setUseSizeStock(hasSizeStock);
+      setFormChannels(item.channels || []);
       setFormData({
         ...formData,
         name: item.name,
@@ -229,10 +259,10 @@ const Inventory = () => {
       const endpoint = activeTab === 'products' ? API_ENDPOINTS.INVENTORY : API_ENDPOINTS.SERVICES;
       await apiDelete(`${endpoint}/${item.id}`);
       activeTab === 'products' ? fetchProducts() : fetchServices();
-      alert(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
+      toast.success(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted successfully!`);
     } catch (error) {
       console.error('Error deleting:', error);
-      alert(error?.error?.message || 'Error deleting. Please try again.');
+      toast.error(error?.error?.message || 'Error deleting. Please try again.');
     }
   };
 
@@ -252,6 +282,7 @@ const Inventory = () => {
     setEditingItem(null);
     setShowAddForm(false);
     setFormErrors({});
+    setFormChannels([]);
   };
 
   const getStockStatus = (stockLevel) => {
@@ -293,7 +324,7 @@ const Inventory = () => {
     } catch (error) {
       console.error('Error searching product:', error);
       setScannedProduct(null);
-      alert('Product not found with this SKU');
+      toast.error('Product not found with this SKU');
     }
   };
 
@@ -314,6 +345,7 @@ const Inventory = () => {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-full">
+      <Toaster position="top-right" />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Inventory & Services</h1>
@@ -363,6 +395,15 @@ const Inventory = () => {
             }`}
         >
           💇‍♀️ Services
+        </button>
+        <button
+          onClick={() => { setActiveTab('movements'); fetchMovements(); }}
+          className={`py-2 px-6 font-medium text-sm transition-colors duration-200 border-b-2 ${activeTab === 'movements'
+            ? 'border-blue-500 text-blue-600'
+            : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+        >
+          📋 Movements
         </button>
         <div className="ml-auto w-1/3 min-w-[200px] pb-2">
           <input
@@ -540,6 +581,100 @@ const Inventory = () => {
         </div>
       )}
 
+      {/* Movements History Panel */}
+      {activeTab === 'movements' && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-700">Inventory Movement History</h3>
+            <div className="flex gap-2 w-full sm:w-auto">
+              <input
+                type="text"
+                placeholder="Search by product..."
+                value={movementFilter}
+                onChange={(e) => setMovementFilter(e.target.value)}
+                className="flex-1 sm:w-48 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select
+                value={movementTypeFilter}
+                onChange={(e) => { setMovementTypeFilter(e.target.value); }}
+                className="px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Types</option>
+                <option value="sale">Sale</option>
+                <option value="restock">Restock</option>
+                <option value="adjustment">Adjustment</option>
+                <option value="return">Return</option>
+              </select>
+              <button
+                onClick={fetchMovements}
+                className="px-3 py-1.5 bg-blue-600 text-white rounded-md text-sm hover:bg-blue-700 transition"
+              >
+                Refresh
+              </button>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Product</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Qty</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Size</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Note</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">By</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {movementsLoading ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                  </td></tr>
+                ) : movements.length === 0 ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-500">No movement records found</td></tr>
+                ) : movements
+                  .filter(m => {
+                    if (!movementFilter) return true;
+                    const q = movementFilter.toLowerCase();
+                    return (m.product_name || '').toLowerCase().includes(q) || (m.sku || '').toLowerCase().includes(q);
+                  })
+                  .map(m => (
+                    <tr key={m.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(m.created_at).toLocaleDateString()} {new Date(m.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{m.product_name || 'Unknown'}</div>
+                        <div className="text-xs text-gray-400">{m.sku || ''}</div>
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-0.5 text-xs font-medium rounded-full ${
+                          m.movement_type === 'sale' ? 'bg-red-100 text-red-700' :
+                          m.movement_type === 'restock' ? 'bg-green-100 text-green-700' :
+                          m.movement_type === 'adjustment' ? 'bg-yellow-100 text-yellow-700' :
+                          m.movement_type === 'return' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {m.movement_type}
+                        </span>
+                      </td>
+                      <td className={`px-4 py-3 whitespace-nowrap text-sm font-medium ${
+                        m.quantity < 0 ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {m.quantity > 0 ? '+' : ''}{m.quantity}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{m.size || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-gray-500 max-w-xs truncate">{m.note || '-'}</td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{m.created_by_name || '-'}</td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Add/Edit Form Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true">
@@ -589,6 +724,36 @@ const Inventory = () => {
                 />
                 {formErrors.category && <p className="text-xs text-red-500 mt-1">{formErrors.category}</p>}
               </div>
+
+              {activeTab === 'products' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Sales Channels</label>
+                  <div className="flex flex-wrap gap-2">
+                    {AVAILABLE_CHANNELS.map(ch => (
+                      <button
+                        key={ch}
+                        type="button"
+                        onClick={() => {
+                          setFormChannels(prev =>
+                            prev.includes(ch) ? prev.filter(c => c !== ch) : [...prev, ch]
+                          );
+                        }}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-full border transition ${
+                          formChannels.includes(ch)
+                            ? 'bg-blue-100 border-blue-400 text-blue-700'
+                            : 'bg-gray-50 border-gray-300 text-gray-600 hover:bg-gray-100'
+                        }`}
+                      >
+                        {ch === 'walk-in' ? '🏪 Walk-in' :
+                         ch === 'pos' ? '💳 POS' :
+                         ch === 'online' ? '🌐 Online' :
+                         ch === 'booking' ? '📅 Booking' : ch}
+                      </button>
+                    ))}
+                  </div>
+                  <input type="hidden" name="channels" value={JSON.stringify(formChannels)} />
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700">Price (₦) *</label>

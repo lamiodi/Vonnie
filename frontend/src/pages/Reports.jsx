@@ -39,6 +39,12 @@ const Reports = () => {
         case 'coupons':
           endpoint = API_ENDPOINTS.REPORTS_COUPONS;
           break;
+        case 'expenses':
+          endpoint = '/reports/expenses';
+          break;
+        case 'profit':
+          endpoint = '/reports/profit';
+          break;
         case 'missed_attendance':
           endpoint = '/reports/missed-attendance';
           break;
@@ -628,6 +634,198 @@ const Reports = () => {
     );
   };
 
+  const renderExpensesReport = () => {
+    if (!reportData) return null;
+    const totalExpenses = reportData.total_expenses || 0;
+    const expenseCount = reportData.expense_count || 0;
+    const byCategory = reportData.by_category || [];
+    const groupedData = reportData.grouped_data || [];
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Total Expenses</div>
+            <div className="text-3xl font-bold text-red-600">{formatCurrency(totalExpenses)}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Expense Count</div>
+            <div className="text-3xl font-bold text-blue-600">{expenseCount}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Average Expense</div>
+            <div className="text-3xl font-bold text-purple-600">{formatCurrency(expenseCount > 0 ? totalExpenses / expenseCount : 0)}</div>
+          </div>
+        </div>
+
+        {byCategory.length > 0 && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Expenses by Category</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">% of Total</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {byCategory.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 capitalize">{item.category?.replace('_', ' ')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{formatCurrency(item.total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{totalExpenses > 0 ? ((parseFloat(item.total) / totalExpenses) * 100).toFixed(1) : 0}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {groupedData.length > 0 && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Daily Expense Trend</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {groupedData.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.period)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{formatCurrency(item.total_expenses)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.expense_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderProfitReport = () => {
+    if (!reportData) return null;
+    const summary = reportData.summary || {};
+    const expenseByCategory = reportData.expense_by_category || [];
+    const dailyTrend = reportData.daily_trend || [];
+
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Total Revenue</div>
+            <div className="text-3xl font-bold text-green-600">{formatCurrency(summary.total_revenue)}</div>
+            <div className="text-xs text-gray-400 mt-1">POS: {formatCurrency(summary.total_pos_sales)} | Bookings: {formatCurrency(summary.total_booking_sales)}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Total Expenses</div>
+            <div className="text-3xl font-bold text-red-600">{formatCurrency(summary.total_expenses)}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Net Profit</div>
+            <div className={`text-3xl font-bold ${(summary.net_profit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(summary.net_profit)}</div>
+            <div className="text-xs text-gray-400 mt-1">Margin: {summary.profit_margin}%</div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">POS Transactions</div>
+            <div className="text-2xl font-bold text-blue-600">{summary.transaction_count || 0}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Completed Bookings</div>
+            <div className="text-2xl font-bold text-indigo-600">{summary.booking_count || 0}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Expense Records</div>
+            <div className="text-2xl font-bold text-red-600">{summary.expense_count || 0}</div>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-sm font-medium text-gray-500">Profit Margin</div>
+            <div className={`text-2xl font-bold ${(summary.net_profit || 0) >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{summary.profit_margin || 0}%</div>
+          </div>
+        </div>
+
+        {expenseByCategory.length > 0 && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Expense Breakdown by Category</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Count</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {expenseByCategory.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 capitalize">{item.category?.replace('_', ' ')}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{formatCurrency(item.total)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{item.count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {dailyTrend.length > 0 && (
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-medium text-gray-900">Daily Profit Trend</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sales</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Expenses</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Net Profit</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {dailyTrend.map((item, index) => (
+                    <tr key={index} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{formatDate(item.date)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-green-600">{formatCurrency(item.sales)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-red-600">{formatCurrency(item.expenses)}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-bold">
+                        <span className={parseFloat(item.net_profit) >= 0 ? 'text-emerald-600' : 'text-rose-600'}>{formatCurrency(item.net_profit)}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderReport = () => {
     switch (reportType) {
       case 'sales':
@@ -638,6 +836,10 @@ const Reports = () => {
         return renderBookingsReport();
       case 'coupons':
         return renderCouponsReport();
+      case 'expenses':
+        return renderExpensesReport();
+      case 'profit':
+        return renderProfitReport();
       case 'missed_attendance':
         return renderMissedAttendanceReport();
       default:
@@ -715,12 +917,14 @@ const Reports = () => {
               <option value="inventory">Inventory Report</option>
               <option value="bookings">Bookings Report</option>
               <option value="coupons">Coupons Report</option>
+              <option value="expenses">Expense Report</option>
+              <option value="profit">Profit Report</option>
               <option value="missed_attendance">Missed Attendance</option>
             </select>
             <span id="report-type-help" className="sr-only">Select the type of report to generate</span>
           </div>
 
-          {(reportType === 'sales' || reportType === 'bookings') && (
+          {(reportType === 'sales' || reportType === 'bookings' || reportType === 'expenses') && (
             <div>
               <label htmlFor="group-by" className="block text-sm font-medium text-gray-700 mb-2">
                 Group By

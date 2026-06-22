@@ -22,6 +22,9 @@ import physicalPosPaymentRoutes from './routes/physical-pos-payments.js';
 import adminRoutes from './routes/admin.js';
 import queueRoutes from './routes/queue.js';
 import paymentWebhooks from './routes/payment-webhooks.js';
+import expenseRoutes from './routes/expenses.js';
+import auditRoutes from './routes/audit.js';
+import syncRoutes from './routes/sync.js';
 import { scheduleWeeklyReport } from './cron/weeklyReport.js';
 import { scheduleDailyAttendanceReport } from './cron/dailyAttendanceReport.js';
 
@@ -117,6 +120,9 @@ app.use('/api/payment-confirmation', paymentConfirmationRoutes);
 app.use('/api/physical-pos', physicalPosPaymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/queue', queueRoutes);
+app.use('/api/expenses', expenseRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/sync', syncRoutes);
 
 
 

@@ -8,21 +8,89 @@ import { apiGet, apiPost, apiPatch, API_ENDPOINTS } from '../utils/api';
 import { generatePaystackReference, generateBankTransferReference, generatePOSReference } from '../utils/paymentUtils';
 import { useAuth } from '../contexts/AuthContext';
 
+// ==========================================
+// CONSTANTS
+// ==========================================
+const VAT_RATE = 0.075; // 7.5% VAT
+
+const categories = [
+  { value: '', label: 'All Categories' },
+  { value: 'hair_products', label: 'Hair Products' },
+  { value: 'nail_products', label: 'Nail Products' },
+  { value: 'skin_care', label: 'Skin Care' },
+  { value: 'tools', label: 'Tools & Equipment' },
+  { value: 'accessories', label: 'Accessories' }
+];
+
+const serviceCategories = [
+  { value: '', label: 'All Services' },
+  { value: 'hair', label: 'Hair Services' },
+  { value: 'nail', label: 'Nail Services' },
+  { value: 'skin', label: 'Skin Care Services' },
+  { value: 'massage', label: 'Massage Services' },
+  { value: 'makeup', label: 'Makeup Services' },
+  { value: 'other', label: 'Other Services' }
+];
+
+// ==========================================
+// HELPER: Safe localStorage read
+// ==========================================
+function safeReadJSON(key, fallback) {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// ==========================================
+// HELPER: Sanitize customer input
+// ==========================================
+function sanitizeCustomerInfo(info) {
+  return {
+    name: (info.name || '').trim().slice(0, 100),
+    email: (info.email || '').trim().slice(0, 255).toLowerCase(),
+    phone: (info.phone || '').trim().slice(0, 20)
+  };
+}
+
+// ==========================================
+// HELPER: Shared booking fetch logic
+// ==========================================
+async function fetchBookingData(bookingNumberOrId, apiGetFn, byId = false) {
+  const endpoint = byId
+    ? `${API_ENDPOINTS.BOOKINGS}/${bookingNumberOrId}`
+    : API_ENDPOINTS.BOOKINGS;
+  const params = byId ? undefined : { booking_number: bookingNumberOrId };
+
+  const response = await apiGetFn(endpoint, params);
+  const booking = Array.isArray(response)
+    ? (response.length > 0 ? response[0] : null)
+    : response;
+
+  if (!booking) return null;
+
+  const allowedStatuses = ['scheduled', 'in-progress', 'completed'];
+  if (!allowedStatuses.includes(booking.status)) {
+    throw new Error(
+      `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'Scheduled', 'In Progress', or 'Completed' can be processed through POS.`
+    );
+  }
+
+  return booking;
+}
+
+// ==========================================
+// COMPONENT: POS
+// ==========================================
 const POS = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [services, setServices] = useState([]);
 
   // Initialize cart from localStorage
-  const [cart, setCart] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pos_cart');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error('Failed to load cart from local storage', e);
-      return [];
-    }
-  });
+  const [cart, setCart] = useState(() => safeReadJSON('pos_cart', []));
 
   const [searchTerm, setSearchTerm] = useState('');
   const [serviceSearchTerm, setServiceSearchTerm] = useState('');
@@ -40,31 +108,17 @@ const POS = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [apiOnline, setApiOnline] = useState(true);
-  const [paystackReference, setPaystackReference] = useState("");
   const [bookingNumber, setBookingNumber] = useState('');
 
   // Initialize bookingData from localStorage
-  const [bookingData, setBookingData] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pos_booking_data');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
-
+  const [bookingData, setBookingData] = useState(() => safeReadJSON('pos_booking_data', null));
   const [bookingLoading, setBookingLoading] = useState(false);
 
   // Initialize customerInfo from localStorage
   const [customerInfo, setCustomerInfo] = useState(() => {
-    try {
-      const saved = localStorage.getItem('pos_customer_info');
-      return saved ? JSON.parse(saved) : { name: '', email: '', phone: '' };
-    } catch (e) {
-      return { name: '', email: '', phone: '' };
-    }
+    const saved = safeReadJSON('pos_customer_info', { name: '', email: '', phone: '' });
+    return sanitizeCustomerInfo(saved);
   });
 
   // Persistence Effects
@@ -75,7 +129,6 @@ const POS = () => {
   useEffect(() => {
     if (bookingData) {
       localStorage.setItem('pos_booking_data', JSON.stringify(bookingData));
-      // Sync booking number if not set
       if (!bookingNumber && bookingData.booking_number) {
         setBookingNumber(bookingData.booking_number);
       }
@@ -91,6 +144,36 @@ const POS = () => {
   const [activeTab, setActiveTab] = useState('products');
   const [miscCharges, setMiscCharges] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Receipt preview & transaction history state
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState(null);
+  const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [transactions, setTransactions] = useState([]);
+  const [txnLoading, setTxnLoading] = useState(false);
+  const [txnSearch, setTxnSearch] = useState('');
+
+  // Refund state
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundReason, setRefundReason] = useState('');
+  const [refundProcessing, setRefundProcessing] = useState(false);
+  const [refundTxn, setRefundTxn] = useState(null);
+
+  // Customer history state
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [customerHistory, setCustomerHistory] = useState(null);
+  const [customerHistoryLoading, setCustomerHistoryLoading] = useState(false);
+
+  // Granular loading states (Suggestion S3)
+  const [applyingCoupon, setApplyingCoupon] = useState(false);
+  const [processingRefund, setProcessingRefund] = useState(false);
+
+  // Ref to track mounted state for async effects
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // Helper function to format prices without showing .00
   const formatPrice = (price) => {
@@ -121,194 +204,140 @@ const POS = () => {
       return matchesSearch && matchesCategory;
     });
   }, [services, serviceSearchTerm, selectedServiceCategory]);
-  const categories = [
-    { value: '', label: 'All Categories' },
-    { value: 'hair_products', label: 'Hair Products' },
-    { value: 'nail_products', label: 'Nail Products' },
-    { value: 'skin_care', label: 'Skin Care' },
-    { value: 'tools', label: 'Tools & Equipment' },
-    { value: 'accessories', label: 'Accessories' }
-  ];
-  const serviceCategories = [
-    { value: '', label: 'All Services' },
-    { value: 'hair', label: 'Hair Services' },
-    { value: 'nail', label: 'Nail Services' },
-    { value: 'skin', label: 'Skin Care Services' },
-    { value: 'massage', label: 'Massage Services' },
-    { value: 'makeup', label: 'Makeup Services' },
-    { value: 'other', label: 'Other Services' }
-  ];
+
   useEffect(() => {
     fetchProducts();
     fetchServices();
   }, []);
+
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         await apiGet(API_ENDPOINTS.PUBLIC_SERVICES);
-        setApiOnline(true);
-      } catch (e) {
-        setApiOnline(false);
+        if (!cancelled) setApiOnline(true);
+      } catch {
+        if (!cancelled) setApiOnline(false);
       }
     })();
+    return () => { cancelled = true; };
   }, []);
+
   // Handle URL parameters to automatically load bookings
   useEffect(() => {
     const bookingId = searchParams.get('booking_id');
     const customerId = searchParams.get('customer_id');
 
     if (bookingId) {
-      // Fetch booking by ID
       fetchBookingById(bookingId);
-
-      // Clear URL parameters after loading
       const newSearchParams = new URLSearchParams(searchParams);
       newSearchParams.delete('booking_id');
       newSearchParams.delete('customer_id');
       setSearchParams(newSearchParams);
     }
   }, [searchParams]);
-  const fetchBookingById = async (bookingId) => {
+
+  // ==========================================
+  // BOOKING LOGIC (consolidated, fix #2)
+  // ==========================================
+  const processBookingData = useCallback(async (booking) => {
+    if (!booking) return;
+
+    setBookingData(booking);
+    setBookingNumber(booking.booking_number || '');
+    setCustomerInfo(sanitizeCustomerInfo({
+      name: booking.customer_name || '',
+      email: booking.customer_email || '',
+      phone: booking.customer_phone || ''
+    }));
+
+    // Auto-update status to 'in-progress' for walk-in customers
+    const isWalkIn = booking.customer_type === 'walk_in' || booking.customer_type === 'walk-in';
+    if (isWalkIn && booking.status === 'scheduled') {
+      try {
+        await apiPatch(`${API_ENDPOINTS.BOOKINGS}/${booking.id}`, {
+          status: 'in-progress',
+          updated_at: new Date().toISOString()
+        });
+        setBookingData({ ...booking, status: 'in-progress' });
+        handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
+      } catch (updateError) {
+        console.error('Error updating booking status:', updateError);
+        handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
+      }
+    } else {
+      handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
+    }
+  }, []);
+
+  const fetchBookingById = useCallback(async (bookingId) => {
     try {
       setBookingLoading(true);
-      const response = await apiGet(`${API_ENDPOINTS.BOOKINGS}/${bookingId}`);
-
-      if (response) {
-        const booking = response;
-        // Allow bookings with statuses aligned to backend schema
-        const allowedStatuses = ['scheduled', 'in-progress', 'completed'];
-
-        if (!allowedStatuses.includes(booking.status)) {
-          handleError(null, `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'Scheduled', 'In Progress', or 'Completed' can be processed through POS.`);
-          setBookingData(null);
-          return;
-        }
-
-        setBookingData(booking);
-        setBookingNumber(booking.booking_number || '');
-        setCustomerInfo({
-          name: booking.customer_name || '',
-          email: booking.customer_email || '',
-          phone: booking.customer_phone || ''
-        });
-
-        // Auto-update status to 'in-progress' for walk-in customers
-        const isWalkIn = booking.customer_type === 'walk_in' || booking.customer_type === 'walk-in';
-        if (isWalkIn && booking.status === 'scheduled') {
-          try {
-            await apiPatch(`${API_ENDPOINTS.BOOKINGS}/${booking.id}`, {
-              status: 'in-progress',
-              updated_at: new Date().toISOString()
-            });
-            setBookingData({ ...booking, status: 'in-progress' });
-            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-          } catch (updateError) {
-            console.error('Error updating booking status:', updateError);
-            handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-          }
-        } else {
-          handleSuccess(`Booking loaded! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-        }
+      const booking = await fetchBookingData(bookingId, apiGet, true);
+      if (booking) {
+        await processBookingData(booking);
       }
     } catch (error) {
       console.error('Error fetching booking by ID:', error);
-      handleError(error, 'Error loading booking. Please try again.');
+      handleError(null, error.message || 'Error loading booking. Please try again.');
     } finally {
       setBookingLoading(false);
     }
-  };
-  const fetchProducts = async () => {
-    try {
-      const response = await apiGet(API_ENDPOINTS.INVENTORY);
-      setProducts(response.filter(product => product.stock_level > 0));
-    } catch (error) {
-      console.error('Error fetching products:', error);
-      handleError(error, 'Failed to fetch products.');
-    } finally {
-      setLoading(false);
-    }
-  };
-  const fetchServices = async () => {
-    try {
-      // Fix: Use API_ENDPOINTS.SERVICES instead of hardcoded path
-      const response = await apiGet(API_ENDPOINTS.SERVICES);
-      setServices(response);
-    } catch (error) {
-      console.error('Error fetching services:', error);
-      handleError(error, 'Failed to fetch services.');
-    }
-  };
-  const fetchBooking = async () => {
+  }, [processBookingData]);
+
+  const fetchBooking = useCallback(async () => {
     if (!bookingNumber.trim()) {
       handleError(null, 'Please enter a booking number');
       return;
     }
     setBookingLoading(true);
     try {
-      const response = await apiGet(API_ENDPOINTS.BOOKINGS, { booking_number: bookingNumber });
-      // Handle both array and single object responses
-      const booking = Array.isArray(response) ? (response.length > 0 ? response[0] : null) : response;
-
+      const booking = await fetchBookingData(bookingNumber, apiGet, false);
       if (booking) {
-
-        // Allow bookings with statuses aligned to backend schema
-        const allowedStatuses = ['scheduled', 'in-progress', 'completed'];
-        if (!allowedStatuses.includes(booking.status)) {
-          handleError(null, `Booking cannot be processed. Current status: ${booking.status}. Only bookings with status 'Scheduled', 'In Progress', or 'Completed' can be processed through POS.`);
-          setBookingData(null);
-          setBookingLoading(false);
-          return;
-        }
-
-        setBookingData(booking);
-        setCustomerInfo({
-          name: booking.customer_name || '',
-          email: booking.customer_email || '',
-          phone: booking.customer_phone || ''
-        });
-
-        // Auto-update status to 'in-progress' for walk-in customers
-        const isWalkIn = booking.customer_type === 'walk_in' || booking.customer_type === 'walk-in';
-        if (isWalkIn && booking.status === 'scheduled') {
-          try {
-            await apiPatch(`${API_ENDPOINTS.BOOKINGS}/${booking.id}`, {
-              status: 'in-progress',
-              updated_at: new Date().toISOString()
-            });
-            setBookingData({ ...booking, status: 'in-progress' });
-            handleSuccess(`Walk-in customer ${booking.customer_name} is now in service! Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-          } catch (updateError) {
-            console.error('Error updating booking status:', updateError);
-            handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-          }
-        } else {
-          handleSuccess(`Booking found! Customer: ${booking.customer_name}, Service: ${booking.service_names ? booking.service_names.join(', ') : 'N/A'}`);
-        }
+        await processBookingData(booking);
       } else {
         handleError(null, 'Booking not found');
         setBookingData(null);
       }
     } catch (error) {
       console.error('Error fetching booking:', error);
-      handleError(error, 'Error fetching booking. Please try again.');
+      handleError(null, error.message || 'Error fetching booking. Please try again.');
       setBookingData(null);
     } finally {
       setBookingLoading(false);
     }
-  };
-  // Memoize functions to prevent unnecessary re-renders
-  const fetchBookingByNumber = useCallback(async (number) => {
+  }, [bookingNumber, processBookingData]);
+
+  const fetchProducts = useCallback(async () => {
+    let cancelled = false;
     try {
-      const response = await apiGet(API_ENDPOINTS.BOOKINGS, { booking_number: number });
-      // Handle both array and single object responses
-      const booking = Array.isArray(response) ? (response.length > 0 ? response[0] : null) : response;
-      if (booking) {
-        setBookingData(booking);
+      const response = await apiGet(API_ENDPOINTS.INVENTORY);
+      if (!cancelled) {
+        setProducts(response.filter(product => product.stock_level > 0));
       }
     } catch (error) {
-      console.error('Error fetching booking by number:', error);
+      if (!cancelled) {
+        console.error('Error fetching products:', error);
+        handleError(error, 'Failed to fetch products.');
+      }
+    } finally {
+      if (!cancelled) setLoading(false);
     }
   }, []);
+
+  const fetchServices = useCallback(async () => {
+    let cancelled = false;
+    try {
+      const response = await apiGet(API_ENDPOINTS.SERVICES);
+      if (!cancelled) setServices(response);
+    } catch (error) {
+      if (!cancelled) {
+        console.error('Error fetching services:', error);
+        handleError(error, 'Failed to fetch services.');
+      }
+    }
+  }, []);
+
   const clearCart = useCallback(() => {
     setCart([]);
     setAppliedCoupon(null);
@@ -316,6 +345,7 @@ const POS = () => {
     setPaymentConfirmed(false);
     setMiscCharges([]);
   }, []);
+
   const clearBooking = useCallback(() => {
     setBookingData(null);
     setBookingNumber('');
@@ -323,26 +353,20 @@ const POS = () => {
     setPaymentConfirmed(false);
     setMiscCharges([]);
   }, []);
+
   // ==========================================
   // CART MANAGEMENT LOGIC
   // ==========================================
 
-  // Memoize calculations to improve performance
   const getSubtotal = useCallback(() => {
     const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-    // Include service price from loaded booking if applicable
     const serviceTotal = bookingData ? parseFloat(bookingData.service_price || 0) : 0;
-
-    // Include miscellaneous charges from local state
     const miscTotal = miscCharges.reduce((sum, charge) => sum + parseFloat(charge.amount || 0), 0);
-
     return cartTotal + serviceTotal + miscTotal;
   }, [cart, bookingData, miscCharges]);
 
-  // Calculate discount based on coupon type (percentage vs fixed)
   const getDiscount = useCallback(() => {
     if (!appliedCoupon) return 0;
-
     const subtotal = getSubtotal();
     if (appliedCoupon.discount_type === 'percentage') {
       return (subtotal * appliedCoupon.discount_value) / 100;
@@ -351,26 +375,23 @@ const POS = () => {
     }
   }, [appliedCoupon, getSubtotal]);
 
-  // Tax Calculation (VAT)
+  // VAT Calculation (Issue #14 - Added VAT)
   const getTaxAmount = useCallback(() => {
-    return 0; // VAT temporarily disabled per business requirement
-  }, []);
+    return getSubtotal() * VAT_RATE;
+  }, [getSubtotal]);
 
-  // Calculate Grand Total
   const getTotal = useCallback(() => {
     const subtotal = getSubtotal();
     const discount = getDiscount();
-    return subtotal - discount; // Tax removed from total calculation
-  }, [getSubtotal, getDiscount]);
+    const tax = getTaxAmount();
+    return subtotal - discount + tax;
+  }, [getSubtotal, getDiscount, getTaxAmount]);
 
-  // Add item to cart (handles both products and services)
   const addToCart = useCallback((item, type = 'product', size = null) => {
-    // Reset payment confirmation when adding new items
     if (paymentConfirmed) {
       setPaymentConfirmed(false);
     }
 
-    // Check if product has sizes and no size is selected yet
     if (type === 'product' && !size && item.stock_by_size && Object.keys(item.stock_by_size).length > 0) {
       setSelectedProductForSize(item);
       setShowSizeModal(true);
@@ -381,7 +402,6 @@ const POS = () => {
     const existingItem = cart.find(cartItem => cartItem.cartItemId === cartItemId && cartItem.type === type);
 
     if (type === 'service') {
-      // Services can be added multiple times (quantity increases)
       if (existingItem) {
         setCart(cart.map(cartItem =>
           cartItem.cartItemId === cartItemId && cartItem.type === type
@@ -392,9 +412,7 @@ const POS = () => {
         setCart([...cart, { ...item, quantity: 1, type: 'service', cartItemId: item.id }]);
       }
     } else {
-      // Product logic: Check stock levels before adding
       let availableStock = item.stock_level;
-
       if (size) {
         availableStock = item.stock_by_size[size] || 0;
       }
@@ -434,7 +452,6 @@ const POS = () => {
           if (item.size && product.stock_by_size) {
             availableStock = product.stock_by_size[item.size] || 0;
           }
-
           if (newQuantity > availableStock) {
             handleError(null, 'Not enough stock available');
             return item;
@@ -452,7 +469,6 @@ const POS = () => {
       handleError(null, 'Invalid price');
       return;
     }
-
     setCart(cart.map(item =>
       (item.cartItemId === cartItemId && item.type === itemType)
         ? { ...item, price: price }
@@ -465,18 +481,31 @@ const POS = () => {
   }, [cart]);
 
   // Misc Charge Management
+  const [showMiscChargeModal, setShowMiscChargeModal] = useState(false);
+  const [miscChargeName, setMiscChargeName] = useState('');
+  const [miscChargeAmount, setMiscChargeAmount] = useState('');
+
+  const openMiscChargeModal = useCallback(() => {
+    setMiscChargeName('');
+    setMiscChargeAmount('');
+    setShowMiscChargeModal(true);
+  }, []);
+
   const addMiscCharge = useCallback(() => {
-    const name = prompt("Enter charge name (e.g. Hair Dye Upgrade):");
-    if (!name) return;
-    const amount = prompt("Enter amount (₦):");
-    if (!amount || isNaN(parseFloat(amount))) {
-      if (amount) toast.error("Invalid amount");
+    if (!miscChargeName.trim()) {
+      toast.error('Please enter a charge name');
       return;
     }
-
-    setMiscCharges(prev => [...prev, { name, amount: parseFloat(amount) }]);
-    toast.success(`Miscellaneous charge "${name}" added`);
-  }, []);
+    if (!miscChargeAmount || isNaN(parseFloat(miscChargeAmount)) || parseFloat(miscChargeAmount) <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    setMiscCharges(prev => [...prev, { name: miscChargeName.trim(), amount: parseFloat(miscChargeAmount) }]);
+    toast.success(`Miscellaneous charge "${miscChargeName}" added`);
+    setShowMiscChargeModal(false);
+    setMiscChargeName('');
+    setMiscChargeAmount('');
+  }, [miscChargeName, miscChargeAmount]);
 
   const removeMiscCharge = useCallback((index) => {
     setMiscCharges(prev => prev.filter((_, i) => i !== index));
@@ -490,18 +519,88 @@ const POS = () => {
       setMiscCharges([]);
     }
   }, [bookingData]);
+
+  // Fetch transaction history
+  const fetchTransactions = useCallback(async () => {
+    setTxnLoading(true);
+    try {
+      const res = await apiGet(`${API_ENDPOINTS.POS_TRANSACTIONS}?limit=50`);
+      setTransactions(res.transactions || res || []);
+    } catch {
+      toast.error('Failed to load transaction history');
+    } finally {
+      setTxnLoading(false);
+    }
+  }, []);
+
+  const viewReceipt = useCallback(async (txn) => {
+    try {
+      const details = await apiGet(API_ENDPOINTS.POS_TRANSACTION_DETAILS(txn.id));
+      setSelectedTransaction(details);
+      setShowReceiptModal(true);
+    } catch {
+      setSelectedTransaction(txn);
+      setShowReceiptModal(true);
+    }
+  }, []);
+
+  const fetchCustomerHistory = useCallback(async (email) => {
+    if (!email) return;
+    setCustomerHistoryLoading(true);
+    setShowCustomerHistory(true);
+    try {
+      const data = await apiGet(API_ENDPOINTS.CUSTOMER_HISTORY(email));
+      setCustomerHistory(data);
+    } catch {
+      setCustomerHistory(null);
+    } finally {
+      setCustomerHistoryLoading(false);
+    }
+  }, []);
+
+  const openRefundModal = useCallback((txn) => {
+    setRefundTxn(txn);
+    setRefundReason('');
+    setShowRefundModal(true);
+  }, []);
+
+  const processRefund = useCallback(async () => {
+    if (!refundTxn) return;
+    if (!refundReason.trim()) {
+      toast.error('Please provide a reason for the refund');
+      return;
+    }
+    setRefundProcessing(true);
+    try {
+      await apiPost(API_ENDPOINTS.POS_TRANSACTION_REFUND(refundTxn.id), {
+        reason: refundReason.trim(),
+        refund_type: 'full'
+      });
+      toast.success(`Refund processed for ${refundTxn.transaction_number}`);
+      setShowRefundModal(false);
+      setShowReceiptModal(false);
+      setSelectedTransaction(null);
+      setRefundTxn(null);
+      setRefundReason('');
+      if (showHistoryPanel) fetchTransactions();
+    } catch (err) {
+      toast.error('Refund failed: ' + (err.response?.data?.error || err.message));
+    } finally {
+      setRefundProcessing(false);
+    }
+  }, [refundTxn, refundReason, showHistoryPanel, fetchTransactions]);
+
   const handleSkuInput = useCallback((e) => {
     const sku = e.target.value;
     setSkuInput(sku);
-
     if (sku.length >= 3 && /^[\dA-Za-z]+$/.test(sku)) {
       searchProductBySku(sku);
     }
   }, []);
+
   const searchProductBySku = useCallback(async (sku) => {
     try {
       const response = await apiGet(API_ENDPOINTS.INVENTORY_BARCODE(sku));
-
       if (response) {
         const product = response;
         if (scanningMode) {
@@ -518,8 +617,9 @@ const POS = () => {
       handleError(error, 'Product not found with this SKU');
     }
   }, [scanningMode, addToCart, handleSuccess, handleError]);
+
   const toggleScanningMode = useCallback(() => {
-    setScanningMode(!scanningMode);
+    setScanningMode(prev => !prev);
     setSkuInput('');
     if (!scanningMode) {
       setTimeout(() => {
@@ -528,8 +628,10 @@ const POS = () => {
       }, 100);
     }
   }, [scanningMode]);
+
   const applyCoupon = useCallback(async () => {
     if (!couponCode.trim()) return;
+    setApplyingCoupon(true);
     try {
       const response = await apiPost(API_ENDPOINTS.COUPON_VALIDATE(couponCode), {
         order_amount: getSubtotal()
@@ -539,34 +641,31 @@ const POS = () => {
     } catch (error) {
       console.error('Error applying coupon:', error);
       handleError(error, 'Invalid or expired coupon code');
+    } finally {
+      setApplyingCoupon(false);
     }
   }, [couponCode, getSubtotal]);
+
   const removeCoupon = useCallback(() => {
     setAppliedCoupon(null);
     setCouponCode('');
   }, []);
+
   const getPaymentStatusColor = useCallback((paymentStatus) => {
     switch (paymentStatus) {
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'pending':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'failed':
-        return 'bg-red-100 text-red-800';
-      case 'refunded':
-        return 'bg-purple-100 text-purple-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'completed': return 'bg-green-100 text-green-800';
+      case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'failed': return 'bg-red-100 text-red-800';
+      case 'refunded': return 'bg-purple-100 text-purple-800';
+      default: return 'bg-gray-100 text-gray-800';
     }
   }, []);
-  // ==========================================
-  // PAYMENT HANDLERS
-  // ==========================================
 
-  // Paystack Configuration and Initialization - Top Level Hook execution
+  // ==========================================
+  // PAYMENT HANDLERS (consolidated, fix #3)
+  // ==========================================
   const managerEmail = user?.email || "manager@vonniesalon.com";
 
-  // Memoize config to prevent infinite re-renders while allowing dynamic payment params
   const paystackConfig = useMemo(() => ({
     reference: generatePaystackReference(),
     email: managerEmail,
@@ -592,7 +691,80 @@ const POS = () => {
 
   const initializePayment = usePaystackPayment(paystackConfig);
 
-  // Paystack Payment Function - Manager-operated workflow
+  // Build transaction data (shared across all payment methods)
+  const buildTransactionData = useCallback(() => {
+    return {
+      booking_number: bookingData?.booking_number || null,
+      items: cart.map(item => ({
+        product_id: item.type === 'product' ? item.id : null,
+        service_id: item.type === 'service' ? item.id : null,
+        quantity: item.quantity,
+        price: item.price,
+        type: item.type
+      })),
+      customer_info: customerInfo,
+      staff_id: user?.id,
+      coupon_code: appliedCoupon?.code || null,
+      tax: getTaxAmount(),
+      misc_charges: miscCharges
+    };
+  }, [bookingData, cart, customerInfo, user, appliedCoupon, getTaxAmount, miscCharges]);
+
+  // Shared success handler for non-Paystack payments
+  const handlePaymentSuccess = useCallback((responseData, paymentMethodLabel) => {
+    setPaymentConfirmed(true);
+    const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
+    let successMessage = `${paymentMethodLabel} successful! Transaction ID: ${transactionNumber}`;
+
+    if (bookingData) {
+      successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
+      successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
+      successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
+    }
+
+    handleSuccess(successMessage);
+    setCart([]);
+    setAppliedCoupon(null);
+    setCouponCode('');
+  }, [bookingData, getTotal]);
+
+  // Generic payment processor for bank transfer / POS terminal
+  const processOfflinePayment = useCallback(async (paymentMethod, paymentReferenceFn, paymentMethodLabel) => {
+    if (!customerInfo.name || !customerInfo.phone) {
+      toast.error("Please provide customer name and phone number");
+      return;
+    }
+    if (getTotal() <= 0) {
+      toast.error("Invalid payment amount");
+      return;
+    }
+    setProcessing(true);
+    try {
+      const transactionData = {
+        ...buildTransactionData(),
+        payment_reference: paymentReferenceFn(),
+        payment_method: paymentMethod,
+        payment_status: 'completed'
+      };
+
+      const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
+      const responseData = transactionResponse.data || transactionResponse;
+      const isSuccess = transactionResponse.success !== false && responseData;
+
+      if (isSuccess) {
+        handlePaymentSuccess(responseData, paymentMethodLabel);
+      } else {
+        handleError(null, 'Payment processing failed. Please try again.');
+      }
+    } catch (error) {
+      console.error(`Error processing ${paymentMethodLabel}:`, error);
+      handleError(error, `Error processing ${paymentMethodLabel}. Please try again.`);
+    } finally {
+      setProcessing(false);
+    }
+  }, [customerInfo, getTotal, buildTransactionData, handlePaymentSuccess]);
+
+  // Paystack Payment
   const handlePaystackPayment = useCallback(() => {
     if (!customerInfo.name || !customerInfo.phone) {
       toast.error("Please provide customer name and phone number");
@@ -603,42 +775,23 @@ const POS = () => {
       return;
     }
 
-
-
     const onSuccess = async (response) => {
       try {
         setProcessing(true);
-
-        // Create complete POS transaction after Paystack payment
         const transactionData = {
-          booking_number: bookingData?.booking_number || null,
-          items: cart.map(item => ({
-            product_id: item.type === 'product' ? item.id : null,
-            service_id: item.type === 'service' ? item.id : null,
-            quantity: item.quantity,
-            price: item.price,
-            type: item.type
-          })),
-          customer_info: customerInfo,
-          staff_id: user?.id,
-          coupon_code: appliedCoupon?.code || null,
-          tax: getTaxAmount(),
-          misc_charges: miscCharges,
+          ...buildTransactionData(),
           payment_reference: response.reference,
           payment_method: 'paystack',
           payment_status: 'completed'
         };
-        // Process the complete transaction
-        const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
 
-        // Handle different response structures
+        const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
         const responseData = transactionResponse.data || transactionResponse;
         const isSuccess = transactionResponse.success !== false && responseData;
 
         if (isSuccess) {
           setPaymentConfirmed(true);
           toast.success("Payment processed and transaction completed successfully!");
-
           const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
           let successMessage = `Transaction completed! ID: ${transactionNumber}`;
 
@@ -650,17 +803,15 @@ const POS = () => {
 
           handleSuccess(successMessage);
 
-
-          // Refresh booking data after successful payment
           if (bookingData?.booking_number) {
-            fetchBookingByNumber(bookingData.booking_number);
+            try {
+              const refreshed = await fetchBookingData(bookingData.booking_number, apiGet, false);
+              if (refreshed) setBookingData(refreshed);
+            } catch { /* ignore refresh error */ }
           }
 
-          // Clear cart and refresh inventory
           clearCart();
           fetchProducts();
-
-          // Receipt modal removed; success already shown via toast and handleSuccess
         } else {
           throw new Error("Transaction processing failed");
         }
@@ -671,370 +822,60 @@ const POS = () => {
         setProcessing(false);
       }
     };
+
     const onClose = () => {
       toast.error("Payment cancelled by manager");
     };
 
     initializePayment(onSuccess, onClose);
-  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError, initializePayment]);
-  // Bank Transfer / Physical POS Payment Handler (Alternative when Paystack is down)
-  const handleCashPayment = useCallback(async () => {
-    if (!customerInfo.name || !customerInfo.phone) {
-      toast.error("Please provide customer name and phone number");
-      return;
-    }
-    if (getTotal() <= 0) {
-      toast.error("Invalid payment amount");
-      return;
-    }
+  }, [customerInfo, getTotal, buildTransactionData, bookingData, initializePayment, clearCart, fetchProducts]);
+
+  // Bank Transfer Payment
+  const handleTransferPayment = useCallback(async () => {
+    await processOfflinePayment('bank_transfer_pos', generateBankTransferReference, 'Bank transfer payment');
+  }, [processOfflinePayment]);
+
+  // POS Terminal Payment
+  const handlePosTerminalPayment = useCallback(async () => {
     setProcessing(true);
     try {
-      // Create complete POS transaction for cash payment
-      const transactionData = {
-        booking_number: bookingData?.booking_number || null,
-        items: cart.map(item => ({
-          product_id: item.type === 'product' ? item.id : null,
-          service_id: item.type === 'service' ? item.id : null,
-          quantity: item.quantity,
-          price: item.price,
-          type: item.type
-        })),
-        customer_info: customerInfo,
-        staff_id: user?.id,
-        coupon_code: appliedCoupon?.code || null,
-        tax: getTaxAmount(),
-        misc_charges: miscCharges,
-        payment_reference: generatePOSReference(),
-        payment_method: 'bank_transfer_pos',
-        payment_status: 'completed'
-      };
-      // Process the complete transaction
-      const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-
-      // Handle different response structures
-      const responseData = transactionResponse.data || transactionResponse;
-      const isSuccess = transactionResponse.success !== false && responseData;
-
-      if (isSuccess) {
-        setPaymentConfirmed(true);
-
-        // Note: Backend automatically handles booking status updates via payment webhooks
-        // No need for manual booking status update here - backend will sync automatically
-
-        if (bookingData && bookingData.id) {
-          console.log('Payment processed for booking:', bookingData.booking_number);
-          // Backend will automatically update booking status via payment confirmation logic
-        }
-
-        // Show success message
-        const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
-        let successMessage = `Bank Transfer/Physical POS payment successful! Transaction ID: ${transactionNumber}`;
-
-        if (bookingData) {
-          successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
-          successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
-        }
-
-        handleSuccess(successMessage);
-
-
-        // Clear cart and reset state
-        setCart([]);
-        setAppliedCoupon(null);
-        setCouponCode('');
-
-        // Receipt modal removed; success already shown via toast and handleSuccess
-
-      } else {
-        handleError(null, 'Payment processing failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error processing Bank Transfer/Physical POS payment:', error);
-      handleError(error, 'Error processing Bank Transfer/Physical POS payment. Please try again.');
+      await new Promise(resolve => setTimeout(resolve, 3000));
+      await processOfflinePayment('physical_pos', generatePOSReference, 'POS Terminal payment');
     } finally {
       setProcessing(false);
     }
-  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError]);
-  // Card Payment Handler (using Paystack)
+  }, [processOfflinePayment]);
+
+  // Card Payment (delegates to Paystack)
   const handleCardPayment = useCallback(() => {
-    // Reuse the existing Paystack payment handler for card payments
     handlePaystackPayment();
   }, [handlePaystackPayment]);
-  // Bank Transfer Payment Handler
-  const handleTransferPayment = useCallback(async () => {
-    if (!customerInfo.name || !customerInfo.phone) {
-      toast.error("Please provide customer name and phone number");
-      return;
-    }
-    if (getTotal() <= 0) {
-      toast.error("Invalid payment amount");
-      return;
-    }
-    setProcessing(true);
-    try {
-      // Create complete POS transaction for bank transfer payment
-      const transactionData = {
-        booking_number: bookingData?.booking_number || null,
-        items: cart.map(item => ({
-          product_id: item.type === 'product' ? item.id : null,
-          service_id: item.type === 'service' ? item.id : null,
-          quantity: item.quantity,
-          price: item.price,
-          type: item.type
-        })),
-        customer_info: customerInfo,
-        staff_id: user?.id,
-        coupon_code: appliedCoupon?.code || null,
-        tax: getTaxAmount(),
-        misc_charges: miscCharges,
-        payment_reference: generateBankTransferReference(),
-        payment_method: 'bank_transfer_pos',
-        payment_status: 'completed'
-      };
-      // Process the complete transaction
-      const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
 
-      // Handle different response structures
-      const responseData = transactionResponse.data || transactionResponse;
-      const isSuccess = transactionResponse.success !== false && responseData;
-
-      if (isSuccess) {
-        setPaymentConfirmed(true);
-
-        // Backend will handle all booking status updates via webhooks
-        // No frontend status updates to prevent conflicts with auto-completion logic
-
-        // Show success message
-        const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
-        let successMessage = `Bank transfer payment recorded! Transaction ID: ${transactionNumber}`;
-
-        if (bookingData) {
-          successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
-          successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
-          successMessage += `\n\nPlease confirm transfer receipt before completing service.`;
-        }
-
-        handleSuccess(successMessage);
-
-
-        // Clear cart and reset state
-        setCart([]);
-        setAppliedCoupon(null);
-        setCouponCode('');
-
-        // Receipt modal removed; success already shown via toast and handleSuccess
-
-      } else {
-        handleError(null, 'Payment processing failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error processing transfer payment:', error);
-      handleError(error, 'Error processing transfer payment. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError]);
-  // POS Terminal Payment Handler
-  const handlePosTerminalPayment = useCallback(async () => {
-    if (!customerInfo.name || !customerInfo.phone) {
-      toast.error("Please provide customer name and phone number");
-      return;
-    }
-    if (getTotal() <= 0) {
-      toast.error("Invalid payment amount");
-      return;
-    }
-    // Simulate POS terminal processing
-    setProcessing(true);
-    try {
-      // Simulate POS terminal processing delay
-      await new Promise(resolve => setTimeout(resolve, 3000));
-
-      // Create complete POS transaction for POS terminal payment
-      const transactionData = {
-        booking_number: bookingData?.booking_number || null,
-        items: cart.map(item => ({
-          product_id: item.type === 'product' ? item.id : null,
-          service_id: item.type === 'service' ? item.id : null,
-          quantity: item.quantity,
-          price: item.price,
-          type: item.type
-        })),
-        customer_info: customerInfo,
-        staff_id: user?.id,
-        coupon_code: appliedCoupon?.code || null,
-        tax: getTaxAmount(),
-        misc_charges: miscCharges,
-        payment_reference: generatePOSReference(),
-        payment_method: 'physical_pos',
-        payment_status: 'completed'
-      };
-      // Process the complete transaction
-      const transactionResponse = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-
-      // Handle different response structures
-      const responseData = transactionResponse.data || transactionResponse;
-      const isSuccess = transactionResponse.success !== false && responseData;
-
-      if (isSuccess) {
-        setPaymentConfirmed(true);
-
-        // Backend will handle all booking status updates via webhooks
-        // No frontend status updates to prevent conflicts with auto-completion logic
-
-        // Show success message
-        const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
-        let successMessage = `POS Terminal payment successful! Transaction ID: ${transactionNumber}`;
-
-        if (bookingData) {
-          successMessage += `\n\nBooking ${bookingData.booking_number} has been completed.`;
-          successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
-          successMessage += `\nTotal Amount: ₦${formatPrice(getTotal())}`;
-        }
-
-        handleSuccess(successMessage);
-
-
-        // Clear cart and reset state
-        setCart([]);
-        setAppliedCoupon(null);
-        setCouponCode('');
-
-        // Receipt modal removed; success already shown via toast and handleSuccess
-
-      } else {
-        handleError(null, 'Payment processing failed. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error processing POS terminal payment:', error);
-      handleError(error, 'Error processing POS terminal payment. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  }, [customerInfo, getTotal, bookingData, cart, appliedCoupon, getSubtotal, getDiscount, getTaxAmount, fetchBookingByNumber, handleSuccess, handleError]);
-  const handleCheckout = useCallback(async () => {
-    if (cart.length === 0 && !bookingData) {
-      handleError(null, 'Cart is empty. Please add products or services to continue.');
-      return;
-    }
-    if (!customerInfo.name || !customerInfo.phone) {
-      handleError(null, 'Please provide customer name and phone number');
-      return;
-    }
-
-    // Validate inventory availability before checkout
-    const inventoryErrors = [];
-    cart.forEach(item => {
-      if (item.type === 'product') {
-        const product = products.find(p => p.id === item.id);
-        if (!product) {
-          inventoryErrors.push(`Product "${item.name}" not found`);
-        } else if (product.stock_level <= 0) {
-          inventoryErrors.push(`Product "${item.name}" is out of stock`);
-        } else if (item.quantity > product.stock_level) {
-          inventoryErrors.push(`Only ${product.stock_level} units available for "${item.name}"`);
-        }
-      }
-    });
-
-    if (inventoryErrors.length > 0) {
-      handleError(null, `Inventory issues: ${inventoryErrors.join(', ')}`);
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const transactionData = {
-        booking_number: bookingData?.booking_number || null,
-        items: cart.map(item => ({
-          product_id: item.type === 'product' ? item.id : null,
-          service_id: item.type === 'service' ? item.id : null,
-          quantity: item.quantity,
-          price: item.price,
-          type: item.type
-        })),
-        customer_info: customerInfo,
-        staff_id: user?.id,
-        coupon_code: appliedCoupon?.code || null,
-        tax: getTaxAmount(),
-        misc_charges: miscCharges
-      };
-      const response = await apiPost(API_ENDPOINTS.POS_CHECKOUT, transactionData);
-
-      // Handle different response structures
-      const responseData = response.data || response;
-      const transactionNumber = responseData.transaction_number || responseData.id || 'N/A';
-
-      let successMessage = `Transaction completed successfully! Transaction ID: ${transactionNumber}`;
-
-      if (responseData.booking_updated || response.booking_updated) {
-        successMessage += `\n\nBooking ${bookingData.booking_number} has been marked as COMPLETED.`;
-        successMessage += `\nService: ${bookingData.service_names ? bookingData.service_names.join(', ') : 'N/A'}`;
-        const totalAmount = responseData.total_amount || response.total_amount || getTotal();
-        const formattedAmount = formatPrice(totalAmount);
-        successMessage += `\nTotal Amount: ₦${formattedAmount}`;
-      }
-
-      handleSuccess(successMessage);
-
-      // Receipt modal removed; success already shown via toast and handleSuccess
-
-      // Reset all state after successful checkout
-      setCart([]);
-      setAppliedCoupon(null);
-      setCouponCode('');
-      setPaymentConfirmed(false);
-      clearBooking();
-      fetchProducts();
-
-    } catch (error) {
-      console.error('Error processing transaction:', error);
-      handleError(error, 'Error processing transaction. Please try again.');
-    } finally {
-      setProcessing(false);
-    }
-  }, [cart, bookingData, customerInfo, appliedCoupon, getSubtotal, getDiscount, getTotal, clearBooking, handleSuccess, handleError, selectedPaymentMethod]);
-
-  // Socket.IO Integration for Real-time Payment Updates
+  // Socket.IO Integration (fix #6 - proper dependency array)
   const bookingIdRef = useRef(null);
-
   useEffect(() => {
     bookingIdRef.current = bookingData?.id;
   }, [bookingData]);
 
   useEffect(() => {
-    // Determine socket URL from env or default
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5010/api';
-    // Remove /api from the end to get the root URL
     const SOCKET_URL = API_URL.replace(/\/api$/, '');
 
-    console.log('🔌 Connecting to socket server at:', SOCKET_URL);
     const socket = io(SOCKET_URL);
 
     socket.on('connect', () => {
-      console.log('✅ Connected to socket server');
+      console.log('Connected to socket server');
     });
 
     socket.on('payment-verified', (data) => {
-      console.log('💰 Payment verified event received:', data);
-
-      // Check if this payment matches the current booking
-      // We use ref to access the latest booking ID without re-running effect
-      if (bookingIdRef.current && data.booking_id === bookingIdRef.current) {
-        if (data.success) {
-          handleSuccess(`Payment verified via Webhook! Reference: ${data.reference}`);
-          setPaymentConfirmed(true);
-          setPaystackReference(data.reference);
-
-          // Clear cart and reset state as requested
-          setCart([]);
-          setAppliedCoupon(null);
-          setCouponCode('');
-          clearBooking();
-          fetchProducts(); // Refresh stock levels
-        }
+      if (bookingIdRef.current && data.booking_id === bookingIdRef.current && data.success) {
+        handleSuccess(`Payment verified via Webhook! Reference: ${data.reference}`);
+        setPaymentConfirmed(true);
+        setCart([]);
+        setAppliedCoupon(null);
+        setCouponCode('');
+        clearBooking();
+        fetchProducts();
       }
     });
 
@@ -1049,7 +890,7 @@ const POS = () => {
       socket.off('payment-failed');
       socket.disconnect();
     };
-  }, []);
+  }, [bookingData?.id, clearBooking, fetchProducts]);
 
   if (loading) {
     return (
@@ -1061,6 +902,7 @@ const POS = () => {
       </div>
     );
   }
+
   return (
     <div className="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 overflow-hidden">
       <div className="flex flex-1 flex-col lg:flex-row overflow-hidden">
@@ -1068,10 +910,22 @@ const POS = () => {
         <div className="flex-1 p-4 lg:p-6 overflow-y-auto order-2 lg:order-1">
           <div className="max-w-7xl mx-auto space-y-4">
             {/* Header */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
-              <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Point of Sale</h1>
-              <p className="text-gray-500 mt-1 text-sm lg:text-base">Manage sales and transactions</p>
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div>
+                <h1 className="text-2xl lg:text-3xl font-bold text-gray-900">Point of Sale</h1>
+                <p className="text-gray-500 mt-1 text-sm lg:text-base">Manage sales and transactions</p>
+              </div>
+              <button
+                onClick={() => { setShowHistoryPanel(true); fetchTransactions(); }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                Transaction History
+              </button>
             </div>
+
             {apiOnline === false && (
               <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">
                 <div className="flex items-center justify-between">
@@ -1080,11 +934,12 @@ const POS = () => {
                 </div>
               </div>
             )}
+
             {/* Booking Lookup */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
               <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
                 Booking Lookup
               </h3>
@@ -1129,6 +984,14 @@ const POS = () => {
                     <div className="flex items-center">
                       <span className="text-gray-600 font-medium">Customer:</span>
                       <span className="ml-2 text-gray-900">{bookingData.customer_name}</span>
+                      {bookingData.customer_email && (
+                        <button
+                          onClick={() => fetchCustomerHistory(bookingData.customer_email)}
+                          className="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline"
+                        >
+                          View History
+                        </button>
+                      )}
                     </div>
                     <div className="flex items-center">
                       <span className="text-gray-600 font-medium">Service:</span>
@@ -1160,6 +1023,7 @@ const POS = () => {
                 </div>
               )}
             </div>
+
             {/* Tab Navigation */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-2">
               <div className="flex gap-2">
@@ -1183,12 +1047,13 @@ const POS = () => {
                 </button>
               </div>
             </div>
+
             {/* Barcode Scanner */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 flex items-center">
                   <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v1m6 11h2m-6 0h-2v4m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                   </svg>
                   Barcode Scanner
                 </h3>
@@ -1228,6 +1093,7 @@ const POS = () => {
                 }
               </p>
             </div>
+
             {/* Search and Filters */}
             {activeTab === 'products' && (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -1253,9 +1119,9 @@ const POS = () => {
                 </div>
               </div>
             )}
+
             {activeTab === 'services' && (
               <div className="space-y-6">
-                {/* Services Search and Filter */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input
@@ -1278,6 +1144,7 @@ const POS = () => {
                     </select>
                   </div>
                 </div>
+
                 {/* Services Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredServices.map(service => (
@@ -1300,7 +1167,7 @@ const POS = () => {
                         <span className="text-lg font-bold text-purple-600">₦{formatPrice(service.price)}</span>
                         <button className="w-8 h-8 bg-purple-600 text-white rounded-lg flex items-center justify-center hover:bg-purple-700 transition">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                           </svg>
                         </button>
                       </div>
@@ -1312,6 +1179,7 @@ const POS = () => {
                 </div>
               </div>
             )}
+
             {/* Products Grid */}
             {activeTab === 'products' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -1345,7 +1213,7 @@ const POS = () => {
                       <span className="text-lg font-bold text-blue-600">₦{formatPrice(product.price)}</span>
                       <button className="w-8 h-8 bg-blue-600 text-white rounded-lg flex items-center justify-center hover:bg-blue-700 transition">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                         </svg>
                       </button>
                     </div>
@@ -1358,13 +1226,14 @@ const POS = () => {
             )}
           </div>
         </div>
-        {/* Cart Sidebar - Desktop */}
+
+        {/* Cart Sidebar */}
         <div className="w-full lg:w-[400px] h-[300px] lg:h-auto bg-white border-t lg:border-t-0 lg:border-l border-gray-200 flex flex-col shadow-xl order-1 lg:order-2 overflow-hidden">
           <div className="p-4 flex flex-col h-full overflow-hidden">
             <div className="flex items-center justify-between mb-4 flex-shrink-0">
               <h3 className="text-lg font-bold text-gray-900 flex items-center">
                 <svg className="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 Shopping Cart
               </h3>
@@ -1372,6 +1241,7 @@ const POS = () => {
                 {cart.length + (bookingData ? 1 : 0)}
               </span>
             </div>
+
             {/* Customer Info */}
             <div className="mb-3 flex-shrink-0">
               <h4 className="font-semibold text-gray-700 mb-2 text-sm uppercase tracking-wide">Customer Details</h4>
@@ -1380,25 +1250,26 @@ const POS = () => {
                   type="text"
                   placeholder="Customer Name *"
                   value={customerInfo.name}
-                  onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value })}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, name: e.target.value.slice(0, 100) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
                 <input
                   type="tel"
                   placeholder="Phone Number *"
                   value={customerInfo.phone}
-                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value })}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, phone: e.target.value.slice(0, 20) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
                 <input
                   type="email"
                   placeholder="Email (optional)"
                   value={customerInfo.email}
-                  onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value })}
+                  onChange={(e) => setCustomerInfo({ ...customerInfo, email: e.target.value.slice(0, 255) })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm"
                 />
               </div>
             </div>
+
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto mb-2 -mx-2 px-2 space-y-2">
               {/* Miscellaneous Charges Section */}
@@ -1406,14 +1277,13 @@ const POS = () => {
                 <div className="flex justify-between items-center mb-2">
                   <p className="text-xs font-semibold text-gray-700">MISCELLANEOUS CHARGES</p>
                   <button
-                    onClick={addMiscCharge}
+                    onClick={openMiscChargeModal}
                     className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 transition shadow-sm"
                     title="Add miscellaneous charge"
                   >
                     + Add Charge
                   </button>
                 </div>
-
                 {miscCharges.length > 0 ? (
                   <div className="space-y-1.5">
                     {miscCharges.map((charge, idx) => (
@@ -1427,7 +1297,7 @@ const POS = () => {
                             title="Remove charge"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                             </svg>
                           </button>
                         </div>
@@ -1442,14 +1312,13 @@ const POS = () => {
               {cart.length === 0 && !bookingData ? (
                 <div className="text-center py-2">
                   <svg className="w-10 h-10 mx-auto text-gray-300 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
                   </svg>
                   <p className="text-gray-500 font-semibold text-xs">Your cart is empty</p>
                   <p className="text-gray-400 text-xs mt-0.5">Add products or services to get started</p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* Service from booking */}
                   {bookingData && (
                     <div className="p-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
                       <div className="flex items-start justify-between">
@@ -1467,7 +1336,6 @@ const POS = () => {
                     </div>
                   )}
 
-                  {/* Regular cart items */}
                   {cart.map(item => (
                     <div key={`${item.type}-${item.id}`} className="p-2 bg-gray-50 border border-gray-200 rounded-lg hover:border-gray-300 transition">
                       <div className="flex items-start justify-between mb-1">
@@ -1506,7 +1374,7 @@ const POS = () => {
                           className="ml-2 w-6 h-6 flex items-center justify-center bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition flex-shrink-0"
                         >
                           <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                           </svg>
                         </button>
                       </div>
@@ -1517,7 +1385,7 @@ const POS = () => {
                             className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 12H4" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
                             </svg>
                           </button>
                           <span className="w-8 text-center text-sm font-semibold text-gray-900">{item.quantity}</span>
@@ -1526,7 +1394,7 @@ const POS = () => {
                             className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition text-gray-600"
                           >
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                             </svg>
                           </button>
                         </div>
@@ -1537,6 +1405,7 @@ const POS = () => {
                 </div>
               )}
             </div>
+
             {/* Coupon and Payment Section */}
             <div className="space-y-3 flex-shrink-0 pt-2 border-t border-gray-100">
               {/* Coupon Section */}
@@ -1548,7 +1417,7 @@ const POS = () => {
                     value={couponCode}
                     onChange={(e) => setCouponCode(e.target.value)}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition text-sm disabled:bg-gray-100"
-                    disabled={!!appliedCoupon}
+                    disabled={!!appliedCoupon || applyingCoupon}
                   />
                   {appliedCoupon ? (
                     <button
@@ -1560,9 +1429,10 @@ const POS = () => {
                   ) : (
                     <button
                       onClick={applyCoupon}
-                      className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium text-sm"
+                      disabled={applyingCoupon}
+                      className="px-3 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition font-medium text-sm disabled:opacity-50"
                     >
-                      Apply
+                      {applyingCoupon ? '...' : 'Apply'}
                     </button>
                   )}
                 </div>
@@ -1575,6 +1445,7 @@ const POS = () => {
                   </div>
                 )}
               </div>
+
               {/* Total Section */}
               <div className="space-y-4">
                 <div className="space-y-1 text-sm">
@@ -1588,12 +1459,11 @@ const POS = () => {
                       <span className="font-medium">-₦{formatPrice(getDiscount())}</span>
                     </div>
                   )}
-                  {/* Tax section commented out per user request
+                  {/* VAT Section */}
                   <div className="flex justify-between text-gray-600">
-                    <span>Tax (7.5%)</span>
+                    <span>VAT (7.5%)</span>
                     <span className="font-medium">₦{formatPrice(getTaxAmount())}</span>
                   </div>
-                  */}
                 </div>
 
                 <div className="pt-2 border-t-2 border-gray-200">
@@ -1601,21 +1471,15 @@ const POS = () => {
                     <span className="text-base font-bold text-gray-900">Total</span>
                     <span className="text-xl font-bold text-blue-600">₦{formatPrice(getTotal())}</span>
                   </div>
-                  {/* Payment Method Selection Removed for Simplicity */}
-                  {/* Payment Buttons - Restructured for clarity */}
+
                   {(bookingData || cart.length > 0) && !paymentConfirmed && (
                     <div className="space-y-3">
-                      {/* Paystack Online Payment (Primary) */}
                       <div className="flex items-center justify-between">
                         <span className="text-sm font-medium text-gray-700">Online Payment</span>
                         {apiOnline ? (
-                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                            Paystack ready
-                          </span>
+                          <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Paystack ready</span>
                         ) : (
-                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">
-                            Paystack unavailable
-                          </span>
+                          <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded-full">Paystack unavailable</span>
                         )}
                       </div>
                       <button
@@ -1638,7 +1502,6 @@ const POS = () => {
                         )}
                       </button>
 
-                      {/* Alternative Payment Methods (Bank Transfer / Physical POS) */}
                       <div className="relative">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-gray-300"></div>
@@ -1648,9 +1511,8 @@ const POS = () => {
                         </div>
                       </div>
 
-                      {/* Bank Transfer / Physical POS Button */}
                       <button
-                        onClick={handleCashPayment}
+                        onClick={handleTransferPayment}
                         disabled={processing || getTotal() <= 0}
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 border-2 border-blue-200"
                       >
@@ -1671,7 +1533,7 @@ const POS = () => {
                       </button>
                     </div>
                   )}
-                  {/* Payment Confirmed Badge */}
+
                   {paymentConfirmed && (
                     <div className="bg-green-100 text-green-800 px-3 py-2 rounded-md font-medium flex items-center justify-center gap-2 mb-2">
                       <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1686,46 +1548,468 @@ const POS = () => {
           </div>
         </div>
       </div>
-      {
-        showSizeModal && selectedProductForSize && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-              <h3 className="text-lg font-bold text-gray-900 mb-4">Select Size for {selectedProductForSize.name}</h3>
 
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {Object.entries(selectedProductForSize.stock_by_size || {})
-                  .filter(([_, stock]) => stock > 0)
-                  .map(([size, stock]) => (
-                    <button
-                      key={size}
-                      onClick={() => {
-                        addToCart(selectedProductForSize, 'product', size);
-                        setShowSizeModal(false);
-                        setSelectedProductForSize(null);
-                      }}
-                      className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
-                    >
-                      <span className="text-lg font-bold text-gray-800">{size}</span>
-                      <span className="text-xs text-gray-500">{stock} available</span>
-                    </button>
-                  ))}
-              </div>
-
-              <div className="flex justify-end">
-                <button
-                  onClick={() => {
-                    setShowSizeModal(false);
-                    setSelectedProductForSize(null);
-                  }}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                >
-                  Cancel
-                </button>
-              </div>
+      {/* Size Selection Modal */}
+      {showSizeModal && selectedProductForSize && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Select Size for {selectedProductForSize.name}</h3>
+              <button
+                onClick={() => { setShowSizeModal(false); setSelectedProductForSize(null); }}
+                className="text-gray-400 hover:text-gray-600 transition"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3 mb-6">
+              {Object.entries(selectedProductForSize.stock_by_size || {})
+                .filter(([_, stock]) => stock > 0)
+                .map(([size, stock]) => (
+                  <button
+                    key={size}
+                    onClick={() => {
+                      addToCart(selectedProductForSize, 'product', size);
+                      setShowSizeModal(false);
+                      setSelectedProductForSize(null);
+                    }}
+                    className="flex flex-col items-center justify-center p-3 border rounded-lg hover:bg-blue-50 hover:border-blue-500 transition"
+                  >
+                    <span className="text-lg font-bold text-gray-800">{size}</span>
+                    <span className="text-xs text-gray-500">{stock} available</span>
+                  </button>
+                ))}
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => { setShowSizeModal(false); setSelectedProductForSize(null); }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )
-      }
+        </div>
+      )}
+
+      {/* Misc Charge Modal */}
+      {showMiscChargeModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Add Miscellaneous Charge</h3>
+              <button
+                onClick={() => setShowMiscChargeModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition"
+                aria-label="Close"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="space-y-4 mb-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Charge Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g., Delivery fee, Wrapping"
+                  value={miscChargeName}
+                  onChange={(e) => setMiscChargeName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount (₦)</label>
+                <input
+                  type="number"
+                  placeholder="0.00"
+                  value={miscChargeAmount}
+                  onChange={(e) => setMiscChargeAmount(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  min="0"
+                  step="0.01"
+                />
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowMiscChargeModal(false); setMiscChargeName(''); setMiscChargeAmount(''); }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={addMiscCharge}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+              >
+                Add Charge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Transaction History Panel */}
+      {showHistoryPanel && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Transaction History</h3>
+              <button onClick={() => setShowHistoryPanel(false)} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 border-b">
+              <input
+                type="text"
+                placeholder="Search by customer name, transaction number..."
+                value={txnSearch}
+                onChange={(e) => setTxnSearch(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {txnLoading ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+              ) : transactions.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No transactions found</p>
+              ) : (
+                <div className="space-y-2">
+                  {transactions
+                    .filter(t => {
+                      if (!txnSearch) return true;
+                      const q = txnSearch.toLowerCase();
+                      return (
+                        (t.customer_name || '').toLowerCase().includes(q) ||
+                        (t.transaction_number || '').toLowerCase().includes(q) ||
+                        (t.staff_name || '').toLowerCase().includes(q)
+                      );
+                    })
+                    .map(txn => (
+                      <div key={txn.id} className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 transition">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-mono font-bold text-blue-600">{txn.transaction_number}</span>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              txn.payment_status === 'completed' ? 'bg-green-100 text-green-700' :
+                              txn.payment_status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                              'bg-red-100 text-red-700'
+                            }`}>
+                              {txn.payment_status}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 truncate">{txn.customer_name || 'Walk-in Customer'}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(txn.created_at).toLocaleString()} • {txn.staff_name || 'Unknown'}
+                          </p>
+                        </div>
+                        <div className="text-right ml-4 flex-shrink-0">
+                          <p className="text-sm font-bold text-gray-900">₦{formatPrice(txn.total_amount)}</p>
+                          <button
+                            onClick={() => { viewReceipt(txn); setShowHistoryPanel(false); }}
+                            className="text-xs text-blue-600 hover:text-blue-800 font-medium mt-1"
+                          >
+                            View Receipt
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end">
+              <button
+                onClick={() => setShowHistoryPanel(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Preview Modal */}
+      {showReceiptModal && selectedTransaction && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Receipt Preview</h3>
+              <button onClick={() => { setShowReceiptModal(false); setSelectedTransaction(null); }} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6" id="receipt-content">
+              <div className="text-center mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Vonne X2X</h2>
+                <p className="text-xs text-gray-500">Professional Service Management</p>
+              </div>
+              <div className="border-t border-b border-dashed border-gray-300 py-3 mb-3 space-y-1">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Transaction</span>
+                  <span className="font-mono font-medium">{selectedTransaction.transaction_number}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Date</span>
+                  <span>{new Date(selectedTransaction.created_at).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Customer</span>
+                  <span>{selectedTransaction.customer_name || 'Walk-in'}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Payment</span>
+                  <span className="capitalize">{selectedTransaction.payment_method?.replace(/_/g, ' ')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Status</span>
+                  <span className={`capitalize font-medium ${
+                    selectedTransaction.payment_status === 'completed' ? 'text-green-600' :
+                    selectedTransaction.payment_status === 'pending' ? 'text-yellow-600' : 'text-red-600'
+                  }`}>{selectedTransaction.payment_status}</span>
+                </div>
+              </div>
+              {selectedTransaction.items && selectedTransaction.items.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-2">Items</p>
+                  {selectedTransaction.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm py-1">
+                      <span className="text-gray-700">
+                        {item.product_name || item.service_name || 'Item'}
+                        {item.quantity > 1 && ` x${item.quantity}`}
+                      </span>
+                      <span className="font-medium">₦{formatPrice(item.total_price)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {selectedTransaction.misc_charges && selectedTransaction.misc_charges.length > 0 && (
+                <div className="mb-3">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-2">Misc Charges</p>
+                  {selectedTransaction.misc_charges.map((charge, idx) => (
+                    <div key={idx} className="flex justify-between text-sm py-1">
+                      <span className="text-gray-700">{charge.name}</span>
+                      <span className="font-medium">₦{formatPrice(charge.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="border-t border-dashed border-gray-300 pt-3 space-y-1">
+                {selectedTransaction.discount_amount > 0 && (
+                  <div className="flex justify-between text-sm text-green-600">
+                    <span>Discount</span>
+                    <span>-₦{formatPrice(selectedTransaction.discount_amount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold pt-2">
+                  <span>Total</span>
+                  <span className="text-blue-600">₦{formatPrice(selectedTransaction.total_amount)}</span>
+                </div>
+              </div>
+              <div className="text-center mt-6 pt-4 border-t border-dashed border-gray-300">
+                <p className="text-xs text-gray-400">Thank you for your business!</p>
+                <p className="text-xs text-gray-400 mt-1">Vonne X2X • vonneex2x.store</p>
+              </div>
+            </div>
+            <div className="p-4 border-t space-y-2">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    const printContent = document.getElementById('receipt-content');
+                    if (printContent) {
+                      const printWindow = window.open('', '_blank');
+                      printWindow.document.write(`<html><head><title>Receipt - ${selectedTransaction.transaction_number}</title><style>body{font-family:monospace;padding:20px;max-width:400px;margin:0 auto;}table{width:100%;}</style></head><body>${printContent.innerHTML}</body></html>`);
+                      printWindow.document.close();
+                      printWindow.print();
+                    }
+                  }}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  Print Receipt
+                </button>
+                <button
+                  onClick={() => { setShowReceiptModal(false); setSelectedTransaction(null); }}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                >
+                  Close
+                </button>
+              </div>
+              {selectedTransaction.status !== 'refunded' && selectedTransaction.payment_status === 'completed' && (
+                <button
+                  onClick={() => openRefundModal(selectedTransaction)}
+                  className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                  </svg>
+                  Process Refund
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Refund Confirmation Modal */}
+      {showRefundModal && refundTxn && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold text-gray-900">Confirm Refund</h3>
+              <button onClick={() => { setShowRefundModal(false); setRefundTxn(null); setRefundReason(''); }} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+              <p className="text-sm text-red-800">
+                You are about to refund <strong>₦{formatPrice(refundTxn.total_amount)}</strong> for transaction <strong>{refundTxn.transaction_number}</strong>.
+                Product stock will be restored automatically.
+              </p>
+            </div>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Refund Reason *</label>
+              <textarea
+                placeholder="Explain why this refund is being processed..."
+                value={refundReason}
+                onChange={(e) => setRefundReason(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition text-sm"
+                rows={3}
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => { setShowRefundModal(false); setRefundTxn(null); setRefundReason(''); }}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                disabled={refundProcessing}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={processRefund}
+                disabled={refundProcessing || !refundReason.trim()}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {refundProcessing ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
+                    </svg>
+                    Confirm Refund
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Customer History Panel */}
+      {showCustomerHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Customer History</h3>
+              <button onClick={() => { setShowCustomerHistory(false); setCustomerHistory(null); }} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {customerHistoryLoading ? (
+                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>
+              ) : !customerHistory ? (
+                <p className="text-center text-gray-500 py-8">No customer history found</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-blue-600">{customerHistory.summary?.total_bookings || 0}</div>
+                      <div className="text-xs text-blue-700">Bookings</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-green-600">{customerHistory.summary?.total_transactions || 0}</div>
+                      <div className="text-xs text-green-700">Transactions</div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-purple-600">₦{formatPrice(customerHistory.summary?.total_spent || 0)}</div>
+                      <div className="text-xs text-purple-700">Total Spent</div>
+                    </div>
+                  </div>
+
+                  {customerHistory.bookings?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Recent Bookings</h4>
+                      <div className="space-y-1">
+                        {customerHistory.bookings.slice(0, 5).map(b => (
+                          <div key={b.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                            <div>
+                              <span className="font-medium">{b.service_names || 'Service'}</span>
+                              <span className="text-gray-400 ml-2">#{b.booking_number}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-gray-500">{new Date(b.scheduled_time).toLocaleDateString()}</div>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                b.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                b.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                'bg-yellow-100 text-yellow-700'
+                              }`}>{b.status}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {customerHistory.transactions?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Recent POS Transactions</h4>
+                      <div className="space-y-1">
+                        {customerHistory.transactions.slice(0, 5).map(t => (
+                          <div key={t.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                            <div>
+                              <span className="font-mono text-xs text-blue-600">{t.transaction_number}</span>
+                              <span className="text-gray-400 ml-2 capitalize">{t.payment_method?.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">₦{formatPrice(t.total_amount)}</div>
+                              <div className="text-xs text-gray-500">{new Date(t.created_at).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end">
+              <button onClick={() => { setShowCustomerHistory(false); setCustomerHistory(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

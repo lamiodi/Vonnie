@@ -1640,4 +1640,53 @@ Thank you for choosing Vonne X2X!`
   }
 });
 
+// Get customer history (bookings + POS transactions)
+router.get('/customer-history/:email', authenticate, async (req, res) => {
+  try {
+    const { email } = req.params;
+
+    // Get booking history
+    const bookingsResult = await query(
+      `SELECT b.*, 
+              (SELECT string_agg(s.name, ', ') FROM booking_services bs2 JOIN services s ON bs2.service_id = s.id WHERE bs2.booking_id = b.id) as service_names
+       FROM bookings b
+       WHERE b.customer_email = $1
+       ORDER BY b.scheduled_time DESC
+       LIMIT 20`,
+      [email]
+    );
+
+    // Get POS transaction history
+    const transactionsResult = await query(
+      `SELECT pt.*, 
+              (SELECT json_agg(json_build_object('name', COALESCE(pti.product_name, pti.service_name), 'quantity', pti.quantity, 'total_price', pti.total_price))
+               FROM pos_transaction_items pti WHERE pti.transaction_id = pt.id) as items
+       FROM pos_transactions pt
+       WHERE pt.customer_email = $1
+       ORDER BY pt.created_at DESC
+       LIMIT 20`,
+      [email]
+    );
+
+    // Calculate totals
+    const totalBookings = bookingsResult.rows.length;
+    const totalSpent = bookingsResult.rows.reduce((sum, b) => sum + Number(b.total_amount || 0), 0)
+      + transactionsResult.rows.reduce((sum, t) => sum + Number(t.total_amount || 0), 0);
+
+    res.json({
+      bookings: bookingsResult.rows,
+      transactions: transactionsResult.rows,
+      summary: {
+        total_bookings: totalBookings,
+        total_transactions: transactionsResult.rows.length,
+        total_spent: totalSpent,
+        last_visit: bookingsResult.rows[0]?.scheduled_time || transactionsResult.rows[0]?.created_at || null
+      }
+    });
+  } catch (error) {
+    console.error('Get customer history error:', error);
+    res.status(400).json(errorResponse(error.message, 'CUSTOMER_HISTORY_ERROR', 400));
+  }
+});
+
 export default router;

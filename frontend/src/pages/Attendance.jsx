@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
+import { apiGet, apiPost, apiPut, API_ENDPOINTS } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { handleError, handleSuccess } from '../utils/errorHandler';
+import toast from 'react-hot-toast';
 
 // ============================================
 // Admin Attendance View Component
@@ -385,6 +386,291 @@ const AdminAttendanceView = () => {
           </>
         )}
       </div>
+
+      {/* Time-Off & Correction Request Management */}
+      <div className="mt-6">
+        <RequestManagement />
+      </div>
+    </div>
+  );
+};
+
+// ============================================
+// Time-Off & Correction Request Management
+// ============================================
+const RequestManagement = () => {
+  const [activeRequestTab, setActiveRequestTab] = useState('time-off');
+  const [timeOffRequests, setTimeOffRequests] = useState([]);
+  const [correctionRequests, setCorrectionRequests] = useState([]);
+  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [showTimeOffForm, setShowTimeOffForm] = useState(false);
+  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
+  const [workers, setWorkers] = useState([]);
+
+  const [timeOffForm, setTimeOffForm] = useState({
+    worker_id: '', start_date: '', end_date: '', reason: '', type: 'time_off'
+  });
+  const [correctionForm, setCorrectionForm] = useState({
+    worker_id: '', date: '', requested_check_in: '', requested_check_out: '', reason: ''
+  });
+
+  useEffect(() => {
+    fetchWorkers();
+    fetchRequests();
+  }, []);
+
+  const fetchWorkers = async () => {
+    try {
+      const res = await apiGet(API_ENDPOINTS.WORKERS);
+      setWorkers(Array.isArray(res) ? res : (res.data || []));
+    } catch (e) { console.error('Failed to fetch workers:', e); }
+  };
+
+  const fetchRequests = async () => {
+    setRequestsLoading(true);
+    try {
+      const [torRes, crRes] = await Promise.all([
+        apiGet(API_ENDPOINTS.ATTENDANCE_TIME_OFF),
+        apiGet(API_ENDPOINTS.ATTENDANCE_CORRECTIONS)
+      ]);
+      setTimeOffRequests(Array.isArray(torRes) ? torRes : []);
+      setCorrectionRequests(Array.isArray(crRes) ? crRes : []);
+    } catch (e) { console.error('Failed to fetch requests:', e); }
+    setRequestsLoading(false);
+  };
+
+  const handleTimeOffSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost(API_ENDPOINTS.ATTENDANCE_TIME_OFF, timeOffForm);
+      toast.success('Time-off request submitted');
+      setShowTimeOffForm(false);
+      setTimeOffForm({ worker_id: '', start_date: '', end_date: '', reason: '', type: 'time_off' });
+      fetchRequests();
+    } catch (err) {
+      toast.error('Failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleCorrectionSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await apiPost(API_ENDPOINTS.ATTENDANCE_CORRECTION, correctionForm);
+      toast.success('Correction request submitted');
+      setShowCorrectionForm(false);
+      setCorrectionForm({ worker_id: '', date: '', requested_check_in: '', requested_check_out: '', reason: '' });
+      fetchRequests();
+    } catch (err) {
+      toast.error('Failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleTimeOffReview = async (id, status) => {
+    try {
+      await apiPut(API_ENDPOINTS.ATTENDANCE_TIME_OFF_UPDATE(id), { status });
+      toast.success(`Request ${status}`);
+      fetchRequests();
+    } catch (err) {
+      toast.error('Failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleCorrectionReview = async (id, status) => {
+    try {
+      await apiPut(API_ENDPOINTS.ATTENDANCE_CORRECTION_UPDATE(id), { status });
+      toast.success(`Request ${status}`);
+      fetchRequests();
+    } catch (err) {
+      toast.error('Failed: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="border-b border-gray-200">
+        <div className="flex">
+          <button
+            onClick={() => setActiveRequestTab('time-off')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 ${activeRequestTab === 'time-off' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            🏖️ Time-Off Requests
+          </button>
+          <button
+            onClick={() => setActiveRequestTab('corrections')}
+            className={`px-4 py-3 text-sm font-medium border-b-2 ${activeRequestTab === 'corrections' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            ✏️ Correction Requests
+          </button>
+        </div>
+      </div>
+
+      <div className="p-4">
+        {activeRequestTab === 'time-off' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Time-Off Requests</h3>
+              <button
+                onClick={() => setShowTimeOffForm(true)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+              >
+                + New Request
+              </button>
+            </div>
+
+            {showTimeOffForm && (
+              <form onSubmit={handleTimeOffSubmit} className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Worker</label>
+                    <select value={timeOffForm.worker_id} onChange={e => setTimeOffForm(p => ({...p, worker_id: e.target.value}))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                      <option value="">Select worker</option>
+                      {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Type</label>
+                    <select value={timeOffForm.type} onChange={e => setTimeOffForm(p => ({...p, type: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                      <option value="time_off">Time Off</option>
+                      <option value="sick_leave">Sick Leave</option>
+                      <option value="vacation">Vacation</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Start Date</label>
+                    <input type="date" value={timeOffForm.start_date} onChange={e => setTimeOffForm(p => ({...p, start_date: e.target.value}))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">End Date</label>
+                    <input type="date" value={timeOffForm.end_date} onChange={e => setTimeOffForm(p => ({...p, end_date: e.target.value}))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
+                  <textarea value={timeOffForm.reason} onChange={e => setTimeOffForm(p => ({...p, reason: e.target.value}))} required rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="Explain the reason for time off..." />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setShowTimeOffForm(false)} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+                  <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">Submit</button>
+                </div>
+              </form>
+            )}
+
+            {requestsLoading ? (
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>
+            ) : timeOffRequests.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No time-off requests</p>
+            ) : (
+              <div className="space-y-2">
+                {timeOffRequests.map(req => (
+                  <div key={req.id} className="border rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{req.worker_name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          req.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          req.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{req.status}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{req.type}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">{req.start_date} → {req.end_date}</p>
+                      <p className="text-xs text-gray-500 mt-1">{req.reason}</p>
+                    </div>
+                    {req.status === 'pending' && (
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => handleTimeOffReview(req.id, 'approved')} className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">Approve</button>
+                        <button onClick={() => handleTimeOffReview(req.id, 'rejected')} className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">Reject</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeRequestTab === 'corrections' && (
+          <div>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-800">Attendance Correction Requests</h3>
+              <button
+                onClick={() => setShowCorrectionForm(true)}
+                className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+              >
+                + New Request
+              </button>
+            </div>
+
+            {showCorrectionForm && (
+              <form onSubmit={handleCorrectionSubmit} className="bg-gray-50 rounded-lg p-4 mb-4 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Worker</label>
+                    <select value={correctionForm.worker_id} onChange={e => setCorrectionForm(p => ({...p, worker_id: e.target.value}))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm">
+                      <option value="">Select worker</option>
+                      {workers.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Date</label>
+                    <input type="date" value={correctionForm.date} onChange={e => setCorrectionForm(p => ({...p, date: e.target.value}))} required className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Requested Check-In</label>
+                    <input type="time" value={correctionForm.requested_check_in} onChange={e => setCorrectionForm(p => ({...p, requested_check_in: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Requested Check-Out</label>
+                    <input type="time" value={correctionForm.requested_check_out} onChange={e => setCorrectionForm(p => ({...p, requested_check_out: e.target.value}))} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Reason</label>
+                  <textarea value={correctionForm.reason} onChange={e => setCorrectionForm(p => ({...p, reason: e.target.value}))} required rows={2} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" placeholder="Explain the correction needed..." />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button type="button" onClick={() => setShowCorrectionForm(false)} className="px-3 py-1.5 border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-100">Cancel</button>
+                  <button type="submit" className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700">Submit</button>
+                </div>
+              </form>
+            )}
+
+            {requestsLoading ? (
+              <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>
+            ) : correctionRequests.length === 0 ? (
+              <p className="text-center text-gray-500 py-8">No correction requests</p>
+            ) : (
+              <div className="space-y-2">
+                {correctionRequests.map(req => (
+                  <div key={req.id} className="border rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-gray-900">{req.worker_name}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          req.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                          req.status === 'approved' ? 'bg-green-100 text-green-700' :
+                          'bg-red-100 text-red-700'
+                        }`}>{req.status}</span>
+                      </div>
+                      <p className="text-sm text-gray-600">Date: {req.date}</p>
+                      {req.existing_check_in && <p className="text-xs text-gray-500">Current: In {req.existing_check_in ? new Date(req.existing_check_in).toLocaleTimeString() : '-'} / Out {req.existing_check_out ? new Date(req.existing_check_out).toLocaleTimeString() : '-'}</p>}
+                      {req.requested_check_in && <p className="text-xs text-blue-600">Requested: In {req.requested_check_in} / Out {req.requested_check_out}</p>}
+                      <p className="text-xs text-gray-500 mt-1">{req.reason}</p>
+                    </div>
+                    {req.status === 'pending' && (
+                      <div className="flex gap-2 flex-shrink-0">
+                        <button onClick={() => handleCorrectionReview(req.id, 'approved')} className="px-3 py-1 bg-green-600 text-white text-xs rounded-lg hover:bg-green-700">Approve</button>
+                        <button onClick={() => handleCorrectionReview(req.id, 'rejected')} className="px-3 py-1 bg-red-600 text-white text-xs rounded-lg hover:bg-red-700">Reject</button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -436,7 +722,11 @@ const WorkerAttendanceView = () => {
     }
   };
 
-  const getCurrentLocation = (retries = 3) => {
+  const GPS_MAX_RETRIES = 3;
+  const GPS_ACCURACY_THRESHOLD = 100; // meters
+  const GPS_TIMEOUT = 15000; // 15 seconds
+
+  const getCurrentLocation = (retries = GPS_MAX_RETRIES) => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
         reject(new Error('Geolocation is not supported by this browser'));
@@ -452,11 +742,14 @@ const WorkerAttendanceView = () => {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy
         };
-        if (position.coords.accuracy > 100 && retries > 0) {
-          console.log(`GPS accuracy poor (${position.coords.accuracy}m), retrying...`);
+        
+        // Only retry if accuracy is poor AND we have retries left
+        // But limit total retries to prevent infinite loops
+        if (position.coords.accuracy > GPS_ACCURACY_THRESHOLD && retries > 0) {
+          console.log(`GPS accuracy poor (${position.coords.accuracy}m), retrying... (${retries} left)`);
           setTimeout(() => {
             getCurrentLocation(retries - 1).then(resolve).catch(reject);
-          }, 1000);
+          }, 2000); // Wait 2 seconds before retry to allow GPS to stabilize
           return;
         }
 
@@ -466,11 +759,21 @@ const WorkerAttendanceView = () => {
       };
 
       const error = (err) => {
-        if (retries > 0) {
-          console.log(`GPS error (${err.code}), retrying...`);
+        // Don't retry on permission denied - user needs to manually enable
+        if (err.code === err.PERMISSION_DENIED) {
+          setLocationLoading(false);
+          const errorMessage = 'Location access denied. Please enable location services in your browser settings.';
+          setLocationError(errorMessage);
+          reject(new Error(errorMessage));
+          return;
+        }
+
+        // Retry on transient errors only
+        if (retries > 0 && (err.code === err.POSITION_UNAVAILABLE || err.code === err.TIMEOUT)) {
+          console.log(`GPS error (${err.code}), retrying... (${retries} left)`);
           setTimeout(() => {
             getCurrentLocation(retries - 1).then(resolve).catch(reject);
-          }, 1000);
+          }, 2000);
           return;
         }
 
@@ -493,7 +796,7 @@ const WorkerAttendanceView = () => {
 
       const options = {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: GPS_TIMEOUT,
         maximumAge: 0
       };
 
@@ -590,7 +893,8 @@ const WorkerAttendanceView = () => {
       setLocationError('');
       
       // 1. Capture the live finger from the local bridge
-      const localResponse = await fetch('http://127.0.0.1:8080/api/capture');
+      const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8080';
+      const localResponse = await fetch(`${FINGERPRINT_BRIDGE_URL}/api/capture`);
       if (!localResponse.ok) {
         throw new Error('Could not connect to local fingerprint scanner');
       }

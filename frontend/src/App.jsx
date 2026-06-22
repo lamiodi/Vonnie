@@ -22,6 +22,8 @@ import Attendance from './pages/Attendance';
 import AttendanceKiosk from './pages/AttendanceKiosk';
 import TransactionManagement from './components/TransactionManagement';
 import AdminSettings from './pages/AdminSettings';
+import Expenses from './pages/Expenses';
+import FraudReview from './pages/FraudReview';
 
 function App() {
   return (
@@ -60,7 +62,9 @@ function App() {
             <Route path="coupons" element={<Coupons />} />
             <Route path="reports" element={<Reports />} />
             <Route path="transactions" element={<TransactionManagement />} />
+            <Route path="expenses" element={<Expenses />} />
             <Route path="admin-settings" element={<AdminSettings />} />
+            <Route path="fraud-review" element={<FraudReview />} />
           </Route>
           
           {/* Catch all route */}

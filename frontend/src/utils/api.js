@@ -278,6 +278,7 @@ export const API_ENDPOINTS = {
   INVENTORY: '/inventory',
   INVENTORY_BARCODE: (barcode) => `/inventory/barcode/${barcode}`,
   INVENTORY_CATEGORIES: '/inventory/categories',
+  INVENTORY_MOVEMENTS: '/inventory/movements',
   
   // Services
   SERVICES: '/services',
@@ -293,6 +294,7 @@ export const API_ENDPOINTS = {
   BOOKING_WAIT_TIME: (id) => `/bookings/${id}/wait-time`,
   BOOKING_WORKERS: (id) => `/bookings/${id}/workers`,
   BOOKING_APPROVE: (id) => `/bookings/${id}/approve`,
+  CUSTOMER_HISTORY: (email) => `/bookings/customer-history/${encodeURIComponent(email)}`,
   
   // POS
   POS_CHECKOUT: '/pos/checkout',
@@ -301,6 +303,7 @@ export const API_ENDPOINTS = {
   POS_TRANSACTIONS_PENDING: '/pos/transactions/pending-verification',
   POS_TRANSACTION_VERIFY: (id) => `/pos/transactions/${id}/verify-payment`,
   POS_TRANSACTION_DETAILS: (id) => `/pos/transactions/${id}`,
+  POS_TRANSACTION_REFUND: (id) => `/pos/transactions/${id}/refund`,
   
   // Workers
   WORKERS: '/workers',
@@ -312,6 +315,11 @@ export const API_ENDPOINTS = {
   ATTENDANCE_CHECKIN: '/attendance/checkin',
   ATTENDANCE_CHECKOUT: '/attendance/checkout',
   ATTENDANCE_VERIFY: '/attendance/verify-location',
+  ATTENDANCE_TIME_OFF: '/attendance/time-off',
+  ATTENDANCE_TIME_OFF_UPDATE: (id) => `/attendance/time-off/${id}`,
+  ATTENDANCE_CORRECTION: '/attendance/correction-request',
+  ATTENDANCE_CORRECTIONS: '/attendance/correction-requests',
+  ATTENDANCE_CORRECTION_UPDATE: (id) => `/attendance/correction-requests/${id}`,
   
   // Reports
   REPORTS_SALES: '/reports/sales',
@@ -324,7 +332,7 @@ export const API_ENDPOINTS = {
   // Analytics
   ANALYTICS_DASHBOARD: '/analytics/dashboard',
   ANALYTICS_EXPORT: '/analytics/export',
-  
+
   // Coupons
   COUPONS: '/coupons',
   COUPON_VALIDATE: (code) => `/coupons/validate/${code}`,
@@ -336,12 +344,30 @@ export const API_ENDPOINTS = {
   ADMIN_SIGNUP_STATUS: '/admin/signup-status',
   ADMIN_SETTINGS: '/admin/settings',
   
+  // Expenses
+  EXPENSES: '/expenses',
+  EXPENSES_SUMMARY: '/expenses/summary',
+  EXPENSES_TODAY: '/expenses/today',
+  EXPENSES_THIS_WEEK: '/expenses/this-week',
+  EXPENSES_CATEGORIES: '/expenses/meta/categories',
+
+  // Audit
+  AUDIT_LOGS: '/audit',
+  AUDIT_FRAUD_ALERTS: '/audit/fraud-alerts',
+
   // Queue
   QUEUE_TODAY: '/queue/today',
 
   // Payment and Booking Confirmation
   PAYMENT_VERIFY: '/public/payment/verify',
   BOOKING_CONFIRMATION: '/public/bookings/confirmation',
+
+  // Offline Sync
+  SYNC_STATUS: '/sync/status',
+  SYNC_BATCH_TRANSACTIONS: '/sync/batch-transactions',
+  SYNC_BATCH_EXPENSES: '/sync/batch-expenses',
+  SYNC_BATCH_BOOKINGS: '/sync/batch-bookings',
+  SYNC_BATCH_INVENTORY: '/sync/batch-inventory',
 };
 
 /**

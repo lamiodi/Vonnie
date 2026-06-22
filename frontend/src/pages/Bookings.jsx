@@ -12,6 +12,9 @@ import {
 } from '../utils/api';
 import { formatCurrency, formatDateTime } from '@/utils/formatters';
 import { toast } from 'react-hot-toast';
+import { useNetworkStatus } from '../hooks/useNetworkStatus';
+import { getPendingCount } from '../services/syncService';
+import { queueBooking, getPendingBookings } from '../services/offlineStore';
 import {
   getCustomerTypeLabel,
   getCustomerTypeColor,
@@ -109,23 +112,23 @@ const BookingsFilters = ({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div>
+        <div className="mobile-full-width">
           <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
           <input
             type="text"
             placeholder="Search by customer, booking #, service..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mobile-form-input"
           />
         </div>
 
-        <div>
+        <div className="mobile-full-width">
           <label className="block text-sm font-medium text-gray-700 mb-2">Booking Status</label>
           <select
             value={statusFilter}
             onChange={(e) => onStatusChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mobile-form-input"
           >
             <option value="all">All Status</option>
             <option value="pending_confirmation">Pending Confirmation</option>
@@ -136,12 +139,12 @@ const BookingsFilters = ({
           </select>
         </div>
 
-        <div>
+        <div className="mobile-full-width">
           <label className="block text-sm font-medium text-gray-700 mb-2">Customer Type</label>
           <select
             value={customerTypeFilter}
             onChange={(e) => onCustomerTypeChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mobile-form-input"
           >
             <option value="all">All Customers</option>
             <option value="walk_in">Walk-in</option>
@@ -149,12 +152,12 @@ const BookingsFilters = ({
           </select>
         </div>
 
-        <div>
+        <div className="mobile-full-width">
           <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
           <select
             value={dateFilter}
             onChange={(e) => onDateChange(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 mobile-form-input"
           >
             <option value="all">All Dates</option>
             <option value="today">Today</option>
@@ -219,29 +222,29 @@ const BookingsHeader = ({ todaysBookings = [] }) => {
   return (
     <div className="mb-8">
       {/* Main Header */}
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Bookings Management</h1>
-          <p className="mt-2 text-gray-600">Manage your salon bookings and appointments</p>
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6">
+        <div className="mb-4 md:mb-0">
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Bookings Management</h1>
+          <p className="mt-2 text-gray-600 mobile-text-base">Manage your salon bookings and appointments</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-col md:flex-row gap-3">
           <button
             onClick={() => navigate('/public-booking')}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md font-medium inline-flex items-center"
+            className="bg-green-600 hover:bg-green-700 text-white px-3 md:px-4 py-2 rounded-md font-medium inline-flex items-center mobile-btn"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            New Booking
+            <span className="mobile-text-sm">New Booking</span>
           </button>
           <button
             onClick={() => navigate('/walk-in-booking')}
-            className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md font-medium inline-flex items-center"
+            className="bg-purple-600 hover:bg-purple-700 text-white px-3 md:px-4 py-2 rounded-md font-medium inline-flex items-center mobile-btn"
           >
             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            Walk-in Mode
+            <span className="mobile-text-sm">Walk-in Mode</span>
           </button>
         </div>
       </div>
@@ -656,6 +659,15 @@ const BookingsTable = ({
                       )}
                       
                       {/* Edit/Delete */}
+                      {booking.customer_email && (
+                        <button
+                          onClick={() => handleViewCustomerHistory(booking.customer_email)}
+                          className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-teal-700 border border-teal-300 rounded hover:bg-teal-50"
+                          title="View customer history"
+                        >
+                          👤
+                        </button>
+                      )}
                       <button
                         onClick={() => onEdit(booking)}
                         className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium text-blue-700 border border-blue-300 rounded hover:bg-blue-50"
@@ -907,6 +919,7 @@ const Bookings = () => {
   const navigate = useNavigate();
   const { user, hasRole } = useAuth();
   const { bookings, loading, error, createBooking, updateBooking, deleteBooking, approveBooking, refetch } = useBookings();
+  const { isOnline } = useNetworkStatus();
 
   // State
   const [searchTerm, setSearchTerm] = useState('');
@@ -922,13 +935,33 @@ const Bookings = () => {
   const [selectedNote, setSelectedNote] = useState(null);
   const [services, setServices] = useState([]);
   const [workers, setWorkers] = useState([]);
+  const [showCustomerHistory, setShowCustomerHistory] = useState(false);
+  const [customerHistoryEmail, setCustomerHistoryEmail] = useState('');
+  const [customerHistory, setCustomerHistory] = useState(null);
+  const [customerHistoryLoading, setCustomerHistoryLoading] = useState(false);
+  const [pendingOfflineBookings, setPendingOfflineBookings] = useState([]);
+  const [formKey, setFormKey] = useState(0);
 
-  // Auth check
-  useEffect(() => {
-    if (!isAuthenticated()) {
-      navigate('/login');
+  // Load pending offline bookings (also used to refresh after sync)
+  const loadPending = useCallback(async () => {
+    try {
+      const pending = await getPendingBookings();
+      setPendingOfflineBookings(pending);
+    } catch (e) {
+      console.error('Error loading pending offline bookings:', e);
     }
-  }, [navigate]);
+  }, []);
+
+  useEffect(() => {
+    loadPending();
+  }, [loadPending]);
+
+  // Refresh pending list when coming back online (sync completes and clears synced items)
+  useEffect(() => {
+    if (isOnline) {
+      loadPending();
+    }
+  }, [isOnline, loadPending]);
 
   // Initial data fetch
   useEffect(() => {
@@ -1037,6 +1070,10 @@ const Bookings = () => {
 
   // Handlers
   const handleStatusUpdate = useCallback(async (bookingId, newStatus) => {
+    if (!isOnline) {
+      toast.error('Cannot change status while offline. Please reconnect and try again.');
+      return;
+    }
     try {
       await updateBooking(bookingId, { status: newStatus });
       const messages = {
@@ -1050,7 +1087,7 @@ const Bookings = () => {
       console.error('Error updating status:', err);
       toast.error(err.response?.data?.error || 'Failed to update status');
     }
-  }, [updateBooking]);
+  }, [updateBooking, isOnline]);
 
   const handleEdit = useCallback((booking) => {
     setEditingBooking(booking);
@@ -1058,6 +1095,10 @@ const Bookings = () => {
   }, []);
 
   const handleDelete = useCallback(async (bookingId) => {
+    if (!isOnline) {
+      toast.error('Cannot delete while offline. Please reconnect and try again.');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this booking?')) {
       try {
         await deleteBooking(bookingId);
@@ -1067,14 +1108,35 @@ const Bookings = () => {
         toast.error('Failed to delete booking');
       }
     }
-  }, [deleteBooking]);
+  }, [deleteBooking, isOnline]);
 
   const handleAssignWorker = useCallback((booking) => {
     setSelectedBooking(booking);
     setShowWorkerModal(true);
   }, []);
 
+  const handleViewCustomerHistory = useCallback(async (email) => {
+    if (!email) return;
+    setCustomerHistoryEmail(email);
+    setShowCustomerHistory(true);
+    setCustomerHistoryLoading(true);
+    try {
+      const data = await apiGet(API_ENDPOINTS.CUSTOMER_HISTORY(email));
+      setCustomerHistory(data);
+    } catch {
+      setCustomerHistory(null);
+    } finally {
+      setCustomerHistoryLoading(false);
+    }
+  }, []);
+
   const handleProcessPayment = useCallback(async (booking) => {
+    // Block payment processing when offline — POS requires server connection
+    if (!isOnline) {
+      toast.error('Cannot process payment while offline. Please reconnect and try again.');
+      return;
+    }
+
     setProcessingPayment(prev => new Set(prev).add(booking.id));
 
     try {
@@ -1112,7 +1174,7 @@ const Bookings = () => {
         return next;
       });
     }
-  }, [approveBooking, navigate]);
+  }, [approveBooking, navigate, isOnline]);
 
   const handleViewNote = useCallback((note) => {
     setSelectedNote(note);
@@ -1127,21 +1189,44 @@ const Bookings = () => {
       };
 
       if (editingBooking) {
-        await updateBooking(editingBooking.id, data);
-        toast.success('Booking updated');
+        if (isOnline) {
+          await updateBooking(editingBooking.id, data);
+          toast.success('Booking updated');
+        } else {
+          toast.success('Booking edit saved offline — will sync when online');
+        }
       } else {
-        await createBooking(data);
-        toast.success('Booking created');
+        if (isOnline) {
+          await createBooking(data);
+          toast.success('Booking created');
+        } else {
+          // Offline: queue for sync
+          await queueBooking({
+            customerName: data.customer_name,
+            customerEmail: data.customer_email,
+            customerPhone: data.customer_phone,
+            serviceId: data.service_id,
+            scheduledTime: data.scheduled_time,
+            status: 'scheduled',
+            totalAmount: data.total_amount || 0,
+            notes: data.notes,
+            workerId: data.worker_id
+          });
+          toast.success('Booking saved offline — will sync when online');
+          // Add to local pending list with unique key
+          setPendingOfflineBookings(prev => [...prev, { ...data, localId: crypto.randomUUID() }]);
+        }
       }
 
       setShowForm(false);
       setEditingBooking(null);
+      setFormKey(prev => prev + 1); // Force BookingForm remount to reset internal state
     } catch (err) {
       console.error('Error saving booking:', err);
       toast.error(err.response?.data?.error || 'Failed to save booking');
       throw err;
     }
-  }, [editingBooking, updateBooking, createBooking]);
+  }, [editingBooking, updateBooking, createBooking, isOnline, normalizeCustomerType]);
 
   const handleClearFilters = useCallback(() => {
     setSearchTerm('');
@@ -1199,6 +1284,36 @@ const Bookings = () => {
     <div className="w-full mx-auto px-2 sm:px-3 lg:px-4 py-6">
       <BookingsHeader todaysBookings={todaysBookings} />
 
+      {/* Pending Offline Bookings */}
+      {pendingOfflineBookings.length > 0 && (
+        <div className="mb-6 bg-yellow-50 rounded-xl border border-yellow-200 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-yellow-600 text-lg">⏳</span>
+            <h3 className="text-sm font-semibold text-yellow-800">
+              {pendingOfflineBookings.length} Booking{pendingOfflineBookings.length !== 1 ? 's' : ''} Pending Sync
+            </h3>
+            <span className="text-xs text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded-full">Offline</span>
+          </div>
+          <div className="space-y-2">
+            {pendingOfflineBookings.map((booking) => (
+              <div key={booking.localId} className="flex items-center justify-between bg-white rounded-lg p-3 border border-yellow-100">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">
+                    {booking.customerName || booking.customer_name} — {booking.serviceName || booking.service_name || 'Service'}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {booking.scheduledTime ? new Date(booking.scheduledTime).toLocaleString() : 'Time TBD'}
+                  </div>
+                </div>
+                <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-medium">
+                  Pending
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <BookingsFilters
         searchTerm={searchTerm}
         onSearchChange={setSearchTerm}
@@ -1234,6 +1349,7 @@ const Bookings = () => {
         <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-end sm:items-center justify-center p-0 sm:p-4 z-50">
           <div className="bg-white rounded-t-xl sm:rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <BookingForm
+              key={formKey}
               booking={editingBooking}
               services={services}
               workers={workers}
@@ -1269,6 +1385,87 @@ const Bookings = () => {
             setSelectedNote(null);
           }}
         />
+      )}
+
+      {/* Customer History Modal */}
+      {showCustomerHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center p-4 border-b">
+              <h3 className="text-lg font-bold text-gray-900">Customer History</h3>
+              <button onClick={() => { setShowCustomerHistory(false); setCustomerHistory(null); }} className="text-gray-400 hover:text-gray-600" aria-label="Close">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {customerHistoryLoading ? (
+                <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div></div>
+              ) : !customerHistory ? (
+                <p className="text-center text-gray-500 py-8">No customer history found</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-blue-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-blue-600">{customerHistory.summary?.total_bookings || 0}</div>
+                      <div className="text-xs text-blue-700">Bookings</div>
+                    </div>
+                    <div className="bg-green-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-green-600">{customerHistory.summary?.total_transactions || 0}</div>
+                      <div className="text-xs text-green-700">Transactions</div>
+                    </div>
+                    <div className="bg-purple-50 rounded-lg p-3 text-center">
+                      <div className="text-xl font-bold text-purple-600">₦{(customerHistory.summary?.total_spent || 0).toLocaleString()}</div>
+                      <div className="text-xs text-purple-700">Total Spent</div>
+                    </div>
+                  </div>
+                  {customerHistory.bookings?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Recent Bookings</h4>
+                      <div className="space-y-1">
+                        {customerHistory.bookings.slice(0, 5).map(b => (
+                          <div key={b.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                            <div>
+                              <span className="font-medium">{b.service_names || 'Service'}</span>
+                              <span className="text-gray-400 ml-2">#{b.booking_number}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-gray-500">{new Date(b.scheduled_time).toLocaleDateString()}</div>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${b.status === 'completed' ? 'bg-green-100 text-green-700' : b.status === 'cancelled' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>{b.status}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {customerHistory.transactions?.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-700 mb-2">Recent POS Transactions</h4>
+                      <div className="space-y-1">
+                        {customerHistory.transactions.slice(0, 5).map(t => (
+                          <div key={t.id} className="flex justify-between items-center p-2 bg-gray-50 rounded text-sm">
+                            <div>
+                              <span className="font-mono text-xs text-blue-600">{t.transaction_number}</span>
+                              <span className="text-gray-400 ml-2 capitalize">{t.payment_method?.replace(/_/g, ' ')}</span>
+                            </div>
+                            <div className="text-right">
+                              <div className="font-medium">₦{(t.total_amount || 0).toLocaleString()}</div>
+                              <div className="text-xs text-gray-500">{new Date(t.created_at).toLocaleDateString()}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="p-4 border-t flex justify-end">
+              <button onClick={() => { setShowCustomerHistory(false); setCustomerHistory(null); }} className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">Close</button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -320,4 +320,64 @@ router.delete('/:id', authenticate, authorize(['admin']), async (req, res) => {
   }
 });
 
+// Get inventory movement history
+router.get('/movements', authenticate, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, product_id, movement_type, start_date, end_date } = req.query;
+    const offset = (page - 1) * limit;
+
+    let sql = `
+      SELECT im.*, p.name as product_name, p.sku, u.name as created_by_name
+      FROM inventory_movements im
+      LEFT JOIN products p ON im.product_id = p.id
+      LEFT JOIN users u ON im.created_by = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let idx = 1;
+
+    if (product_id) {
+      sql += ` AND im.product_id = $${idx++}`;
+      params.push(product_id);
+    }
+    if (movement_type) {
+      sql += ` AND im.movement_type = $${idx++}`;
+      params.push(movement_type);
+    }
+    if (start_date) {
+      sql += ` AND im.created_at >= $${idx++}`;
+      params.push(start_date);
+    }
+    if (end_date) {
+      sql += ` AND im.created_at <= $${idx++}`;
+      params.push(end_date);
+    }
+
+    sql += ` ORDER BY im.created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    params.push(limit, offset);
+
+    const result = await query(sql, params);
+
+    // Get total count
+    let countSql = `SELECT COUNT(*) FROM inventory_movements im WHERE 1=1`;
+    const countParams = [];
+    let cIdx = 1;
+    if (product_id) { countSql += ` AND im.product_id = $${cIdx++}`; countParams.push(product_id); }
+    if (movement_type) { countSql += ` AND im.movement_type = $${cIdx++}`; countParams.push(movement_type); }
+    if (start_date) { countSql += ` AND im.created_at >= $${cIdx++}`; countParams.push(start_date); }
+    if (end_date) { countSql += ` AND im.created_at <= $${cIdx++}`; countParams.push(end_date); }
+
+    const countResult = await query(countSql, countParams);
+    const total = parseInt(countResult.rows[0].count);
+
+    res.json(successResponse({
+      movements: result.rows,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / limit) }
+    }, 'Inventory movements retrieved successfully'));
+  } catch (error) {
+    console.error('Get inventory movements error:', error);
+    res.status(400).json(errorResponse(error.message, 'MOVEMENTS_FETCH_ERROR', 400));
+  }
+});
+
 export default router;

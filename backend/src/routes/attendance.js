@@ -624,6 +624,252 @@ router.get('/templates', async (req, res) => {
   }
 });
 
+// ==========================================
+// TIME-OFF REQUESTS
+// ==========================================
+
+// Submit time-off request
+router.post('/time-off', authenticate, async (req, res) => {
+  try {
+    const { worker_id, start_date, end_date, reason, type = 'time_off' } = req.body;
+
+    if (!worker_id || !start_date || !end_date || !reason) {
+      return res.status(400).json({ error: 'worker_id, start_date, end_date, and reason are required' });
+    }
+
+    const result = await query(
+      `INSERT INTO time_off_requests (worker_id, start_date, end_date, reason, type, status)
+       VALUES ($1, $2, $3, $4, $5, 'pending')
+       RETURNING *`,
+      [worker_id, start_date, end_date, reason, type]
+    );
+
+    res.status(201).json({ message: 'Time-off request submitted', request: result.rows[0] });
+  } catch (error) {
+    console.error('Time-off request error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get time-off requests (own for staff, all for manager/admin)
+router.get('/time-off', authenticate, async (req, res) => {
+  try {
+    const { worker_id, status } = req.query;
+    let sql = `
+      SELECT tor.*, u.name as worker_name
+      FROM time_off_requests tor
+      JOIN users u ON tor.worker_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let idx = 1;
+
+    // Non-admin/manager can only see their own
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      sql += ` AND tor.worker_id = $${idx++}`;
+      params.push(req.user.id);
+    } else if (worker_id) {
+      sql += ` AND tor.worker_id = $${idx++}`;
+      params.push(worker_id);
+    }
+
+    if (status) {
+      sql += ` AND tor.status = $${idx++}`;
+      params.push(status);
+    }
+
+    sql += ' ORDER BY tor.created_at DESC';
+
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get time-off requests error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Approve/reject time-off request (manager/admin only)
+router.put('/time-off/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, review_notes } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be "approved" or "rejected"' });
+    }
+
+    const result = await query(
+      `UPDATE time_off_requests
+       SET status = $1, reviewed_by = $2, review_notes = $3, reviewed_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [status, req.user.id, review_notes || null, id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Time-off request not found' });
+    }
+
+    res.json({ message: `Time-off request ${status}`, request: result.rows[0] });
+  } catch (error) {
+    console.error('Update time-off request error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ==========================================
+// ATTENDANCE CORRECTION REQUESTS
+// ==========================================
+
+// Submit attendance correction request
+router.post('/correction-request', authenticate, async (req, res) => {
+  try {
+    const { worker_id, date, requested_check_in, requested_check_out, reason } = req.body;
+
+    if (!worker_id || !date || !reason) {
+      return res.status(400).json({ error: 'worker_id, date, and reason are required' });
+    }
+
+    // Get existing attendance record if any
+    let existingAttendance = null;
+    const existingResult = await query(
+      'SELECT * FROM attendance WHERE worker_id = $1 AND date = $2',
+      [worker_id, date]
+    );
+    if (existingResult.rows.length > 0) {
+      existingAttendance = existingResult.rows[0];
+    }
+
+    const result = await query(
+      `INSERT INTO attendance_correction_requests
+       (worker_id, date, existing_check_in, existing_check_out, requested_check_in, requested_check_out, reason, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+       RETURNING *`,
+      [
+        worker_id,
+        date,
+        existingAttendance?.check_in_time || null,
+        existingAttendance?.check_out_time || null,
+        requested_check_in || null,
+        requested_check_out || null,
+        reason
+      ]
+    );
+
+    res.status(201).json({ message: 'Correction request submitted', request: result.rows[0] });
+  } catch (error) {
+    console.error('Correction request error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Get correction requests
+router.get('/correction-requests', authenticate, async (req, res) => {
+  try {
+    const { worker_id, status } = req.query;
+    let sql = `
+      SELECT acr.*, u.name as worker_name
+      FROM attendance_correction_requests acr
+      JOIN users u ON acr.worker_id = u.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let idx = 1;
+
+    if (req.user.role !== 'admin' && req.user.role !== 'manager') {
+      sql += ` AND acr.worker_id = $${idx++}`;
+      params.push(req.user.id);
+    } else if (worker_id) {
+      sql += ` AND acr.worker_id = $${idx++}`;
+      params.push(worker_id);
+    }
+
+    if (status) {
+      sql += ` AND acr.status = $${idx++}`;
+      params.push(status);
+    }
+
+    sql += ' ORDER BY acr.created_at DESC';
+
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Get correction requests error:', error);
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Approve/reject correction request (manager/admin only)
+router.put('/correction-requests/:id', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  const { getClient } = await import('../config/db.js');
+  const client = await getClient();
+
+  try {
+    await client.query('BEGIN');
+
+    const { id } = req.params;
+    const { status, review_notes } = req.body;
+
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be "approved" or "rejected"' });
+    }
+
+    // Get the correction request
+    const requestResult = await client.query(
+      'SELECT * FROM attendance_correction_requests WHERE id = $1',
+      [id]
+    );
+
+    if (requestResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Correction request not found' });
+    }
+
+    const correctionReq = requestResult.rows[0];
+
+    // Update the request status
+    const updateResult = await client.query(
+      `UPDATE attendance_correction_requests
+       SET status = $1, reviewed_by = $2, review_notes = $3, reviewed_at = CURRENT_TIMESTAMP
+       WHERE id = $4
+       RETURNING *`,
+      [status, req.user.id, review_notes || null, id]
+    );
+
+    // If approved, update the attendance record
+    if (status === 'approved') {
+      if (correctionReq.requested_check_in || correctionReq.requested_check_out) {
+        // Update existing attendance record
+        await client.query(
+          `UPDATE attendance
+           SET check_in_time = COALESCE($1, check_in_time),
+               check_out_time = COALESCE($2, check_out_time),
+               status = 'present',
+               updated_at = CURRENT_TIMESTAMP
+           WHERE worker_id = $3 AND date = $4`,
+          [correctionReq.requested_check_in, correctionReq.requested_check_out, correctionReq.worker_id, correctionReq.date]
+        );
+      } else {
+        // Create new attendance record if none exists
+        await client.query(
+          `INSERT INTO attendance (worker_id, date, check_in_time, check_out_time, status, location_verification_status)
+           VALUES ($1, $2, $3, $4, 'present', 'verified')`,
+          [correctionReq.worker_id, correctionReq.date, correctionReq.requested_check_in, correctionReq.requested_check_out]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    res.json({ message: `Correction request ${status}`, request: updateResult.rows[0] });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Update correction request error:', error);
+    res.status(400).json({ error: error.message });
+  } finally {
+    client.release();
+  }
+});
+
 // Get today's attendance for the kiosk display
 router.get('/today', async (req, res) => {
   try {

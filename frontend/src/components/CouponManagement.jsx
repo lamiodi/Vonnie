@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiPatch, API_ENDPOINTS } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
+import toast, { Toaster } from 'react-hot-toast';
 
 const CouponManagement = () => {
   const { hasRole } = useAuth();
@@ -153,10 +154,10 @@ const CouponManagement = () => {
       
       fetchCoupons();
       resetForm();
-      alert(editingCoupon ? 'Coupon updated successfully!' : 'Coupon created successfully!');
+      toast.success(editingCoupon ? 'Coupon updated successfully!' : 'Coupon created successfully!');
     } catch (error) {
       console.error('Error saving coupon:', error);
-      alert('Error saving coupon: ' + (error.response?.data?.error || error.message));
+      toast.error('Error saving coupon: ' + (error.response?.data?.error || error.message));
     } finally {
       setIsSubmitting(false);
     }
@@ -184,10 +185,10 @@ const CouponManagement = () => {
       try {
         await apiPatch(`${API_ENDPOINTS.COUPONS}/${id}/deactivate`);
         fetchCoupons();
-        alert('Coupon deactivated successfully!');
+        toast.success('Coupon deactivated successfully!');
       } catch (error) {
         console.error('Error deactivating coupon:', error);
-        alert('Error deactivating coupon: ' + (error.response?.data?.error || error.message));
+        toast.error('Error deactivating coupon: ' + (error.response?.data?.error || error.message));
       }
     }
   };
@@ -261,6 +262,7 @@ const CouponManagement = () => {
 
   return (
     <div className="p-6">
+      <Toaster position="top-right" />
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-800">Coupon Management</h1>
       

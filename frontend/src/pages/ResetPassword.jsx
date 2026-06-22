@@ -2,6 +2,15 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../utils/api';
 
+// Token validation: JWT tokens are base64url encoded with 3 parts separated by dots
+const isValidTokenFormat = (token) => {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  // Check each part is non-empty and contains only valid base64url characters
+  return parts.every(part => part.length > 0 && /^[A-Za-z0-9_-]+$/.test(part));
+};
+
 const ResetPassword = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -18,8 +27,16 @@ const ResetPassword = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate token exists
     if (!token) {
       setError('Invalid or missing reset token.');
+      return;
+    }
+    
+    // Validate token format before making API call
+    if (!isValidTokenFormat(token)) {
+      setError('Invalid reset token format. Please use the link from your email.');
       return;
     }
 
@@ -47,12 +64,17 @@ const ResetPassword = () => {
     }
   };
 
-  if (!token) {
+  // Show error page if token is missing or has invalid format
+  if (!token || !isValidTokenFormat(token)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full bg-white p-8 rounded-xl shadow-lg text-center">
           <h2 className="text-2xl font-bold text-red-600 mb-4">Invalid Link</h2>
-          <p className="text-gray-600 mb-6">The password reset link is invalid or missing.</p>
+          <p className="text-gray-600 mb-6">
+            {!token 
+              ? 'The password reset link is invalid or missing.' 
+              : 'The password reset link has an invalid format. Please use the link from your email.'}
+          </p>
           <button onClick={() => navigate('/login')} className="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium">
             Go to Login
           </button>

@@ -476,4 +476,263 @@ router.get('/customers', authenticate, authorize(['admin', 'manager']), async (r
   }
 });
 
+// Expense report
+router.get('/expenses', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  try {
+    const { start_date, end_date, period = 'daily' } = req.query;
+    
+    let sql = `
+      SELECT 
+        e.id,
+        e.date,
+        e.amount,
+        e.category,
+        e.payment_method,
+        e.supplier,
+        e.description,
+        u.name as recorded_by_name
+      FROM expenses e
+      LEFT JOIN users u ON e.recorded_by = u.id
+      WHERE 1=1
+    `;
+    
+    const params = [];
+    let paramCount = 0;
+    
+    if (start_date) {
+      paramCount++;
+      sql += ` AND e.date >= $${paramCount}`;
+      params.push(start_date);
+    }
+    
+    if (end_date) {
+      paramCount++;
+      sql += ` AND e.date <= $${paramCount}`;
+      params.push(end_date);
+    }
+    
+    sql += ` ORDER BY e.date DESC`;
+    
+    const result = await query(sql, params);
+    const data = result.rows;
+    
+    // Group by period
+    const groupedData = data.reduce((acc, expense) => {
+      const date = new Date(expense.date);
+      let key;
+      
+      if (period === 'daily') {
+        key = date.toISOString().split('T')[0];
+      } else if (period === 'monthly') {
+        key = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+      } else if (period === 'yearly') {
+        key = date.getFullYear().toString();
+      }
+      
+      if (!acc[key]) {
+        acc[key] = {
+          period: key,
+          total_expenses: 0,
+          expense_count: 0
+        };
+      }
+      
+      acc[key].total_expenses += parseFloat(expense.amount || 0);
+      acc[key].expense_count += 1;
+      
+      return acc;
+    }, {});
+    
+    // Category breakdown
+    const byCategory = data.reduce((acc, expense) => {
+      if (!acc[expense.category]) {
+        acc[expense.category] = { total: 0, count: 0 };
+      }
+      acc[expense.category].total += parseFloat(expense.amount || 0);
+      acc[expense.category].count += 1;
+      return acc;
+    }, {});
+    
+    const totalExpenses = data.reduce((sum, e) => sum + parseFloat(e.amount || 0), 0);
+    
+    res.json(successResponse({
+      total_expenses: totalExpenses,
+      expense_count: data.length,
+      by_category: Object.entries(byCategory).map(([category, d]) => ({
+        category,
+        total: d.total,
+        count: d.count
+      })).sort((a, b) => b.total - a.total),
+      grouped_data: Object.values(groupedData),
+      expenses: data.slice(0, 100)
+    }, 'Expense report generated successfully'));
+  } catch (error) {
+    console.error('Expense report error:', error);
+    res.status(400).json(errorResponse(error.message, 'EXPENSE_REPORT_ERROR', 400));
+  }
+});
+
+// Profit report (sales - expenses)
+router.get('/profit', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+  try {
+    const { start_date, end_date } = req.query;
+    
+    // Default to current month
+    const startDate = start_date || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
+    const endDate = end_date || new Date().toISOString().split('T')[0];
+    
+    // Get total sales from POS transactions
+    let salesSql = `
+      SELECT COALESCE(SUM(total_amount), 0) as total_sales, COUNT(*) as transaction_count
+      FROM pos_transactions
+      WHERE status = 'completed'
+      AND payment_status = 'completed'
+    `;
+    const salesParams = [];
+    let salesParamCount = 0;
+    
+    if (start_date) {
+      salesParamCount++;
+      salesSql += ` AND created_at >= $${salesParamCount}`;
+      salesParams.push(start_date);
+    }
+    if (end_date) {
+      salesParamCount++;
+      salesSql += ` AND created_at <= $${salesParamCount}`;
+      salesParams.push(end_date);
+    }
+    
+    const salesResult = await query(salesSql, salesParams);
+    const totalSales = parseFloat(salesResult.rows[0].total_sales);
+    const transactionCount = parseInt(salesResult.rows[0].transaction_count);
+    
+    // Get total sales from completed bookings
+    let bookingSalesSql = `
+      SELECT COALESCE(SUM(total_amount), 0) as total_booking_sales, COUNT(*) as booking_count
+      FROM bookings
+      WHERE status = 'completed'
+    `;
+    const bookingSalesParams = [];
+    let bookingParamCount = 0;
+    
+    if (start_date) {
+      bookingParamCount++;
+      bookingSalesSql += ` AND scheduled_time >= $${bookingParamCount}`;
+      bookingSalesParams.push(start_date);
+    }
+    if (end_date) {
+      bookingParamCount++;
+      bookingSalesSql += ` AND scheduled_time <= $${bookingParamCount}`;
+      bookingSalesParams.push(end_date);
+    }
+    
+    const bookingSalesResult = await query(bookingSalesSql, bookingSalesParams);
+    const totalBookingSales = parseFloat(bookingSalesResult.rows[0].total_booking_sales);
+    const bookingCount = parseInt(bookingSalesResult.rows[0].booking_count);
+    
+    // Combined revenue
+    const totalRevenue = totalSales + totalBookingSales;
+    
+    // Get total expenses
+    let expenseSql = `
+      SELECT COALESCE(SUM(amount), 0) as total_expenses, COUNT(*) as expense_count
+      FROM expenses
+      WHERE 1=1
+    `;
+    const expenseParams = [];
+    let expenseParamCount = 0;
+    
+    if (start_date) {
+      expenseParamCount++;
+      expenseSql += ` AND date >= $${expenseParamCount}`;
+      expenseParams.push(start_date);
+    }
+    if (end_date) {
+      expenseParamCount++;
+      expenseSql += ` AND date <= $${expenseParamCount}`;
+      expenseParams.push(end_date);
+    }
+    
+    const expenseResult = await query(expenseSql, expenseParams);
+    const totalExpenses = parseFloat(expenseResult.rows[0].total_expenses);
+    const expenseCount = parseInt(expenseResult.rows[0].expense_count);
+    
+    // Net profit
+    const netProfit = totalRevenue - totalExpenses;
+    const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue * 100).toFixed(1) : 0;
+    
+    // Get expense breakdown by category
+    let categorySql = `
+      SELECT category, COALESCE(SUM(amount), 0) as total, COUNT(*) as count
+      FROM expenses
+      WHERE 1=1
+    `;
+    const categoryParams = [];
+    let catParamCount = 0;
+    
+    if (start_date) {
+      catParamCount++;
+      categorySql += ` AND date >= $${catParamCount}`;
+      categoryParams.push(start_date);
+    }
+    if (end_date) {
+      catParamCount++;
+      categorySql += ` AND date <= $${catParamCount}`;
+      categoryParams.push(end_date);
+    }
+    
+    categorySql += ` GROUP BY category ORDER BY total DESC`;
+    const categoryResult = await query(categorySql, categoryParams);
+    
+    // Get daily profit trend
+    let dailySql = `
+      WITH daily_sales AS (
+        SELECT DATE(created_at) as date, COALESCE(SUM(total_amount), 0) as sales
+        FROM pos_transactions
+        WHERE status = 'completed' AND payment_status = 'completed'
+        ${start_date ? `AND created_at >= '${start_date}'` : ''}
+        ${end_date ? `AND created_at <= '${end_date}'` : ''}
+        GROUP BY DATE(created_at)
+      ),
+      daily_expenses AS (
+        SELECT date, COALESCE(SUM(amount), 0) as expenses
+        FROM expenses
+        WHERE 1=1
+        ${start_date ? `AND date >= '${start_date}'` : ''}
+        ${end_date ? `AND date <= '${end_date}'` : ''}
+        GROUP BY date
+      )
+      SELECT 
+        COALESCE(ds.date, de.date) as date,
+        COALESCE(ds.sales, 0) as sales,
+        COALESCE(de.expenses, 0) as expenses,
+        COALESCE(ds.sales, 0) - COALESCE(de.expenses, 0) as net_profit
+      FROM daily_sales ds
+      FULL OUTER JOIN daily_expenses de ON ds.date = de.date
+      ORDER BY date DESC
+      LIMIT 30
+    `;
+    const dailyResult = await query(dailySql);
+    
+    res.json(successResponse({
+      summary: {
+        total_revenue: totalRevenue,
+        total_pos_sales: totalSales,
+        total_booking_sales: totalBookingSales,
+        total_expenses: totalExpenses,
+        net_profit: netProfit,
+        profit_margin: parseFloat(profitMargin),
+        transaction_count: transactionCount,
+        booking_count: bookingCount,
+        expense_count: expenseCount
+      },
+      expense_by_category: categoryResult.rows,
+      daily_trend: dailyResult.rows
+    }, 'Profit report generated successfully'));
+  } catch (error) {
+    console.error('Profit report error:', error);
+    res.status(400).json(errorResponse(error.message, 'PROFIT_REPORT_ERROR', 400));
+  }
+});
+
 export default router;

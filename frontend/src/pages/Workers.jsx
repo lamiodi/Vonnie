@@ -6,6 +6,7 @@ import { handleError, handleSuccess } from '@/utils/errorHandler';
 
 const pageSizeOptions = [10, 25, 50];
 const roles = ['staff', 'manager', 'admin'];
+const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8080';
 const permissionsCatalog = [
   { key: 'assign_bookings', label: 'Assign bookings' },
   { key: 'edit_schedule', label: 'Edit schedule' },
@@ -169,7 +170,8 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
       // Ensure the bridge app is running on the shop PC
       handleSuccess('Please scan the same finger 3 times. Wait for the green light each time.');
       
-      const localResponse = await fetch('http://127.0.0.1:8080/api/enroll');
+      const localResponse = await fetch(`${FINGERPRINT_BRIDGE_URL}/api/enroll`);
+
       
       if (!localResponse.ok) {
         throw new Error('Could not connect to local fingerprint scanner');
@@ -388,8 +390,26 @@ export default function Workers() {
     }
   };
 
-  const handleEditOpen = (w) => {
-    setForm({ name: w.name || '', email: w.email || '', phone: w.phone || '', role: w.role || 'staff', permissions: [], schedule: defaultSchedule });
+  const handleEditOpen = async (w) => {
+    // Fetch the worker's current schedule from the API
+    let currentSchedule = defaultSchedule;
+    try {
+      const scheduleRes = await apiGet(`/workers/${w.id}/schedule`);
+      if (scheduleRes && scheduleRes.schedule && scheduleRes.schedule.length > 0) {
+        currentSchedule = scheduleRes.schedule;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch worker schedule, using default:', e);
+    }
+    
+    setForm({ 
+      name: w.name || '', 
+      email: w.email || '', 
+      phone: w.phone || '', 
+      role: w.role || 'staff', 
+      permissions: w.permissions || [], 
+      schedule: currentSchedule 
+    });
     setShowEdit(true);
     setChangeLog((l) => [...l, { action: `Opened edit for ${w.name}`, ts: Date.now() }]);
   };

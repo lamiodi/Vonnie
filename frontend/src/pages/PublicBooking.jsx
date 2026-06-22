@@ -4,6 +4,7 @@ import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError } from '../utils/errorHandler';
+import { toast } from 'react-hot-toast';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
 
@@ -231,6 +232,7 @@ const PublicBooking = () => {
       };
 
       const response = await axios.post(endpoints.createBooking, bookingData);
+        toast.success('Booking created successfully!');
       const serverBookingData = response.data.data || response.data;
 
       // Navigate to confirmation
