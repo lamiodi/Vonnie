@@ -88,7 +88,7 @@ const AdminAttendanceView = () => {
           <p className="text-sm sm:text-base text-gray-600">Track and monitor worker attendance records</p>
         </div>
         <button
-          onClick={() => navigate('/attendance-kiosk')}
+          onClick={() => window.open('https://vonneex2x.store/attendance-kiosk', '_blank', 'noopener,noreferrer')}
           className="bg-gray-900 text-white px-5 py-2.5 rounded-lg hover:bg-black font-medium shadow-md flex items-center justify-center gap-2 transition-transform active:scale-95"
         >
           <svg className="w-5 h-5 text-teal-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1075,13 +1075,25 @@ const WorkerAttendanceView = () => {
         <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-3">
           {!todayAttendance?.check_in_time && (
             <>
-              <button
-                onClick={handleCheckIn}
-                disabled={checkingIn || locationLoading}
-                className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
+              {false && (
+                <button
+                  onClick={handleCheckIn}
+                  disabled={checkingIn || locationLoading}
+                  className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
+                >
+                  {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In via GPS'}
+                </button>
+              )}
+
+              {/* Kiosk Link - check in/out via the fingerprint kiosk */}
+              <a
+                href="https://vonneex2x.store/attendance-kiosk"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
               >
-                {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In via GPS'}
-              </button>
+                Check In via Kiosk
+              </a>
               
               {/* Desktop / Shop PC Biometric Option */}
               {!isMobileDevice && (

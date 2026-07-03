@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
 import { handleError } from '../utils/errorHandler';
@@ -21,6 +21,10 @@ const Login = () => {
   
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  // Synchronous guard: prevents re-entrant submissions before the `loading`
+  // state update is committed. Avoids duplicate login toasts when Enter is
+  // held or the button is tapped multiple times in quick succession.
+  const submittingRef = useRef(false);
 
   const handleChange = (e) => {
     setFormData({
@@ -32,6 +36,8 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submittingRef.current || loading) return;
+    submittingRef.current = true;
     setLoading(true);
     setError('');
 
@@ -44,6 +50,7 @@ const Login = () => {
       handleError(err, message);
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 

@@ -255,7 +255,12 @@ const AttendanceKiosk = () => {
         </div>
 
         {/* Scan Area */}
-        <div className="p-10 flex flex-col items-center justify-center min-h-[320px]">
+        <div 
+          onClick={!scanning ? handleScan : undefined}
+          className={`p-10 flex flex-col items-center justify-center min-h-[320px] transition-all duration-200 ${
+            !scanning ? 'cursor-pointer hover:bg-gray-700/30' : ''
+          }`}
+        >
           
           {message ? (
             <div className={`text-center animate-fade-in ${

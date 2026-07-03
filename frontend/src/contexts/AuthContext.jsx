@@ -87,12 +87,16 @@ export const AuthProvider = ({ children }) => {
     checkAuth();
   }, []);
 
+  // Track the last token that triggered a login-success notification so the
+  // toast isn't re-fired on re-renders or StrictMode double-invocations.
+  const lastNotifiedToken = React.useRef(null);
+
   const login = async (email, password) => {
     // Prevent multiple simultaneous login attempts
     if (loginInProgress.current) {
       return { success: false, message: 'Login already in progress' };
     }
-    
+
     try {
       loginInProgress.current = true;
       setLoading(true);
@@ -104,22 +108,29 @@ export const AuthProvider = ({ children }) => {
       // Handle successful login response
       if (response.data.token && response.data.user) {
         const { token: newToken, user: userData } = response.data;
-        
+
         // Store in localStorage
         localStorage.setItem('token', newToken);
         localStorage.setItem('user', JSON.stringify(userData));
-        
+
         // Update state
         setToken(newToken);
         setUser(userData);
-        
+
         // Set axios default header
         if (api && api.defaults && api.defaults.headers && api.defaults.headers.common) {
           api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
         }
-        
-        // Use toast ID to prevent duplicate toasts
-        toast.success('Login successful!', { id: 'login-success' });
+
+        // Dismiss any lingering login-success toast from a prior attempt
+        // and only fire the success toast once per token. This prevents the
+        // notification from re-appearing on StrictMode re-renders or when
+        // the Login component re-mounts.
+        toast.dismiss('login-success');
+        if (lastNotifiedToken.current !== newToken) {
+          lastNotifiedToken.current = newToken;
+          toast.success('Login successful!', { id: 'login-success' });
+        }
         return { success: true };
       } else {
         // Handle case where backend returns unexpected response structure
@@ -164,15 +175,20 @@ export const AuthProvider = ({ children }) => {
     // Clear localStorage
     localStorage.removeItem('token');
     localStorage.removeItem('user');
-    
+
     // Clear state
     setToken(null);
     setUser(null);
-    
+
     // Remove axios default header
     delete axios.defaults.headers.common['Authorization'];
     delete api.defaults.headers.common['Authorization'];
-    
+
+    // Dismiss any login toast and reset the once-per-token guard so the
+    // next login fires a fresh success notification.
+    toast.dismiss('login-success');
+    lastNotifiedToken.current = null;
+
     toast.success('Logged out successfully');
   };
 

@@ -1,10 +1,14 @@
 services:
   # Backend Service
+  # The repo root is the vone-x2x directory.
+  # rootDir is relative to the repo root, so the backend path is:
+  #   backend
   - type: web
     name: vonne-x2x-backend
     env: node
-    buildCommand: cd backend && npm install
-    startCommand: cd backend && cross-env NODE_ENV=production PORT=5010 node src/index.js
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: cross-env NODE_ENV=production PORT=5010 node src/index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -32,11 +36,14 @@ services:
         sync: false
 
   # Frontend Service
+  # rootDir is relative to the repo root, so the frontend path is:
+  #   frontend
   - type: web
     name: vonne-x2x-frontend
     env: static
-    buildCommand: cd frontend && npm install && npm run build
-    staticPublishPath: frontend/dist
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         sync: false
