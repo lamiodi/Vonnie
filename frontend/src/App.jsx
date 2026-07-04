@@ -39,12 +39,8 @@ function App() {
         <Route path="/walk-in-booking" element={<WalkInBooking />} />
         <Route path="/booking-confirmation" element={<BookingConfirmation />} />
         
-        {/* Kiosk Route (Requires Auth but runs full screen) */}
-        <Route path="/attendance-kiosk" element={
-          <ProtectedRoute>
-            <AttendanceKiosk />
-          </ProtectedRoute>
-        } />
+        {/* Kiosk Route (Publicly accessible for attendance kiosk) */}
+        <Route path="/attendance-kiosk" element={<AttendanceKiosk />} />
           
           {/* Protected Routes */}
           <Route path="/" element={

@@ -15,7 +15,8 @@ const AdminAttendanceView = () => {
   const [filters, setFilters] = useState({
     startDate: new Date().toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
-    workerId: ''
+    workerId: '',
+    status: ''
   });
 
   useEffect(() => {
@@ -165,7 +166,6 @@ const AdminAttendanceView = () => {
                         <span>Check-in:</span>
                         <span className="font-medium flex items-center gap-1">
                           {formatTime(record.check_in_time)}
-                          {record.gps_check_in_verified && <span className="text-green-600 text-xs">✓</span>}
                         </span>
                       </div>
                       {record.check_out_time && (
@@ -173,7 +173,6 @@ const AdminAttendanceView = () => {
                           <span>Check-out:</span>
                           <span className="font-medium flex items-center gap-1">
                             {formatTime(record.check_out_time)}
-                            {record.gps_check_out_verified && <span className="text-green-600 text-xs">✓</span>}
                           </span>
                         </div>
                       )}
@@ -304,12 +303,10 @@ const AdminAttendanceView = () => {
                     <div>
                       <span className="text-gray-500">In: </span>
                       <span className="font-medium">{formatTime(record.check_in_time)}</span>
-                      {record.gps_check_in_verified && <span className="text-green-600 ml-1">✓</span>}
                     </div>
                     <div>
                       <span className="text-gray-500">Out: </span>
                       <span className="font-medium">{formatTime(record.check_out_time)}</span>
-                      {record.gps_check_out_verified && <span className="text-green-600 ml-1">✓</span>}
                     </div>
                   </div>
                   {record.location_verification_status && (
@@ -338,7 +335,7 @@ const AdminAttendanceView = () => {
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
                     <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                    <th className="px-4 lg:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">Location</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -348,15 +345,9 @@ const AdminAttendanceView = () => {
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">{record.name || 'Unknown'}</td>
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatTime(record.check_in_time)}
-                        {record.gps_check_in_verified && (
-                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                        )}
                       </td>
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatTime(record.check_out_time)}
-                        {record.gps_check_out_verified && (
-                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                        )}
+                        {formatTime(record.check_out_time) || '-'}
                       </td>
                       <td className="px-4 lg:px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
@@ -367,7 +358,7 @@ const AdminAttendanceView = () => {
                           {record.status}
                         </span>
                       </td>
-                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-4 lg:px-6 py-4 whitespace-nowrap text-sm text-gray-500 hidden md:table-cell">
                         {record.location_verification_status === 'verified' ? (
                           <span className="text-green-600 flex items-center"><span className="mr-1">✓</span> Verified</span>
                         ) : record.location_verification_status === 'rejected' ? (
@@ -684,11 +675,7 @@ const WorkerAttendanceView = () => {
   const [loading, setLoading] = useState(true);
   const [checkingIn, setCheckingIn] = useState(false);
   const [checkingOut, setCheckingOut] = useState(false);
-  const [locationError, setLocationError] = useState('');
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(null);
   const [isMobileDevice, setIsMobileDevice] = useState(false);
-  const [manualOverride, setManualOverride] = useState(false);
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
@@ -722,126 +709,14 @@ const WorkerAttendanceView = () => {
     }
   };
 
-  const GPS_MAX_RETRIES = 3;
-  const GPS_ACCURACY_THRESHOLD = 100; // meters
-  const GPS_TIMEOUT = 15000; // 15 seconds
-
-  const getCurrentLocation = (retries = GPS_MAX_RETRIES) => {
-    return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported by this browser'));
-        return;
-      }
-
-      setLocationLoading(true);
-      setLocationError('');
-
-      const success = (position) => {
-        const location = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy
-        };
-        
-        // Only retry if accuracy is poor AND we have retries left
-        // But limit total retries to prevent infinite loops
-        if (position.coords.accuracy > GPS_ACCURACY_THRESHOLD && retries > 0) {
-          console.log(`GPS accuracy poor (${position.coords.accuracy}m), retrying... (${retries} left)`);
-          setTimeout(() => {
-            getCurrentLocation(retries - 1).then(resolve).catch(reject);
-          }, 2000); // Wait 2 seconds before retry to allow GPS to stabilize
-          return;
-        }
-
-        setCurrentLocation(location);
-        setLocationLoading(false);
-        resolve(location);
-      };
-
-      const error = (err) => {
-        // Don't retry on permission denied - user needs to manually enable
-        if (err.code === err.PERMISSION_DENIED) {
-          setLocationLoading(false);
-          const errorMessage = 'Location access denied. Please enable location services in your browser settings.';
-          setLocationError(errorMessage);
-          reject(new Error(errorMessage));
-          return;
-        }
-
-        // Retry on transient errors only
-        if (retries > 0 && (err.code === err.POSITION_UNAVAILABLE || err.code === err.TIMEOUT)) {
-          console.log(`GPS error (${err.code}), retrying... (${retries} left)`);
-          setTimeout(() => {
-            getCurrentLocation(retries - 1).then(resolve).catch(reject);
-          }, 2000);
-          return;
-        }
-
-        setLocationLoading(false);
-        let errorMessage = 'Failed to get location';
-        switch (err.code) {
-          case err.PERMISSION_DENIED:
-            errorMessage = 'Location access denied. Please enable location services in your browser settings.';
-            break;
-          case err.POSITION_UNAVAILABLE:
-            errorMessage = 'Location unavailable. Try moving to an area with better signal (near a window/outside).';
-            break;
-          case err.TIMEOUT:
-            errorMessage = 'Location request timed out. Please try again.';
-            break;
-        }
-        setLocationError(errorMessage);
-        reject(new Error(errorMessage));
-      };
-
-      const options = {
-        enableHighAccuracy: true,
-        timeout: GPS_TIMEOUT,
-        maximumAge: 0
-      };
-
-      navigator.geolocation.getCurrentPosition(success, error, options);
-    });
-  };
-
   const handleCheckIn = async () => {
     try {
       setCheckingIn(true);
-      setLocationError('');
-
-      let locationData = {};
-
-      try {
-        const location = await getCurrentLocation();
-        locationData = {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy
-        };
-      } catch (locationError) {
-        console.warn('GPS location not available:', locationError.message);
-        if (!isMobileDevice || manualOverride) {
-          setLocationError('Check-in recorded without GPS verification (Desktop mode)');
-        } else {
-          setLocationError('Check-in without GPS - location verification disabled');
-        }
-      }
-
       const response = await apiPost(API_ENDPOINTS.ATTENDANCE_CHECKIN, {
-        worker_id: user.id,
-        ...locationData
+        worker_id: user.id
       });
-
-      const responseData = response.data || response;
-      if (responseData.location_verification_status === 'rejected') {
-        setLocationError('Unable to verify attendance. You appear to be outside the shop. Please ensure you are inside the shop to mark attendance.');
-      } else if (responseData.location_verification_status === 'verified') {
-        setLocationError('');
-      }
-
       handleSuccess('Check-in successful');
       fetchAttendanceRecords();
-      setCurrentLocation(null);
     } catch (error) {
       handleError(error, 'Check-in failed');
     } finally {
@@ -852,34 +727,11 @@ const WorkerAttendanceView = () => {
   const handleCheckOut = async () => {
     try {
       setCheckingOut(true);
-      setLocationError('');
-
-      let locationData = {};
-
-      try {
-        const location = await getCurrentLocation();
-        locationData = {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy
-        };
-      } catch (locationError) {
-        console.warn('GPS location not available:', locationError.message);
-        if (!isMobileDevice || manualOverride) {
-          setLocationError('Check-out recorded without GPS verification (Desktop mode)');
-        } else {
-          setLocationError('Check-out without GPS - location verification disabled');
-        }
-      }
-
       await apiPost(API_ENDPOINTS.ATTENDANCE_CHECKOUT, {
-        worker_id: user.id,
-        ...locationData
+        worker_id: user.id
       });
-
       handleSuccess('Check-out successful');
       fetchAttendanceRecords();
-      setCurrentLocation(null);
     } catch (error) {
       handleError(error, 'Check-out failed');
     } finally {
@@ -890,18 +742,17 @@ const WorkerAttendanceView = () => {
   const handleFingerprintCheckIn = async () => {
     try {
       setCheckingIn(true);
-      setLocationError('');
-      
+
       // 1. Capture the live finger from the local bridge
       const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
       const localResponse = await fetch(`${FINGERPRINT_BRIDGE_URL}/api/capture`);
       if (!localResponse.ok) {
         throw new Error('Could not connect to local fingerprint scanner');
       }
-      
+
       const captureData = await localResponse.json();
 
-      // For this implementation, we are sending the worker ID to verify. 
+      // For this implementation, we are sending the worker ID to verify.
       // A more advanced bridge could match it locally.
       const response = await apiPost('/attendance/verify-fingerprint', {
         worker_id: user.id,
@@ -914,31 +765,6 @@ const WorkerAttendanceView = () => {
       handleError(error, 'Fingerprint Check-in failed. Is the ZKTeco bridge running?');
     } finally {
       setCheckingIn(false);
-    }
-  };
-
-  const verifyLocation = async () => {
-    try {
-      setLocationLoading(true);
-      const location = await getCurrentLocation();
-
-      const response = await apiPost(API_ENDPOINTS.ATTENDANCE_VERIFY, {
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        worker_id: user.id
-      });
-
-      const responseData = response.data || response;
-      if (responseData.verified) {
-        handleSuccess(`Location verified - you are within ${responseData.distance_meters}m of business`);
-      } else {
-        setLocationError(`Too far from business location - ${responseData.distance_meters}m away (max: ${responseData.max_allowed_distance}m)`);
-      }
-    } catch (error) {
-      handleError(error, 'Location verification failed');
-    } finally {
-      setLocationLoading(false);
     }
   };
 
@@ -985,10 +811,9 @@ const WorkerAttendanceView = () => {
               <h3 className="text-xs sm:text-sm font-medium text-blue-800">Attendance Guidelines</h3>
               <div className="mt-1.5 sm:mt-2 text-xs sm:text-sm text-blue-700">
                 <ul className="list-disc pl-4 sm:pl-5 space-y-0.5 sm:space-y-1">
-                  <li><strong>Check-In:</strong> You must be within 500 meters of the shop. Enable GPS on your device.</li>
+                  <li><strong>Check-In:</strong> Use the kiosk or fingerprint scanner to mark attendance.</li>
                   <li><strong>One Check-In Per Day:</strong> You can only check in once per day.</li>
                   <li><strong>Check-Out:</strong> Don't forget to check out when you leave!</li>
-                  <li><strong>Troubleshooting:</strong> If GPS fails, try moving near a window or going outside.</li>
                 </ul>
               </div>
             </div>
@@ -1003,8 +828,8 @@ const WorkerAttendanceView = () => {
         {todayAttendance ? (
           <div className="space-y-3 sm:space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <span className="text-sm sm:text-base text-gray-600 font-medium">Status:</span>
-              <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium w-fit ${todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
+              <span className="text-sm sm:text:base text-gray-600 font-medium">Status:</span>
+              <span className={`px-3 py-1 rounded-full text-xs sm:text:s font-medium w-fit ${todayAttendance.status === 'present' ? 'bg-green-100 text-green-800' :
                 todayAttendance.status === 'late' ? 'bg-yellow-100 text-yellow-800' :
                   todayAttendance.status === 'flagged' ? 'bg-orange-100 text-orange-800' :
                     'bg-red-100 text-red-800'
@@ -1015,92 +840,42 @@ const WorkerAttendanceView = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div className="bg-gray-50 p-3 rounded-md">
-                <span className="text-gray-600 text-xs sm:text-sm block mb-1">Check-in:</span>
-                <p className="font-semibold text-sm sm:text-base text-gray-900">{formatTime(todayAttendance.check_in_time)}</p>
-                {todayAttendance.gps_check_in_verified && (
-                  <span className="text-xs text-green-600 flex items-center mt-1">
-                    <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                    Location Verified
-                  </span>
-                )}
+                <span className="text-gray-600 text-xs sm:text:s block mb-1">Check-in:</span>
+                <p className="font-semibold text-sm sm:text:base text-gray-900">{formatTime(todayAttendance.check_in_time)}</p>
               </div>
 
               {todayAttendance.check_out_time && (
                 <div className="bg-gray-50 p-3 rounded-md">
-                  <span className="text-gray-600 text-xs sm:text-sm block mb-1">Check-out:</span>
-                  <p className="font-semibold text-sm sm:text-base text-gray-900">{formatTime(todayAttendance.check_out_time)}</p>
-                  {todayAttendance.gps_check_out_verified && (
-                    <span className="text-xs text-green-600 flex items-center mt-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full mr-1"></span>
-                      Location Verified
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="border-t border-gray-100 pt-3 space-y-2">
-              <div className="flex items-center justify-between text-xs sm:text-sm">
-                <span className="text-gray-600">Location Status:</span>
-                <span className={`px-2 py-0.5 rounded text-xs font-medium ${todayAttendance.location_verification_status === 'verified' ? 'bg-green-100 text-green-800' :
-                  todayAttendance.location_verification_status === 'rejected' ? 'bg-red-100 text-red-800' :
-                    todayAttendance.location_verification_status === 'flagged' ? 'bg-orange-100 text-orange-800' :
-                      'bg-yellow-100 text-yellow-800'
-                  }`}>
-                  {todayAttendance.location_verification_status === 'verified' ? 'Verified' :
-                    todayAttendance.location_verification_status === 'rejected' ? 'Rejected' :
-                      todayAttendance.location_verification_status === 'flagged' ? 'Flagged' :
-                        'Pending'}
-                </span>
-              </div>
-
-              {todayAttendance.distance_from_shop && (
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <span className="text-gray-600">Distance from Shop:</span>
-                  <span className="font-medium">
-                    {todayAttendance.distance_from_shop <= 1000 ?
-                      `${Math.round(todayAttendance.distance_from_shop)}m` :
-                      `${(todayAttendance.distance_from_shop / 1000).toFixed(1)}km`
-                    }
-                  </span>
+                  <span className="text-gray-600 text-xs sm:text:s block mb-1">Check-out:</span>
+                  <p className="font-semibold text-sm sm:text:base text-gray-900">{formatTime(todayAttendance.check_out_time)}</p>
                 </div>
               )}
             </div>
           </div>
         ) : (
-          <p className="text-gray-500 text-xs sm:text-sm md:text-base">No attendance record for today</p>
+          <p className="text-gray-500 text-xs sm:text:s md:text:base">No attendance record for today</p>
         )}
 
         {/* Action Buttons */}
         <div className="mt-4 sm:mt-6 space-y-2 sm:space-y-3">
           {!todayAttendance?.check_in_time && (
             <>
-              {false && (
-                <button
-                  onClick={handleCheckIn}
-                  disabled={checkingIn || locationLoading}
-                  className="w-full bg-blue-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
-                >
-                  {checkingIn ? 'Checking in...' : locationLoading ? 'Getting location...' : 'Check In via GPS'}
-                </button>
-              )}
-
               {/* Kiosk Link - check in/out via the fingerprint kiosk */}
               <a
                 href="https://vonneex2x.store/attendance-kiosk"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
+                className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 flex items-center justify-center text-sm sm:text:base font-medium shadow-sm active:scale-95 transition-transform"
               >
                 Check In via Kiosk
               </a>
-              
+
               {/* Desktop / Shop PC Biometric Option */}
               {!isMobileDevice && (
                 <button
                   onClick={handleFingerprintCheckIn}
                   disabled={checkingIn}
-                  className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform mt-2"
+                  className="w-full bg-teal-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text:base font-medium shadow-sm active:scale-95 transition-transform mt-2"
                 >
                   Scan Fingerprint (Shop PC)
                 </button>
@@ -1111,8 +886,8 @@ const WorkerAttendanceView = () => {
           {todayAttendance?.check_in_time && (
             <button
               onClick={handleCheckOut}
-              disabled={checkingOut || locationLoading || !!todayAttendance.check_out_time}
-              className={`w-full text-white px-4 py-2.5 sm:py-3 rounded-lg flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform ${todayAttendance.check_out_time
+              disabled={checkingOut || !!todayAttendance.check_out_time}
+              className={`w-full text-white px-4 py-2.5 sm:py-3 rounded-lg flex items-center justify-center text-sm sm:text:base font-medium shadow-sm active:scale-95 transition-transform ${todayAttendance.check_out_time
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-green-600 hover:bg-green-700'
                 }`}
@@ -1121,42 +896,10 @@ const WorkerAttendanceView = () => {
                 ? 'Checked Out'
                 : checkingOut
                   ? 'Checking out...'
-                  : locationLoading
-                    ? 'Getting location...'
-                    : 'Check Out'}
-            </button>
-          )}
-
-          {isMobileDevice && !manualOverride && (
-            <button
-              onClick={verifyLocation}
-              disabled={locationLoading}
-              className="w-full bg-gray-600 text-white px-4 py-2.5 sm:py-3 rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center text-sm sm:text-base font-medium shadow-sm active:scale-95 transition-transform"
-            >
-              {locationLoading ? 'Getting location...' : 'Verify Location'}
+                  : 'Check Out'}
             </button>
           )}
         </div>
-
-        {locationError && (
-          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-yellow-800 text-xs sm:text-sm">{locationError}</p>
-          </div>
-        )}
-
-        {currentLocation && (
-          <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 bg-green-50 border border-green-200 rounded-md">
-            <p className="text-green-800 text-xs sm:text-sm">
-              Current location: {currentLocation.latitude.toFixed(6)}, {currentLocation.longitude.toFixed(6)}
-              {currentLocation.accuracy && ` (±${Math.round(currentLocation.accuracy)}m accuracy)`}
-            </p>
-            {currentLocation.accuracy > 100 && (
-              <p className="text-yellow-700 text-xs mt-1">
-                GPS accuracy is poor. Try moving to a location with clearer sky view for better accuracy.
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Filters */}
@@ -1164,7 +907,7 @@ const WorkerAttendanceView = () => {
         <h2 className="text-base sm:text-lg md:text-xl font-semibold text-gray-800 mb-3 sm:mb-4">Filters</h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">Start Date</label>
+            <label className="block text-xs sm:text:s font-medium text-gray-700 mb-1.5">Start Date</label>
             <input
               type="date"
               value={filters.startDate}
@@ -1173,7 +916,7 @@ const WorkerAttendanceView = () => {
             />
           </div>
           <div>
-            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1.5">End Date</label>
+            <label className="block text-xs sm:text:s font-medium text-gray-700 mb-1.5">End Date</label>
             <input
               type="date"
               value={filters.endDate}
@@ -1222,12 +965,10 @@ const WorkerAttendanceView = () => {
                     <div>
                       <span className="text-gray-500">In: </span>
                       <span className="font-medium">{formatTime(record.check_in_time)}</span>
-                      {record.gps_check_in_verified && <span className="text-green-600 ml-1">✓</span>}
                     </div>
                     <div>
                       <span className="text-gray-500">Out: </span>
                       <span className="font-medium">{formatTime(record.check_out_time)}</span>
-                      {record.gps_check_out_verified && <span className="text-green-600 ml-1">✓</span>}
                     </div>
                   </div>
                 </div>
@@ -1254,15 +995,9 @@ const WorkerAttendanceView = () => {
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">{record.name}</td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatTime(record.check_in_time)}
-                        {record.gps_check_in_verified && (
-                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatTime(record.check_out_time) || '-'}
-                        {record.gps_check_out_verified && (
-                          <span className="ml-2 text-xs text-green-600">✓ GPS</span>
-                        )}
                       </td>
                       <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
                         <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${record.status === 'present' ? 'bg-green-100 text-green-800' :
