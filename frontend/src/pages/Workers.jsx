@@ -6,7 +6,7 @@ import { handleError, handleSuccess } from '@/utils/errorHandler';
 
 const pageSizeOptions = [10, 25, 50];
 const roles = ['staff', 'manager', 'admin'];
-const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8080';
+const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
 const permissionsCatalog = [
   { key: 'assign_bookings', label: 'Assign bookings' },
   { key: 'edit_schedule', label: 'Edit schedule' },

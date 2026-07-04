@@ -5,7 +5,7 @@ import { apiPost, apiGet, API_BASE_URL } from '../utils/api';
 // Configurable constants - can be moved to environment variables or backend config
 const CHECKOUT_TIME_HOUR = 20; // 8 PM
 const CHECKOUT_TIME_MINUTE = 30; // 30 minutes
-const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8080';
+const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
 
 const AttendanceKiosk = () => {
   const [time, setTime] = useState(new Date());

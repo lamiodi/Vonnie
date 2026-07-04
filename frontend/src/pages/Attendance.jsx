@@ -893,7 +893,7 @@ const WorkerAttendanceView = () => {
       setLocationError('');
       
       // 1. Capture the live finger from the local bridge
-      const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8080';
+      const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
       const localResponse = await fetch(`${FINGERPRINT_BRIDGE_URL}/api/capture`);
       if (!localResponse.ok) {
         throw new Error('Could not connect to local fingerprint scanner');
