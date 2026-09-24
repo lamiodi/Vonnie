@@ -304,6 +304,7 @@ export const API_ENDPOINTS = {
   POS_TRANSACTION_VERIFY: (id) => `/pos/transactions/${id}/verify-payment`,
   POS_TRANSACTION_DETAILS: (id) => `/pos/transactions/${id}`,
   POS_TRANSACTION_REFUND: (id) => `/pos/transactions/${id}/refund`,
+  POS_TRANSACTION_CANCEL: (id) => `/pos/transactions/${id}/cancel`,
   
   // Workers
   WORKERS: '/workers',
@@ -354,6 +355,7 @@ export const API_ENDPOINTS = {
   // Audit
   AUDIT_LOGS: '/audit',
   AUDIT_FRAUD_ALERTS: '/audit/fraud-alerts',
+  FRAUD_ALERTS: '/audit/fraud-alerts',
 
   // Queue
   QUEUE_TODAY: '/queue/today',

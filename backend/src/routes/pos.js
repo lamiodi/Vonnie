@@ -368,20 +368,41 @@ router.post('/transaction', authenticate, authorize(['staff', 'manager', 'admin'
       }
     }
 
+    // Build receipt items list (supports both items and products formats)
+    let receiptItems = [];
+    if (items && items.length > 0) {
+      receiptItems = items.map(i => ({
+        name: i.name || i.product_name || i.service_name || (i.type === 'service' ? 'Salon Service' : 'Product'),
+        amount: Number(i.price || i.unit_price || 0) * Number(i.quantity || 1)
+      }));
+    } else if (products && products.length > 0) {
+      receiptItems = products.map(p => ({
+        name: p.name || 'Product',
+        amount: Number(p.price || 0) * Number(p.quantity || 1)
+      }));
+    }
+
+    const receiptEmail = booking?.customer_email || transaction.customer_email;
+    const recipientName = booking?.customer_name || transaction.customer_name || 'Valued Customer';
+
     // Send receipt email using unified POS transaction function
-    if (booking) {
-      await sendPOSTransactionEmail(
-        booking.customer_email,
-        {
-          customerName: booking.customer_name,
-          transactionId: transaction.id,
-          items: products.map(p => ({ name: p.name, amount: p.price * p.quantity })),
-          totalAmount: formattedTotalAmount,
-          paymentMethod: 'POS',
-          bookingNumber: booking.booking_number,
-          includeReceipt: true
-        }
-      );
+    if (receiptEmail) {
+      try {
+        await sendPOSTransactionEmail(
+          receiptEmail,
+          {
+            customerName: recipientName,
+            transactionId: transaction.id,
+            items: receiptItems,
+            totalAmount: formattedTotalAmount,
+            paymentMethod: payment_method || 'POS',
+            bookingNumber: booking?.booking_number,
+            includeReceipt: true
+          }
+        );
+      } catch (emailErr) {
+        console.warn('Could not send POS receipt email:', emailErr.message);
+      }
     }
 
     res.status(201).json(successResponse({
@@ -841,6 +862,45 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     }
 
     await client.query('COMMIT');
+
+    // Send receipt email if payment is completed and customer email is available
+    if (effectivePaymentStatus === 'completed') {
+      const recipientEmail = booking?.customer_email || customer_info?.email || transaction.customer_email;
+      const recipientName = booking?.customer_name || customer_info?.name || transaction.customer_name || 'Valued Customer';
+
+      let receiptItems = [];
+      if (items && items.length > 0) {
+        receiptItems = items.map(i => ({
+          name: i.name || i.product_name || i.service_name || (i.type === 'service' ? 'Salon Service' : 'Product'),
+          amount: Number(i.price || i.unit_price || 0) * Number(i.quantity || 1)
+        }));
+      } else if (products && products.length > 0) {
+        receiptItems = products.map(p => ({
+          name: p.name || 'Product',
+          amount: Number(p.price || 0) * Number(p.quantity || 1)
+        }));
+      }
+
+      if (recipientEmail) {
+        try {
+          await sendPOSTransactionEmail(
+            recipientEmail,
+            {
+              customerName: recipientName,
+              transactionId: transaction.id,
+              items: receiptItems,
+              totalAmount: computed_total,
+              paymentMethod: payment_method || 'POS',
+              bookingNumber: booking?.booking_number,
+              includeReceipt: true
+            }
+          );
+        } catch (emailErr) {
+          console.warn('Could not send POS checkout receipt email:', emailErr.message);
+        }
+      }
+    }
+
     res.status(201).json(successResponse({
       ...transaction,
       booking_updated: !!booking,
@@ -1228,7 +1288,7 @@ router.post('/transactions/:id/refund', authenticate, authorize(['manager', 'adm
     const originalTxn = txnResult.rows[0];
 
     // Check if already refunded
-    if (originalTxn.status === 'refunded') {
+    if (originalTxn.status === 'refunded' || originalTxn.payment_status === 'refunded') {
       await client.query('ROLLBACK');
       return res.status(400).json({ error: 'Transaction has already been refunded' });
     }
@@ -1275,6 +1335,7 @@ router.post('/transactions/:id/refund', authenticate, authorize(['manager', 'adm
     await client.query(
       `UPDATE pos_transactions
        SET status = 'refunded',
+           payment_status = 'refunded',
            updated_at = CURRENT_TIMESTAMP
        WHERE id = $1`,
       [id]
@@ -1345,6 +1406,83 @@ router.post('/transactions/:id/refund', authenticate, authorize(['manager', 'adm
     await client.query('ROLLBACK');
     console.error('Refund error:', error);
     res.status(400).json(errorResponse(error.message, 'REFUND_ERROR', 400));
+  } finally {
+    client.release();
+  }
+});
+
+// Cancel / Void a pending POS transaction and restore stock
+router.post('/transactions/:id/cancel', authenticate, authorize(['staff', 'manager', 'admin']), async (req, res) => {
+  const client = await getClient();
+  try {
+    await client.query('BEGIN');
+    const { id } = req.params;
+    const { reason = 'Cancelled by cashier' } = req.body;
+
+    const txnResult = await client.query('SELECT * FROM pos_transactions WHERE id = $1 FOR UPDATE', [id]);
+    if (txnResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json(errorResponse('Transaction not found', 'NOT_FOUND', 404));
+    }
+
+    const txn = txnResult.rows[0];
+    if (txn.status === 'cancelled') {
+      await client.query('ROLLBACK');
+      return res.status(400).json(errorResponse('Transaction is already cancelled', 'ALREADY_CANCELLED', 400));
+    }
+    if (txn.payment_status === 'completed') {
+      await client.query('ROLLBACK');
+      return res.status(400).json(errorResponse('Completed transactions must be refunded, not cancelled', 'CANNOT_CANCEL_COMPLETED', 400));
+    }
+
+    // Restore stock for any items
+    const itemsResult = await client.query('SELECT * FROM pos_transaction_items WHERE transaction_id = $1', [id]);
+    for (const item of itemsResult.rows) {
+      if (item.product_id) {
+        if (item.size) {
+          const prodResult = await client.query('SELECT stock_by_size FROM products WHERE id = $1 FOR UPDATE', [item.product_id]);
+          if (prodResult.rows.length > 0) {
+            const stockBySize = prodResult.rows[0].stock_by_size || {};
+            stockBySize[item.size] = (Number(stockBySize[item.size]) || 0) + item.quantity;
+            await client.query(
+              'UPDATE products SET stock_by_size = $1, stock_level = stock_level + $2 WHERE id = $3',
+              [stockBySize, item.quantity, item.product_id]
+            );
+          }
+        } else {
+          await client.query(
+            'UPDATE products SET stock_level = stock_level + $1 WHERE id = $2',
+            [item.quantity, item.product_id]
+          );
+        }
+      }
+    }
+
+    // Mark cancelled
+    await client.query(
+      `UPDATE pos_transactions 
+       SET status = 'cancelled', 
+           payment_status = 'failed', 
+           notes = COALESCE(notes, '') || $1, 
+           updated_at = NOW() 
+       WHERE id = $2`,
+      [` [Cancelled: ${reason}]`, id]
+    );
+
+    // If attached to a booking that is still pending payment, reset booking
+    if (txn.booking_id) {
+      await client.query(
+        `UPDATE bookings SET payment_status = 'pending', updated_at = NOW() WHERE id = $1 AND payment_status != 'completed'`,
+        [txn.booking_id]
+      );
+    }
+
+    await client.query('COMMIT');
+    res.json(successResponse({ transaction_id: id, status: 'cancelled', stock_restored: true }, 'Transaction cancelled and inventory restored'));
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('Cancel transaction error:', err);
+    res.status(500).json(errorResponse(err.message, 'CANCEL_ERROR', 500));
   } finally {
     client.release();
   }

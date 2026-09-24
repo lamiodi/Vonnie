@@ -79,6 +79,7 @@ const WalkInBooking = () => {
   });
 
   // UI State
+  const [timingMode, setTimingMode] = useState('now'); // 'now' or 'slot'
   const [loading, setLoading] = useState(false);
   const [showOptionalFields, setShowOptionalFields] = useState(false);
   const [availableSlots, setAvailableSlots] = useState([]);
@@ -87,8 +88,9 @@ const WalkInBooking = () => {
   const [validationErrors, setValidationErrors] = useState({});
   const slotsControllerRef = useRef(null);
 
-  // Fetch available slots when date changes
+  // Fetch available slots when date changes (only if in 'slot' mode)
   useEffect(() => {
+    if (timingMode !== 'slot') return;
     const fetchAvailableSlots = async () => {
       if (slotsControllerRef.current) {
         try { slotsControllerRef.current.abort(); } catch (e) { /* ignore */ }
@@ -169,14 +171,19 @@ const WalkInBooking = () => {
 
   const validateForm = () => {
     const errors = {};
+    const sanitizedPhone = formData.customer_phone.replace(/[\s\-\(\)]/g, '');
+
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
     if (!formData.customer_phone.trim()) {
       errors.customer_phone = 'Phone number is required';
-    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(formData.customer_phone.trim())) {
-      errors.customer_phone = 'Please enter a valid Nigerian phone number';
+    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(sanitizedPhone)) {
+      errors.customer_phone = 'Please enter a valid Nigerian phone number (e.g. 08012345678 or +2348012345678)';
     }
-    if (!formData.booking_date) errors.booking_date = 'Date is required';
-    if (!formData.booking_time) errors.booking_time = 'Time is required';
+
+    if (timingMode === 'slot') {
+      if (!formData.booking_date) errors.booking_date = 'Date is required';
+      if (!formData.booking_time) errors.booking_time = 'Time is required';
+    }
 
     // Email is now optional, validate only if provided
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -199,14 +206,24 @@ const WalkInBooking = () => {
     setLoading(true);
 
     try {
-      // Prepare booking payload
-      const dateStr = formData.booking_date.toLocaleDateString('en-CA');
-      // Create date object in Lagos time (UTC+1)
-      const scheduledTime = `${dateStr}T${formData.booking_time}:00+01:00`;
+      const sanitizedPhone = formData.customer_phone.replace(/[\s\-\(\)]/g, '');
+      let scheduledTime;
+
+      if (timingMode === 'now') {
+        const now = new Date();
+        const lagosDate = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' }));
+        const hours = String(lagosDate.getHours()).padStart(2, '0');
+        const minutes = String(lagosDate.getMinutes()).padStart(2, '0');
+        const dateStr = `${lagosDate.getFullYear()}-${String(lagosDate.getMonth() + 1).padStart(2, '0')}-${String(lagosDate.getDate()).padStart(2, '0')}`;
+        scheduledTime = `${dateStr}T${hours}:${minutes}:00+01:00`;
+      } else {
+        const dateStr = formData.booking_date.toLocaleDateString('en-CA');
+        scheduledTime = `${dateStr}T${formData.booking_time}:00+01:00`;
+      }
 
       const payload = {
         customer_name: formData.customer_name,
-        customer_phone: formData.customer_phone,
+        customer_phone: sanitizedPhone,
         customer_email: formData.customer_email || undefined,
         instagram_handle: formData.instagram_handle || undefined,
         scheduled_time: scheduledTime,
@@ -395,26 +412,67 @@ const WalkInBooking = () => {
 
               {/* Date & Time Selection */}
               <section>
-                <h3 className="text-2xl font-bold mb-6 flex items-center text-gray-800" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
+                <h3 className="text-2xl font-bold mb-4 flex items-center text-gray-800" style={{ fontFamily: '"UnifrakturCook", cursive' }}>
                   <span className="w-8 h-8 rounded-full bg-black text-white text-sm flex items-center justify-center mr-3 font-sans">2</span>
-                  Date & Time
+                  Service Timing
                 </h3>
 
-                <div className="mb-6 font-sans">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Date *</label>
-                  <div className="border border-gray-200 rounded-xl overflow-hidden p-4 bg-gray-50">
-                    <Calendar
-                      onChange={handleDateChange}
-                      value={formData.booking_date}
-                      minDate={new Date()}
-                      tileClassName={tileClassName}
-                      className="w-full border-none bg-transparent"
-                    />
-                  </div>
+                {/* Timing Preference Selector */}
+                <div className="grid grid-cols-2 gap-3 mb-6 font-sans">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTimingMode('now');
+                      setValidationErrors(prev => ({ ...prev, booking_time: null, booking_date: null }));
+                    }}
+                    className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                      timingMode === 'now'
+                        ? 'border-black bg-gray-900 text-white shadow-md'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <span className="text-xl mb-1">⚡ Service Now</span>
+                    <span className="text-xs opacity-80">Immediate queue / In-salon customer</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setTimingMode('slot')}
+                    className={`p-4 rounded-xl border-2 text-left transition-all flex flex-col justify-between ${
+                      timingMode === 'slot'
+                        ? 'border-black bg-gray-900 text-white shadow-md'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <span className="text-xl mb-1">📅 Schedule Slot</span>
+                    <span className="text-xs opacity-80">Book for later today or future date</span>
+                  </button>
                 </div>
 
-                <div className="font-sans">
-                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Time *</label>
+                {timingMode === 'now' ? (
+                  <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 font-sans flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse flex-shrink-0"></div>
+                    <p className="text-sm">
+                      Customer is in the salon right now. They will be immediately checked into today's queue upon submission.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-6 font-sans">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Date *</label>
+                      <div className="border border-gray-200 rounded-xl overflow-hidden p-4 bg-gray-50">
+                        <Calendar
+                          onChange={handleDateChange}
+                          value={formData.booking_date}
+                          minDate={new Date()}
+                          tileClassName={tileClassName}
+                          className="w-full border-none bg-transparent"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="font-sans">
+                      <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Select Time *</label>
 
                   {slotsLoading ? (
                     <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg">
@@ -465,7 +523,9 @@ const WalkInBooking = () => {
                   )}
                   {validationErrors.booking_time && <p className="text-red-500 text-xs mt-1">{validationErrors.booking_time}</p>}
                 </div>
-              </section>
+              </>
+            )}
+          </section>
 
               {/* Notes */}
               <section>

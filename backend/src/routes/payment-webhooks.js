@@ -259,6 +259,57 @@ async function handleFailedCharge(data, io) {
   const { reference, metadata } = data;
   
   try {
+    // Check if there is an associated POS transaction
+    const posTxnResult = await query(
+      `SELECT id, status, payment_status 
+       FROM pos_transactions 
+       WHERE payment_reference = $1 AND payment_status = 'pending'`,
+      [reference]
+    );
+
+    if (posTxnResult.rows.length > 0) {
+      for (const txn of posTxnResult.rows) {
+        // Mark transaction as failed/cancelled
+        await query(
+          `UPDATE pos_transactions 
+           SET payment_status = 'failed', status = 'cancelled', updated_at = NOW() 
+           WHERE id = $1`,
+          [txn.id]
+        );
+
+        // Restore deducted product stock
+        const itemsResult = await query(
+          `SELECT product_id, quantity, size FROM pos_transaction_items WHERE transaction_id = $1`,
+          [txn.id]
+        );
+
+        for (const item of itemsResult.rows) {
+          if (item.product_id) {
+            if (item.size) {
+              const prodResult = await query(
+                'SELECT stock_by_size FROM products WHERE id = $1 FOR UPDATE',
+                [item.product_id]
+              );
+              if (prodResult.rows.length > 0) {
+                const stockBySize = prodResult.rows[0].stock_by_size || {};
+                stockBySize[item.size] = (Number(stockBySize[item.size]) || 0) + item.quantity;
+                await query(
+                  'UPDATE products SET stock_by_size = $1, stock_level = stock_level + $2 WHERE id = $3',
+                  [stockBySize, item.quantity, item.product_id]
+                );
+              }
+            } else {
+              await query(
+                'UPDATE products SET stock_level = stock_level + $1 WHERE id = $2',
+                [item.quantity, item.product_id]
+              );
+            }
+          }
+        }
+        console.log(`✅ Restored stock and cancelled POS transaction ${txn.id} due to failed charge.`);
+      }
+    }
+
     // Check if booking_id exists in metadata, if so use it to find the booking
     if (metadata && metadata.booking_id) {
         await query(
@@ -281,7 +332,7 @@ async function handleFailedCharge(data, io) {
           });
         }
     } else {
-        // Fallback to updating by payment_reference if booking_id is missing (less reliable if reference wasn't saved yet)
+        // Fallback to updating by payment_reference if booking_id is missing
         await query(
         `UPDATE bookings 
         SET payment_status = 'failed',

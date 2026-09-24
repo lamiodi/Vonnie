@@ -173,12 +173,13 @@ const PublicBooking = () => {
 
   const validateForm = () => {
     const errors = {};
+    const sanitizedPhone = formData.customer_phone.replace(/[\s\-\(\)]/g, '');
 
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
     if (!formData.customer_phone.trim()) {
       errors.customer_phone = 'Phone number is required';
-    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(formData.customer_phone.trim())) {
-      errors.customer_phone = 'Please enter a valid Nigerian phone number';
+    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(sanitizedPhone)) {
+      errors.customer_phone = 'Please enter a valid Nigerian phone number (e.g. 08012345678 or +2348012345678)';
     }
 
     // Email is now optional, so we don't return an error if it's empty
@@ -217,11 +218,12 @@ const PublicBooking = () => {
       // Create date object in Lagos time (UTC+1)
       // We append +01:00 to ensure the backend interprets it as Lagos time
       const scheduledTime = `${dateStr}T${formData.booking_time}:00+01:00`;
+      const sanitizedPhone = formData.customer_phone.replace(/[\s\-\(\)]/g, '');
 
       const bookingData = {
         customer_name: formData.customer_name,
         customer_email: formData.customer_email,
-        customer_phone: formData.customer_phone,
+        customer_phone: sanitizedPhone,
         instagram_handle: formData.instagram_handle,
         scheduled_time: scheduledTime,
         notes: formData.notes,

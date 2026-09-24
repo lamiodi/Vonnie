@@ -620,6 +620,16 @@ const BookingsTable = ({
                       )}
                       
                       {/* Status Actions */}
+                      {booking.status === 'pending_confirmation' && (
+                        <button
+                          onClick={() => onStatusUpdate(booking.id, 'scheduled')}
+                          className="inline-flex items-center px-2 py-1 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded"
+                          title="Confirm and schedule this booking"
+                        >
+                          ✓ Confirm
+                        </button>
+                      )}
+
                       {booking.status === 'scheduled' && (
                         <button
                           onClick={() => onStatusUpdate(booking.id, 'in-progress')}

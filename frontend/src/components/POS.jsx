@@ -1848,7 +1848,7 @@ const POS = () => {
                   Close
                 </button>
               </div>
-              {selectedTransaction.status !== 'refunded' && selectedTransaction.payment_status === 'completed' && (
+              {selectedTransaction.status !== 'refunded' && selectedTransaction.payment_status !== 'refunded' && selectedTransaction.payment_status === 'completed' && (
                 <button
                   onClick={() => openRefundModal(selectedTransaction)}
                   className="w-full px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition font-medium flex items-center justify-center gap-2"
@@ -1857,6 +1857,29 @@ const POS = () => {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
                   </svg>
                   Process Refund
+                </button>
+              )}
+              {selectedTransaction.status !== 'cancelled' && selectedTransaction.payment_status === 'pending' && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm(`Are you sure you want to void / cancel transaction ${selectedTransaction.transaction_number}? Any deducted inventory stock will be immediately restored.`)) {
+                      try {
+                        await apiPost(API_ENDPOINTS.POS_TRANSACTION_CANCEL(selectedTransaction.id), { reason: 'Voided by cashier' });
+                        toast.success('Transaction cancelled and inventory stock restored');
+                        setShowReceiptModal(false);
+                        setSelectedTransaction(null);
+                        if (typeof fetchTransactions === 'function') fetchTransactions();
+                      } catch (err) {
+                        toast.error('Failed to cancel transaction: ' + (err.response?.data?.error || err.message));
+                      }
+                    }
+                  }}
+                  className="w-full px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition font-medium flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  Void / Cancel Pending Transaction
                 </button>
               )}
             </div>

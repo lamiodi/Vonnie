@@ -237,7 +237,7 @@ CREATE TABLE public.pos_transactions (
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   payment_status character varying DEFAULT 'pending'::character varying CHECK (payment_status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'failed'::text, 'refunded'::text])),
-  status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'cancelled'::text])),
+  status character varying DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::text, 'completed'::text, 'cancelled'::text, 'refunded'::text])),
   booking_id uuid,
   payment_reference character varying,
   CONSTRAINT pos_transactions_pkey PRIMARY KEY (id),

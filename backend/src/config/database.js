@@ -59,8 +59,7 @@ async function getClient() {
 
 // Handle pool errors
 pool.on('error', (err) => {
-  console.error('❌ Unexpected error on idle client', err);
-  process.exit(-1);
+  console.error('❌ Unexpected error on idle client (pool will automatically discard and reconnect):', err.message || err);
 });
 
 export { query, getClient, testConnection, pool };

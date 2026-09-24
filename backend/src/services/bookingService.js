@@ -22,8 +22,11 @@ export const createBooking = async (bookingData, skipNotification = false) => {
     payment_status = 'pending'
   } = bookingData;
 
+  // Sanitize customer phone number (remove spaces, hyphens, parentheses)
+  const sanitizedCustomerPhone = customer_phone ? customer_phone.trim().replace(/[\s\-\(\)]/g, '') : customer_phone;
+
   // Validate required fields (email is now optional)
-  if (!customer_name || !customer_phone || !scheduled_time) {
+  if (!customer_name || !sanitizedCustomerPhone || !scheduled_time) {
     throw {
       success: false,
       message: 'Missing required fields: customer_name, customer_phone, and scheduled_time are required',
@@ -39,14 +42,15 @@ export const createBooking = async (bookingData, skipNotification = false) => {
       throw new Error('Invalid date format');
     }
 
-    // Check if date is in the past (allow 10 min buffer for clock skew)
+    // Check if date is in the past (allow 15 min buffer for pre-booked, 60 min for walk-ins)
     const now = new Date();
-    const bufferTime = new Date(now.getTime() - 10 * 60000); 
+    const bufferMinutes = customer_type === 'walk_in' ? 60 : 15;
+    const bufferTime = new Date(now.getTime() - bufferMinutes * 60000); 
     
     if (dateObj < bufferTime) {
       throw {
         success: false,
-        message: 'Cannot create a booking in the past. Please select a future time.',
+        message: 'Cannot create a booking in the past. Please select a current or future time.',
         status: 400
       };
     }
@@ -151,19 +155,21 @@ export const createBooking = async (bookingData, skipNotification = false) => {
       };
     }
 
-    // Check for scheduling conflicts
+    // Check for scheduling conflicts with range overlap
+    const newDuration = totalDuration || 60;
     const conflictResult = await query(
       `SELECT id FROM bookings 
-       WHERE worker_id = $1 
-       AND scheduled_time = $2 
-       AND status IN ('scheduled', 'in-progress')`,
-      [worker_id, formattedScheduledTime]
+       WHERE (worker_id = $1 OR id IN (SELECT booking_id FROM booking_workers WHERE worker_id = $1 AND status = 'active'))
+       AND status IN ('scheduled', 'in-progress')
+       AND scheduled_time < ($2::timestamptz + ($3 || ' minutes')::interval)
+       AND (scheduled_time + (COALESCE(duration, 60) || ' minutes')::interval) > $2::timestamptz`,
+      [worker_id, formattedScheduledTime, newDuration]
     );
 
     if (conflictResult.rows.length > 0) {
       throw {
         success: false,
-        message: 'Worker is not available at the selected time',
+        message: 'Worker is not available during this time slot (conflict with existing booking)',
         status: 409
       };
     }
@@ -187,7 +193,7 @@ export const createBooking = async (bookingData, skipNotification = false) => {
         bookingNumber,
         customer_name,
         customer_email,
-        customer_phone,
+        sanitizedCustomerPhone,
         customer_type || 'pre_booked',
         formattedScheduledTime,
         worker_id,
