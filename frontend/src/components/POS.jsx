@@ -633,7 +633,9 @@ const POS = () => {
     if (!couponCode.trim()) return;
     setApplyingCoupon(true);
     try {
-      const response = await apiPost(API_ENDPOINTS.COUPON_VALIDATE(couponCode), {
+      // Backend expects POST /coupons/validate with the code in the body
+      const response = await apiPost('/coupons/validate', {
+        code: couponCode,
         order_amount: getSubtotal()
       });
       setAppliedCoupon(response.coupon || response);
@@ -858,7 +860,7 @@ const POS = () => {
   }, [bookingData]);
 
   useEffect(() => {
-    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5010/api';
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5057/api';
     const SOCKET_URL = API_URL.replace(/\/api$/, '');
 
     const socket = io(SOCKET_URL);

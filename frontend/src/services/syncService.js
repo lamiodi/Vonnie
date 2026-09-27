@@ -92,7 +92,9 @@ async function syncExpenses(expenses) {
   for (const batch of batches) {
     try {
       const response = await apiPost('/api/sync/batch-expenses', { expenses: batch });
-      if (response && response.success) {
+      // apiPost resolves to the inner payload of successResponse (no `success`
+      // key) and only resolves on HTTP success, so a resolved response is enough
+      if (response) {
         for (const expense of batch) {
           await markExpenseSynced(expense.localId);
         }
@@ -119,7 +121,9 @@ async function syncInventoryAdjustments(adjustments) {
   for (const batch of batches) {
     try {
       const response = await apiPost('/api/sync/batch-inventory', { adjustments: batch });
-      if (response && response.success) {
+      // apiPost resolves to the inner payload of successResponse (no `success`
+      // key) and only resolves on HTTP success, so a resolved response is enough
+      if (response) {
         for (const adj of batch) {
           await markInventoryAdjustmentSynced(adj.localId);
         }
@@ -146,7 +150,9 @@ async function syncBookings(bookings) {
   for (const batch of batches) {
     try {
       const response = await apiPost('/api/sync/batch-bookings', { bookings: batch });
-      if (response && response.success) {
+      // apiPost resolves to the inner payload of successResponse (no `success`
+      // key) and only resolves on HTTP success, so a resolved response is enough
+      if (response) {
         for (const booking of batch) {
           await markBookingSynced(booking.localId);
         }
@@ -174,9 +180,11 @@ async function syncTransactions(transactions) {
   for (const batch of batches) {
     try {
       const response = await apiPost('/api/sync/batch-transactions', { transactions: batch });
-      if (response && response.success) {
+      // apiPost resolves to the inner payload of successResponse (no `success`
+      // key) and only resolves on HTTP success, so a resolved response is enough
+      if (response) {
         for (let i = 0; i < batch.length; i++) {
-          const serverTxnNumber = response.data?.[i]?.transactionNumber || batch[i].transactionNumber;
+          const serverTxnNumber = response.results?.[i]?.serverTransactionNumber || batch[i].transactionNumber;
           await markTransactionSynced(batch[i].localId, serverTxnNumber);
         }
         result.success += batch.length;

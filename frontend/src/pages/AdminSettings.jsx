@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { getAdminSettings, updateAdminSettings } from '../utils/api';
+import { getAdminSettings, updateAdminSettings, API_BASE_URL } from '../utils/api';
 import toast from 'react-hot-toast';
 
 const AdminSettings = () => {
@@ -37,7 +37,7 @@ const AdminSettings = () => {
 
   const fetchSignupStatus = async () => {
     try {
-      const response = await fetch('/api/public/signup-status');
+      const response = await fetch(`${API_BASE_URL}/public/signup-status`);
       if (response.ok) {
         const status = await response.json();
         setSignupStatus(status);
@@ -70,7 +70,7 @@ const AdminSettings = () => {
   const updateSignupStatus = async () => {
     try {
       const token = localStorage.getItem('token');
-      await fetch('/api/admin/signup-status', {
+      const response = await fetch(`${API_BASE_URL}/admin/signup-status`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -83,6 +83,7 @@ const AdminSettings = () => {
             : 'Signups are currently disabled. Please contact your administrator.'
         })
       });
+      if (!response.ok) throw new Error('Failed to update signup status');
     } catch (error) {
       console.error('Error updating signup status:', error);
       throw error;

@@ -785,9 +785,10 @@ const WorkerAttendanceView = () => {
   };
 
   const getTodayAttendance = () => {
-    const today = new Date().toISOString().split('T')[0];
+    // Attendance days are Lagos calendar days; the UTC date shifts near midnight
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
     return attendanceRecords.find(record => {
-      const recordDate = new Date(record.date).toISOString().split('T')[0];
+      const recordDate = typeof record.date === 'string' ? record.date.slice(0, 10) : new Date(record.date).toLocaleDateString('en-CA', { timeZone: 'Africa/Lagos' });
       return recordDate === today && record.worker_id === user.id;
     });
   };

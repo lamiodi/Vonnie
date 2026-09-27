@@ -125,7 +125,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       const uniqueCategories = ['All', ...new Set(servicesData.map(s => s.category || 'Other'))];
       setCategories(uniqueCategories);
     } catch (error) {
-      handleError('Failed to load services', error);
+      handleError(error, 'Failed to load services');
       setServices([]); // Ensure services is always an array on error
     } finally {
       setServicesLoading(false);
@@ -140,7 +140,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
         (data && Array.isArray(data.workers) ? data.workers : []);
       setWorkers(workersData);
     } catch (error) {
-      handleError('Failed to load workers', error);
+      handleError(error, 'Failed to load workers');
       setWorkers([]); // Ensure workers is always an array on error
     } finally {
       setWorkersLoading(false);
@@ -440,7 +440,7 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       }
     } catch (error) {
       const message = error.response?.data?.error || 'Error saving booking. Please try again.';
-      handleError(message, error);
+      handleError(error, message);
     } finally {
       setLoading(false);
     }

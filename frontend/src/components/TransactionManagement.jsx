@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiGet, apiPost, API_ENDPOINTS } from '../utils/api';
 import { formatCurrency, formatDateTime } from '../utils/formatters';
 import { handleError, handleSuccess } from '../utils/errorHandler';
+import toast from 'react-hot-toast';
 
 const TransactionManagement = () => {
   const [transactions, setTransactions] = useState([]);
@@ -55,7 +56,7 @@ const TransactionManagement = () => {
       setShowDetailsModal(true);
     } catch (error) {
       console.error('Error fetching transaction details:', error);
-      handleError(error.message || 'Failed to load transaction details');
+      handleError(error, 'Failed to load transaction details');
     } finally {
       setDetailsLoading(false);
     }
@@ -107,7 +108,7 @@ const TransactionManagement = () => {
 
   const handleVerifyPayment = async () => {
     if (!verificationData.payment_reference.trim()) {
-      handleError('Please enter payment reference');
+      toast.error('Please enter a payment reference');
       return;
     }
 
@@ -129,7 +130,7 @@ const TransactionManagement = () => {
       }
     } catch (error) {
       console.error('Error verifying payment:', error);
-      handleError(error.response?.data?.error || 'Failed to verify payment');
+      handleError(error, 'Failed to verify payment');
     } finally {
       setVerificationLoading(false);
     }

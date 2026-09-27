@@ -1,4 +1,5 @@
 import React from 'react';
+import { API_BASE_URL } from '../utils/api';
 import { usePaystackPayment } from 'react-paystack';
 
 const PaystackPayment = ({ 
@@ -63,7 +64,7 @@ const PaystackPayment = ({
       try {
         console.log(`Payment verification attempt ${attempt + 1} for reference: ${reference}`);
         
-        const response = await fetch('/api/public/payment/verify', {
+        const response = await fetch(`${API_BASE_URL}/public/payment/verify`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

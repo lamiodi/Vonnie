@@ -55,7 +55,7 @@ const Reports = () => {
       const response = await apiGet(endpoint, params);
       setReportData(response.data || response);
     } catch (error) {
-      handleError('Failed to load report data', error);
+      handleError(error, 'Failed to load report data');
     } finally {
       setLoading(false);
     }
@@ -851,7 +851,7 @@ const Reports = () => {
     try {
       // Use direct fetch/axios to handle blob response properly since apiGet wrapper might expect JSON
       const token = localStorage.getItem('token'); // Assuming token is stored in localStorage
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5010/api'}/admin/export-customers`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5057/api'}/admin/export-customers`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -869,7 +869,7 @@ const Reports = () => {
       window.URL.revokeObjectURL(url);
       handleSuccess('Customer list exported successfully');
     } catch (error) {
-      handleError('Failed to export customer list', error);
+      handleError(error, 'Failed to export customer list');
     }
   };
 

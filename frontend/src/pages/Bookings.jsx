@@ -775,7 +775,7 @@ const WorkerAssignmentModal = ({ booking, onClose, onSuccess }) => {
       // Auto-start if scheduled
       if (booking.status === 'scheduled') {
         try {
-          await apiPatch(API_ENDPOINTS.BOOKING_STATUS(booking.id), { status: 'in-progress' });
+          await apiPut(`/bookings/${booking.id}`, { status: 'in-progress' });
           toast.success('Worker assigned and service started');
         } catch {
           toast.success('Worker assigned successfully');

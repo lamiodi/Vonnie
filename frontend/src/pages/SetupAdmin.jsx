@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { API_BASE_URL } from '../utils/api';
 import { useNavigate } from 'react-router-dom';
 import { handleError } from '../utils/errorHandler';
 import axios from 'axios';
@@ -60,7 +61,7 @@ const SetupAdmin = () => {
     try {
       // Use the standard register endpoint
       // The backend logic has been updated to allow 'admin' role creation ONLY if no admin exists
-      await axios.post('/api/auth/register', formData);
+      await axios.post(`${API_BASE_URL}/auth/register`, formData);
       
       setSuccess('Admin account created successfully! Redirecting to login...');
       setTimeout(() => {

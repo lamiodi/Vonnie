@@ -318,7 +318,7 @@ const Inventory = () => {
           stock_level: product.stock_level,
           stock_by_size: hasSizeStock ? product.stock_by_size : { S: 0, M: 0, L: 0, XL: 0 }
         });
-        setEditingProduct(product);
+        setEditingItem(product);
         setShowAddForm(true);
       }
     } catch (error) {

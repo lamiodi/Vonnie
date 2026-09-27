@@ -3,13 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { API_BASE_URL } from '../utils/api';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
 
 const endpoints = {
-  availableSlots: '/api/public/bookings/available-slots',
-  createBooking: '/api/public/bookings'
+  availableSlots: `${API_BASE_URL}/public/bookings/available-slots`,
+  createBooking: `${API_BASE_URL}/public/bookings`
 };
 
 // Helper function to safely extract time and label from any slot format

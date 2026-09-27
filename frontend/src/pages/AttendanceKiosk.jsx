@@ -1,11 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiPost, apiGet, API_BASE_URL } from '../utils/api';
+import api from '../utils/api';
 
 // Configurable constants - can be moved to environment variables or backend config
 const CHECKOUT_TIME_HOUR = 20; // 8 PM
 const CHECKOUT_TIME_MINUTE = 30; // 30 minutes
 const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
+// Shared kiosk secret — must match KIOSK_TOKEN on the backend once that is set
+const KIOSK_TOKEN = import.meta.env.VITE_KIOSK_TOKEN || '';
+if (KIOSK_TOKEN) {
+  api.defaults.headers.common['x-kiosk-token'] = KIOSK_TOKEN;
+}
 
 const AttendanceKiosk = () => {
   const [time, setTime] = useState(new Date());
@@ -190,10 +196,11 @@ const AttendanceKiosk = () => {
       const response = await fetch(`${API_BASE_URL}/attendance/public-kiosk-scan`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...(KIOSK_TOKEN ? { 'x-kiosk-token': KIOSK_TOKEN } : {})
         },
         body: JSON.stringify({
-          worker_id: identifyData.worker_id 
+          worker_id: identifyData.worker_id
         })
       });
       

@@ -349,7 +349,7 @@ export default function Workers() {
         apiGet('/reports/worker-performance', { worker_id: w.id }),
         apiGet(API_ENDPOINTS.BOOKINGS, { worker_id: w.id }),
       ]);
-      const perfRows = perf?.worker_performance || [];
+      const perfRows = Array.isArray(perf) ? perf : (perf?.worker_performance || []);
       const totalServices = perfRows.reduce((s, r) => s + parseInt(r.total_services_performed || 0), 0);
       const completed = perfRows.reduce((s, r) => s + parseInt(r.completed_services || 0), 0);
       const revenue = perfRows.reduce((s, r) => s + parseFloat(r.total_service_revenue || 0), 0);
@@ -374,10 +374,13 @@ export default function Workers() {
     e.preventDefault();
     try {
       setSubmitting(true);
-      await apiPost(API_ENDPOINTS.WORKERS, { name: form.name, email: form.email, phone: form.phone, role: form.role });
-      try {
-        await apiPut(`/workers/${user?.id}/schedule`, { schedule: form.schedule });
-      } catch {}
+      const created = await apiPost(API_ENDPOINTS.WORKERS, { name: form.name, email: form.email, phone: form.phone, role: form.role });
+      const createdId = created?.data?.id || created?.id || created?.worker?.id;
+      if (createdId) {
+        try {
+          await apiPut(`/workers/${createdId}/schedule`, { schedule: form.schedule });
+        } catch {}
+      }
       handleSuccess('Worker created');
       setChangeLog((l) => [...l, { action: `Created ${form.name}`, ts: Date.now() }]);
       setShowCreate(false);
@@ -395,8 +398,10 @@ export default function Workers() {
     let currentSchedule = defaultSchedule;
     try {
       const scheduleRes = await apiGet(`/workers/${w.id}/schedule`);
-      if (scheduleRes && scheduleRes.schedule && scheduleRes.schedule.length > 0) {
-        currentSchedule = scheduleRes.schedule;
+      // The endpoint returns a bare array of schedule rows
+      const scheduleRows = Array.isArray(scheduleRes) ? scheduleRes : scheduleRes?.schedule;
+      if (scheduleRows && scheduleRows.length > 0) {
+        currentSchedule = scheduleRows;
       }
     } catch (e) {
       console.warn('Failed to fetch worker schedule, using default:', e);

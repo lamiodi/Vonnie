@@ -5,7 +5,6 @@ import { handleError } from '../utils/errorHandler';
 import toast, { Toaster } from 'react-hot-toast';
 import { useNetworkStatus } from '../hooks/useNetworkStatus';
 import { queueExpense, queueExpenseEdit, getPendingExpenses } from '../services/offlineStore';
-
 const CATEGORIES = [
   { value: 'rent', label: 'Rent', emoji: '🏠' },
   { value: 'electricity', label: 'Electricity', emoji: '⚡' },
@@ -62,7 +61,7 @@ const Expenses = () => {
 
   const loadPendingOfflineExpenses = async () => {
     try {
-      const pending = await getPendingOfflineExpenses();
+      const pending = await getPendingExpenses();
       setPendingOfflineExpenses(pending);
     } catch (e) {
       console.error('Error loading pending offline expenses:', e);

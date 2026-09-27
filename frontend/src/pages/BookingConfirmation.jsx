@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { API_BASE_URL } from '../utils/api';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useAuth } from '../contexts/AuthContext';
@@ -69,7 +70,7 @@ const BookingConfirmation = () => {
     if (!bn || bn === 'Generating...' || bn === 'Pending...') return;
     const fetchBooking = async () => {
       try {
-        const response = await axios.get(`/api/public/bookings/by-number/${bn}`);
+        const response = await axios.get(`${API_BASE_URL}/public/bookings/by-number/${bn}`);
         const apiData = response?.data?.data || response?.data || null;
         if (apiData) {
           const merged = {

@@ -1,4 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
+import { API_BASE_URL } from '../utils/api';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthContext from '../contexts/AuthContext';
 import { handleError } from '../utils/errorHandler';
@@ -41,7 +42,7 @@ const Signup = () => {
     try {
       // Use public endpoint instead of protected admin endpoint
       // Using relative path to leverage Vite proxy or same-origin in production
-      const response = await fetch('/api/public/signup-status');
+      const response = await fetch(`${API_BASE_URL}/public/signup-status`);
       if (response.ok) {
         const status = await response.json();
         setSignupStatus(status);

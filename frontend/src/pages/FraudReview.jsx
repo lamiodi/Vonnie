@@ -33,7 +33,7 @@ const FraudReview = () => {
     setLoading(true);
     try {
       const data = await apiGet(`${API_ENDPOINTS.AUDIT_LOGS}?limit=100&action=refund,void,delete,cancel`);
-      setAuditLogs(Array.isArray(data) ? data : (data.audit_logs || data.data || []));
+      setAuditLogs(Array.isArray(data) ? data : (data.logs || data.data || []));
     } catch (error) {
       toast.error('Failed to load audit logs');
     } finally {
