@@ -15,9 +15,9 @@ const permissionsCatalog = [
 
 const defaultSchedule = Array.from({ length: 7 }, (_, i) => ({
   day_of_week: i,
-  start_time: '09:00',
+  start_time: '08:30',
   end_time: '17:00',
-  is_available: true,
+  is_available: i !== 2, // shop closed on Tuesdays
 }));
 
 function Badge({ text, className }) {

@@ -1,7 +1,7 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
-import { getLagosDateStr, isLateNow } from '../utils/lagosTime.js';
+import { getLagosDateStr, getLagosDayOfWeek, isLateNow, isShopClosedDay, getBusinessResumption } from '../utils/lagosTime.js';
 
 const router = express.Router();
 
@@ -12,11 +12,59 @@ const BUSINESS_LOCATION = {
   ALLOWED_RADIUS_METERS: 500 // Increased to 500 meters for more flexibility
 };
 
-// Work hours configuration (Lagos Time)
+// Fallback work hours (Lagos Time). Day-specific resumption (8:30 AM Mon–Sat,
+// 12:30 PM Sunday) and the Tuesday closure live in lagosTime.BUSINESS_SCHEDULE;
+// per-worker schedules in worker_schedules take priority over both.
 const WORK_HOURS = {
-  RESUMPTION: { HOUR: 9, MINUTE: 0 }, // 9:00 AM
-  CLOSING: { HOUR: 20, MINUTE: 30 }   // 8:30 PM
+  RESUMPTION: { HOUR: 8, MINUTE: 30 }, // 8:30 AM Mon–Sat (12:30 PM Sunday)
+  CLOSING: { HOUR: 20, MINUTE: 30 }    // 8:30 PM Mon–Sat (7:00 PM Sunday)
 };
+
+// Attendance scans are rejected on the shop's closed day
+const CLOSED_DAY_MESSAGE = 'The shop is closed on Tuesdays — attendance is not recorded.';
+
+/**
+ * Format hour and minute to 12-hour string (e.g. 9:00 AM, 10:30 AM).
+ */
+function formatTime12h(hour, minute) {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h = hour % 12 || 12;
+  const m = String(minute).padStart(2, '0');
+  return `${h}:${m} ${period}`;
+}
+
+/**
+ * Get the scheduled resumption time for a worker on a given day of the week (0-6).
+ * Checks the worker_schedules table. If the worker has a schedule for today with start_time,
+ * returns that time. Otherwise falls back to the shop schedule (8:30 AM Mon–Sat,
+ * 12:30 PM Sunday) — never called for the closed day, but falls back defensively.
+ */
+async function getWorkerResumption(workerId, dayOfWeek) {
+  const fallbackResumption = getBusinessResumption(dayOfWeek) || WORK_HOURS.RESUMPTION;
+  try {
+    const res = await query(
+      `SELECT start_time, is_available FROM worker_schedules 
+       WHERE worker_id = $1 AND day_of_week = $2`,
+      [workerId, dayOfWeek]
+    );
+    if (res.rows.length > 0) {
+      const schedule = res.rows[0];
+      if (schedule.is_available && schedule.start_time) {
+        const parts = schedule.start_time.split(':');
+        const hour = parseInt(parts[0], 10);
+        const minute = parseInt(parts[1], 10);
+        if (!isNaN(hour) && !isNaN(minute)) {
+          return { hour, minute, isScheduled: true, isOff: false };
+        }
+      } else if (!schedule.is_available) {
+        return { ...fallbackResumption, isScheduled: true, isOff: true };
+      }
+    }
+  } catch (err) {
+    console.error('Failed to get worker schedule for lateness check:', err.message);
+  }
+  return { ...fallbackResumption, isScheduled: false, isOff: false };
+}
 
 // Reject a check-out scan that arrives this soon after check-in (double-tap guard)
 const MIN_CHECKOUT_INTERVAL_MS = 60 * 1000;
@@ -84,6 +132,14 @@ router.post('/checkin', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'worker_id is required' });
     }
 
+    if (req.user.role === 'staff' && req.user.id !== worker_id) {
+      return res.status(403).json({ error: 'You can only check in for yourself.' });
+    }
+
+    if (isShopClosedDay()) {
+      return res.status(400).json({ error: CLOSED_DAY_MESSAGE });
+    }
+
     // Workday boundary is the Lagos calendar day, not the server's UTC day
     const today = getLagosDateStr();
 
@@ -103,8 +159,10 @@ router.post('/checkin', authenticate, async (req, res) => {
     let distanceFromShop = null;
     let attendanceStatus = 'present';
 
-    // Lateness detection (9:00 AM Lagos Time)
-    if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
+    // Lateness detection: per-worker schedule if set, else the shop schedule (8:30 AM Mon–Sat, 12:30 PM Sun)
+    const dayOfWeek = getLagosDayOfWeek();
+    const workerResumption = await getWorkerResumption(worker_id, dayOfWeek);
+    if (isLateNow(workerResumption)) {
       attendanceStatus = 'late';
     }
 
@@ -163,19 +221,17 @@ router.post('/checkin', authenticate, async (req, res) => {
     }
 
     // Return appropriate message based on verification status
+    const resumptionStr = formatTime12h(workerResumption.hour, workerResumption.minute);
     let message = 'Check-in successful';
     if (locationVerificationStatus === 'verified') {
       message = attendanceStatus === 'late'
-        ? 'Attendance marked (Late). Work starts at 9:00 AM.'
+        ? `Attendance marked (Late). Scheduled resumption was ${resumptionStr}.`
         : 'Attendance marked successfully.';
     } else if (locationVerificationStatus === 'rejected') {
       message = 'Unable to verify attendance. You appear to be too far from shop.';
     } else if (locationVerificationStatus === 'flagged') {
       message = 'Check-in recorded without location verification.';
     }
-
-    // REMOVED INCORRECT LOGIC: "Update user status to 'offline' on checkout" block was copy-pasted into checkin route
-    // The checkin route should set status to 'available', which is already handled above.
 
     res.json({
       message: message,
@@ -196,6 +252,10 @@ router.post('/checkout', authenticate, async (req, res) => {
 
     if (!worker_id) {
       return res.status(400).json({ error: 'worker_id is required' });
+    }
+
+    if (req.user.role === 'staff' && req.user.id !== worker_id) {
+      return res.status(403).json({ error: 'You can only check out for yourself.' });
     }
 
     // Match the Lagos workday the check-in was recorded under
@@ -395,6 +455,10 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
     if (!worker_id) {
       return res.status(400).json({ error: 'Worker ID is required' });
     }
+
+    if (isShopClosedDay()) {
+      return res.status(400).json({ error: CLOSED_DAY_MESSAGE });
+    }
     // Verification is now handled by the local ZKBridge SDK via the frontend.
     // The frontend sends the matched worker_id directly after identifying them.
     const today = getLagosDateStr();
@@ -415,8 +479,10 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
 
     let attendanceStatus = 'present';
 
-    // Lateness detection (9:00 AM Lagos Time)
-    if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
+    // Lateness detection: per-worker schedule if set, else the shop schedule (8:30 AM Mon–Sat, 12:30 PM Sun)
+    const dayOfWeek = getLagosDayOfWeek();
+    const workerResumption = await getWorkerResumption(worker_id, dayOfWeek);
+    if (isLateNow(workerResumption)) {
       attendanceStatus = 'late';
     }
 
@@ -468,6 +534,10 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
       return res.status(400).json({ error: 'Worker ID is required. Fingerprint matching must occur locally.' });
     }
 
+    if (isShopClosedDay()) {
+      return res.status(400).json({ error: CLOSED_DAY_MESSAGE });
+    }
+
     // Get user details
     const userResult = await query('SELECT name FROM users WHERE id = $1 AND is_active = true', [worker_id]);
     if (userResult.rows.length === 0) {
@@ -520,8 +590,10 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
       action = 'check_in';
       let attendanceStatus = 'present';
 
-      // Lateness detection
-      if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
+      // Lateness detection: per-worker schedule if set, else the shop schedule (8:30 AM Mon–Sat, 12:30 PM Sun)
+      const dayOfWeek = getLagosDayOfWeek();
+      const workerResumption = await getWorkerResumption(worker_id, dayOfWeek);
+      if (isLateNow(workerResumption)) {
         attendanceStatus = 'late';
       }
 
@@ -566,6 +638,10 @@ router.post('/public-kiosk-scan', requireKioskOrUser, async (req, res) => {
       return res.status(400).json({ error: 'Worker ID is required. Fingerprint matching must occur locally.' });
     }
 
+    if (isShopClosedDay()) {
+      return res.status(400).json({ error: CLOSED_DAY_MESSAGE });
+    }
+
     // Get user details
     const userResult = await query('SELECT name FROM users WHERE id = $1 AND is_active = true', [worker_id]);
     if (userResult.rows.length === 0) {
@@ -618,8 +694,10 @@ router.post('/public-kiosk-scan', requireKioskOrUser, async (req, res) => {
       action = 'check_in';
       let attendanceStatus = 'present';
 
-      // Lateness detection
-      if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
+      // Lateness detection: per-worker schedule if set, else the shop schedule (8:30 AM Mon–Sat, 12:30 PM Sun)
+      const dayOfWeek = getLagosDayOfWeek();
+      const workerResumption = await getWorkerResumption(worker_id, dayOfWeek);
+      if (isLateNow(workerResumption)) {
         attendanceStatus = 'late';
       }
 
@@ -677,6 +755,10 @@ router.post('/time-off', authenticate, async (req, res) => {
 
     if (!worker_id || !start_date || !end_date || !reason) {
       return res.status(400).json({ error: 'worker_id, start_date, end_date, and reason are required' });
+    }
+
+    if (req.user.role === 'staff' && req.user.id !== worker_id) {
+      return res.status(403).json({ error: 'You can only submit time-off requests for yourself.' });
     }
 
     const result = await query(
@@ -770,6 +852,10 @@ router.post('/correction-request', authenticate, async (req, res) => {
 
     if (!worker_id || !date || !reason) {
       return res.status(400).json({ error: 'worker_id, date, and reason are required' });
+    }
+
+    if (req.user.role === 'staff' && req.user.id !== worker_id) {
+      return res.status(403).json({ error: 'You can only submit correction requests for yourself.' });
     }
 
     // Get existing attendance record if any

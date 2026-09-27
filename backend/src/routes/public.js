@@ -204,17 +204,17 @@ router.get('/bookings/available-slots', async (req, res) => {
       return res.json([]); // Return empty array for Tuesdays
     }
 
-    // Closing time logic needs to be handled inside the loop or via specific hour checks
-
+    // Shop schedule (Lagos): resumption 8:30 AM Mon–Sat, 12:30 PM Sunday;
+    // closing 8:30 PM Mon–Sat, 7:00 PM Sunday
     if (dayOfWeek === 0) {
-      // Sunday: 1 PM to 7 PM
-      startHour = 13; // 1 PM
-      startMinute = 0; // 00 mins
+      // Sunday: 12:30 PM to 7 PM
+      startHour = 12; // 12 PM (loop limit)
+      startMinute = 30;
       endHour = 19;   // 7 PM
     } else {
-      // Mon, Wed-Sat: 9:00 AM to 8:30 PM
-      startHour = 9;  // 9 AM
-      startMinute = 0; // 00 mins
+      // Mon, Wed-Sat: 8:30 AM to 8:30 PM
+      startHour = 8;  // 8 AM (loop limit)
+      startMinute = 30;
       endHour = 20;   // 8 PM (for loop limit)
     }
 

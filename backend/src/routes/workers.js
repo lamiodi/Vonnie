@@ -1,6 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
-import { query } from '../config/db.js';
+import { query, getClient } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { successResponse, errorResponse, notFoundResponse } from '../utils/apiResponse.js';
 import { validateEmail, validatePhone, validateStringLength } from '../utils/inputValidation.js';
@@ -362,9 +362,9 @@ router.get('/:id/schedule', authenticate, async (req, res) => {
     if (scheduleResult.rows.length === 0) {
       const defaultSchedule = Array.from({ length: 7 }, (_, i) => ({
         day_of_week: i,
-        start_time: '09:00',
+        start_time: '08:30',
         end_time: '17:00',
-        is_available: true
+        is_available: i !== 2 // shop closed on Tuesdays
       }));
       return res.json(defaultSchedule);
     }
@@ -377,7 +377,7 @@ router.get('/:id/schedule', authenticate, async (req, res) => {
 });
 
 // Update worker schedule
-router.put('/:id/schedule', authenticate, async (req, res) => {
+router.put('/:id/schedule', authenticate, authorize(['admin', 'manager']), async (req, res) => {
   try {
     const { schedule } = req.body;
     
@@ -418,7 +418,7 @@ router.put('/:id/schedule', authenticate, async (req, res) => {
         details: validationErrors,
         example: {
           day_of_week: 1,
-          start_time: '09:00',
+          start_time: '08:30',
           end_time: '17:00', 
           is_available: true
         }
@@ -431,23 +431,25 @@ router.put('/:id/schedule', authenticate, async (req, res) => {
     );
     if (workerResult.rows.length === 0) return res.status(404).json({ error: 'Worker not found' });
     
-    await query('BEGIN');
-    
+    const client = await getClient();
     try {
-      await query('DELETE FROM worker_schedules WHERE worker_id = $1', [req.params.id]);
+      await client.query('BEGIN');
+      await client.query('DELETE FROM worker_schedules WHERE worker_id = $1', [req.params.id]);
       
       for (const slot of schedule) {
-        await query(
+        await client.query(
           'INSERT INTO worker_schedules (worker_id, day_of_week, start_time, end_time, is_available) VALUES ($1, $2, $3, $4, $5)',
-          [req.params.id, slot.day_of_week, slot.start_time || '09:00', slot.end_time || '17:00', slot.is_available]
+          [req.params.id, slot.day_of_week, slot.start_time || '08:30', slot.end_time || '17:00', slot.is_available]
         );
       }
       
-      await query('COMMIT');
+      await client.query('COMMIT');
       res.json({ message: 'Schedule updated successfully' });
     } catch (error) {
-      await query('ROLLBACK');
+      await client.query('ROLLBACK');
       throw error;
+    } finally {
+      client.release();
     }
   } catch (error) {
     console.error('Update worker schedule error:', error);

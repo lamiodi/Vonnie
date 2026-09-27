@@ -3,9 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import { apiPost, apiGet, API_BASE_URL } from '../utils/api';
 import api from '../utils/api';
 
-// Configurable constants - can be moved to environment variables or backend config
-const CHECKOUT_TIME_HOUR = 20; // 8 PM
-const CHECKOUT_TIME_MINUTE = 30; // 30 minutes
+// Shop schedule (Lagos time). The kiosk checkout gate opens at closing:
+// 8:30 PM Mon–Sat and 7:00 PM on Sunday. Tuesdays the shop is closed.
+const SHOP_SCHEDULE = {
+  0: { hour: 19, minute: 0, label: '7:00 PM' }, // Sunday
+  2: null,                                      // Tuesday — closed
+  default: { hour: 20, minute: 30, label: '8:30 PM' }
+};
+const getTodayShopSchedule = () => {
+  const day = new Date().getDay();
+  return SHOP_SCHEDULE[day] !== undefined ? SHOP_SCHEDULE[day] : SHOP_SCHEDULE.default;
+};
 const FINGERPRINT_BRIDGE_URL = import.meta.env.VITE_FINGERPRINT_BRIDGE_URL || 'http://127.0.0.1:8081';
 // Shared kiosk secret — must match KIOSK_TOKEN on the backend once that is set
 const KIOSK_TOKEN = import.meta.env.VITE_KIOSK_TOKEN || '';
@@ -61,36 +69,38 @@ const AttendanceKiosk = () => {
   };
 
   const isCheckoutAllowed = () => {
+    const schedule = getTodayShopSchedule();
+    if (!schedule) return false; // shop closed today
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTime = currentHour * 100 + currentMinute;
-    const checkoutTime = CHECKOUT_TIME_HOUR * 100 + CHECKOUT_TIME_MINUTE;
-    
-    return currentTime >= checkoutTime;
+    const currentTime = now.getHours() * 100 + now.getMinutes();
+    return currentTime >= schedule.hour * 100 + schedule.minute;
   };
 
   const getCheckoutMessage = () => {
+    const schedule = getTodayShopSchedule();
+    if (!schedule) {
+      return {
+        allowed: false,
+        message: 'The shop is closed on Tuesdays.'
+      };
+    }
+
     if (isCheckoutAllowed()) {
       return {
         allowed: true,
         message: 'You may now check out'
       };
     }
-    
+
     const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    
+
     // Calculate remaining minutes until checkout time
-    let remainingMinutes = (CHECKOUT_TIME_HOUR - currentHour) * 60 + (CHECKOUT_TIME_MINUTE - currentMinute);
+    let remainingMinutes = (schedule.hour - now.getHours()) * 60 + (schedule.minute - now.getMinutes());
     if (remainingMinutes < 0) remainingMinutes = 0;
-    
-    const checkoutTimeStr = `${CHECKOUT_TIME_HOUR}:${CHECKOUT_TIME_MINUTE.toString().padStart(2, '0')} ${CHECKOUT_TIME_HOUR >= 12 ? 'PM' : 'AM'}`;
-    
+
     return {
       allowed: false,
-      message: `Check-out opens at ${checkoutTimeStr} (${remainingMinutes} minutes remaining)`
+      message: `Check-out opens at ${schedule.label} (${remainingMinutes} minutes remaining)`
     };
   };
 
@@ -326,7 +336,7 @@ const AttendanceKiosk = () => {
                     <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    Checkout at 8:30 PM
+                    {getTodayShopSchedule() ? `Checkout at ${getTodayShopSchedule().label}` : 'Closed on Tuesdays'}
                   </span>
                 )}
               </div>

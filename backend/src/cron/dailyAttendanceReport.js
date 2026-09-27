@@ -1,11 +1,17 @@
 import cron from 'node-cron';
 import { query } from '../config/db.js';
 import { sendDailyAttendanceReport } from '../services/email.js';
-import { getLagosDateStr, formatLagosTime, lagosDayBoundsUTC } from '../utils/lagosTime.js';
+import { getLagosDateStr, formatLagosTime, lagosDayBoundsUTC, isShopClosedDay } from '../utils/lagosTime.js';
 
 export const scheduleDailyAttendanceReport = () => {
   // Run every day at 10:00 AM Lagos Time
   cron.schedule('0 10 * * *', async () => {
+    // The shop is closed on Tuesdays — no attendance is expected, skip the report
+    if (isShopClosedDay()) {
+      console.log('⏭️ Tuesday — shop closed, daily attendance report skipped.');
+      return;
+    }
+
     console.log('⏰ Starting Daily Attendance Report job...');
 
     try {

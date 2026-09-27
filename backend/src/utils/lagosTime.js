@@ -41,12 +41,56 @@ export function getLagosDateStr(date = new Date()) {
 }
 
 /**
- * Is the current Lagos wall clock strictly after the given resumption time?
- * Matches the previous Date-comparison semantics (exactly 09:00 is not late).
+ * Today's (or the given instant's) day of the week in Lagos (0 = Sunday, 1 = Monday, ..., 6 = Saturday).
  */
-export function isLateNow(resumption = { hour: 9, minute: 0 }) {
+export function getLagosDayOfWeek(date = new Date()) {
+  const dateStr = getLagosDateStr(date);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+// Shop operating schedule (Lagos time).
+// Resumption is 8:30 AM Monday–Saturday and 12:30 PM on Sunday; the shop is
+// closed every Tuesday, so attendance is not recorded that day.
+export const BUSINESS_SCHEDULE = {
+  CLOSED_DAY: 2, // Tuesday
+  RESUMPTION: {
+    DEFAULT: { hour: 8, minute: 30 },  // Mon–Sat
+    0: { hour: 12, minute: 30 },       // Sunday
+  },
+  CLOSING: {
+    DEFAULT: { hour: 20, minute: 30 }, // Mon–Sat 8:30 PM
+    0: { hour: 19, minute: 0 },        // Sunday 7:00 PM
+  },
+};
+
+/**
+ * Is the given Lagos day of week a non-working day for the shop?
+ */
+export function isShopClosedDay(dayOfWeek = getLagosDayOfWeek()) {
+  return dayOfWeek === BUSINESS_SCHEDULE.CLOSED_DAY;
+}
+
+/**
+ * The shop's resumption time for the given Lagos day of week,
+ * or null on the closed day.
+ */
+export function getBusinessResumption(dayOfWeek = getLagosDayOfWeek()) {
+  if (isShopClosedDay(dayOfWeek)) return null;
+  return BUSINESS_SCHEDULE.RESUMPTION[dayOfWeek] || BUSINESS_SCHEDULE.RESUMPTION.DEFAULT;
+}
+
+/**
+ * Is the current Lagos wall clock strictly after the given resumption time?
+ * Matches the previous Date-comparison semantics (exactly the resumption time
+ * is not late). When no resumption is passed, the day-aware shop schedule is
+ * used and a closed day is never late.
+ */
+export function isLateNow(resumption = null) {
+  const effective = resumption || getBusinessResumption();
+  if (!effective) return false;
   const { hour, minute } = getLagosParts();
-  return hour * 60 + minute > resumption.hour * 60 + resumption.minute;
+  return hour * 60 + minute > effective.hour * 60 + effective.minute;
 }
 
 /**
