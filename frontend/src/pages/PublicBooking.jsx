@@ -5,6 +5,7 @@ import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { API_BASE_URL } from '../utils/api';
 import { handleError } from '../utils/errorHandler';
+import { validatePhoneFormat } from '../utils/phone';
 import { toast } from 'react-hot-toast';
 import '@fontsource/patrick-hand';
 import '@fontsource/unifrakturcook';
@@ -179,8 +180,9 @@ const PublicBooking = () => {
     if (!formData.customer_name.trim()) errors.customer_name = 'Name is required';
     if (!formData.customer_phone.trim()) {
       errors.customer_phone = 'Phone number is required';
-    } else if (!/^(0[789][01]\d{8}|(?:\+234|234)\d{10})$/.test(sanitizedPhone)) {
-      errors.customer_phone = 'Please enter a valid Nigerian phone number (e.g. 08012345678 or +2348012345678)';
+    } else {
+      const phoneError = validatePhoneFormat(sanitizedPhone);
+      if (phoneError) errors.customer_phone = phoneError;
     }
 
     // Email is now optional, so we don't return an error if it's empty

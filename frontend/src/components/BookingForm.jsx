@@ -4,6 +4,7 @@ import { apiGet, apiPost, apiPut } from '../utils/api';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
 import { handleError, handleSuccess } from '../utils/errorHandler';
+import { validatePhoneFormat } from '../utils/phone';
 
 const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = false, bookings = [], services: propServices, workers: propWorkers }) => {
   const {
@@ -185,8 +186,8 @@ const BookingForm = ({ booking, onSubmit, onCancel, endpoints = {}, isWalkIn = f
       case 'customer_phone':
         if (!value.trim()) {
           error = 'Phone number is required';
-        } else if (!/^\+?(234|0)?[789]\d{9}$/.test(value.trim().replace(/[\s-]/g, ''))) {
-          error = 'Please enter a valid Nigerian phone number (e.g., 08012345678 or +2348012345678)';
+        } else {
+          error = validatePhoneFormat(value) || '';
         }
         break;
 

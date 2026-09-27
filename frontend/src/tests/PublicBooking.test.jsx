@@ -168,7 +168,7 @@ describe('PublicBooking Component', () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/Please enter a valid Nigerian phone number/i)).toBeInTheDocument();
+      expect(screen.getByText(/Please enter a valid phone number/i)).toBeInTheDocument();
     });
   });
 });
