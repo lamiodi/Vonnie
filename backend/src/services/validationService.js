@@ -99,7 +99,7 @@ export async function validateBookingTimeConflict(scheduledTime, estimatedDurati
  * @param {number} estimatedDuration - Estimated duration in minutes
  * @returns {Promise<Object>} Availability result
  */
-export async function validateWorkerAvailability(workerIds, scheduledTime, estimatedDuration = 60) {
+export async function validateWorkerAvailability(workerIds, scheduledTime, estimatedDuration = 60, excludeBookingId = null) {
   try {
     if (!workerIds || workerIds.length === 0) {
       return {
@@ -111,30 +111,42 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
     const startTime = new Date(scheduledTime);
     const endTime = new Date(startTime.getTime() + estimatedDuration * 60 * 1000);
 
-    // Check worker availability and current status
+    // A worker is 'busy' only when an active assignment overlaps THIS time
+    // window — historical assignments on completed/cancelled bookings must not
+    // block new ones.
     const availabilityQuery = `
-      SELECT 
+      WITH worker_overlaps AS (
+        SELECT bw.worker_id, COUNT(*) AS overlapping_bookings
+        FROM booking_workers bw
+        JOIN bookings b ON b.id = bw.booking_id
+        WHERE bw.status = 'active'
+          AND b.status IN ('scheduled', 'in-progress', 'confirmed')
+          AND b.scheduled_time < $3
+          AND b.scheduled_time + (COALESCE(b.duration, 60) * interval '1 minute') > $2
+          AND ($4::uuid IS NULL OR b.id != $4)
+          AND bw.worker_id = ANY($1)
+        GROUP BY bw.worker_id
+      )
+      SELECT
         u.id as worker_id,
         u.name as worker_name,
         u.current_status as worker_status,
         u.is_active,
-        COUNT(bw.id) as active_bookings,
-        CASE 
+        COALESCE(wo.overlapping_bookings, 0) as active_bookings,
+        CASE
           WHEN u.is_active = false THEN 'inactive'
           WHEN u.current_status = 'absent' THEN 'absent'
           WHEN u.current_status = 'unavailable' THEN 'unavailable'
           WHEN u.current_status = 'on_break' THEN 'on_break'
-          WHEN COUNT(bw.id) > 0 THEN 'busy'
+          WHEN COALESCE(wo.overlapping_bookings, 0) > 0 THEN 'busy'
           ELSE 'available'
         END as availability_status
       FROM users u
-      LEFT JOIN booking_workers bw ON u.id = bw.worker_id AND bw.status = 'active'
-      LEFT JOIN bookings b ON bw.booking_id = b.id AND b.status IN ('scheduled', 'in-progress')
+      LEFT JOIN worker_overlaps wo ON wo.worker_id = u.id
       WHERE u.id = ANY($1) AND u.role = 'staff'
-      GROUP BY u.id, u.name, u.current_status, u.is_active
     `;
 
-    const availabilityResult = await query(availabilityQuery, [workerIds]);
+    const availabilityResult = await query(availabilityQuery, [workerIds, startTime, endTime, excludeBookingId]);
 
     const unavailableWorkers = availabilityResult.rows.filter(worker =>
       worker.availability_status !== 'available'
@@ -157,7 +169,8 @@ export async function validateWorkerAvailability(workerIds, scheduledTime, estim
     const timeConflictResult = await validateBookingTimeConflict(
       scheduledTime,
       estimatedDuration,
-      workerIds
+      workerIds,
+      excludeBookingId
     );
 
     if (!timeConflictResult.isValid) {

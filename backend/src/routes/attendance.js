@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import { getLagosDateStr, isLateNow } from '../utils/lagosTime.js';
 
 const router = express.Router();
 
@@ -17,11 +18,20 @@ const WORK_HOURS = {
   CLOSING: { HOUR: 20, MINUTE: 30 }   // 8:30 PM
 };
 
-// Helper to get current Lagos time
-function getLagosTime() {
-  const now = new Date();
-  const lagosTimeStr = now.toLocaleString('en-US', { timeZone: 'Africa/Lagos' });
-  return new Date(lagosTimeStr);
+// Reject a check-out scan that arrives this soon after check-in (double-tap guard)
+const MIN_CHECKOUT_INTERVAL_MS = 60 * 1000;
+
+// Kiosk endpoints are reachable without a user session; once KIOSK_TOKEN is set
+// on the backend they require either that header or a valid user JWT.
+const requireKioskOrUser = (req, res, next) => {
+  const kioskSecret = process.env.KIOSK_TOKEN;
+  if (kioskSecret && req.get('x-kiosk-token') === kioskSecret) return next();
+  if (!kioskSecret) return next(); // not configured yet — keep legacy open access
+  return authenticate(req, res, next);
+};
+
+function isDuplicateAttendanceError(error) {
+  return error && error.code === '23505';
 }
 
 // Calculate distance between two coordinates in meters
@@ -74,14 +84,15 @@ router.post('/checkin', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'worker_id is required' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Workday boundary is the Lagos calendar day, not the server's UTC day
+    const today = getLagosDateStr();
 
     // Check if already checked in today
     const existing = await query(
       `SELECT * FROM attendance 
        WHERE worker_id = $1 
-       AND (date = $2 OR date::text LIKE $3)`,
-      [worker_id, today, `${today}%`]
+       AND date = $2`,
+      [worker_id, today]
     );
 
     if (existing.rows.length > 0) {
@@ -93,11 +104,7 @@ router.post('/checkin', authenticate, async (req, res) => {
     let attendanceStatus = 'present';
 
     // Lateness detection (9:00 AM Lagos Time)
-    const lagosNow = getLagosTime();
-    const resumptionTime = new Date(lagosNow);
-    resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
-
-    if (lagosNow > resumptionTime) {
+    if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
       attendanceStatus = 'late';
     }
 
@@ -123,21 +130,30 @@ router.post('/checkin', authenticate, async (req, res) => {
       locationVerificationStatus = 'flagged';
     }
 
-    const result = await query(
-      `INSERT INTO attendance (worker_id, date, check_in_time, status, check_in_latitude, check_in_longitude, 
-                              location_verification_status, distance_from_shop) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-      [
-        worker_id,
-        today,
-        new Date().toISOString(),
-        attendanceStatus,
-        latitude || null,
-        longitude || null,
-        locationVerificationStatus,
-        distanceFromShop
-      ]
-    );
+    let result;
+    try {
+      result = await query(
+        `INSERT INTO attendance (worker_id, date, check_in_time, status, check_in_latitude, check_in_longitude, 
+                                location_verification_status, distance_from_shop) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+        [
+          worker_id,
+          today,
+          new Date().toISOString(),
+          attendanceStatus,
+          latitude || null,
+          longitude || null,
+          locationVerificationStatus,
+          distanceFromShop
+        ]
+      );
+    } catch (insertError) {
+      if (isDuplicateAttendanceError(insertError)) {
+        // Lost a race with a concurrent check-in — treat as already checked in
+        return res.status(400).json({ error: 'Already checked in today' });
+      }
+      throw insertError;
+    }
 
     // Update user status to 'available' on checkin (if not busy)
     try {
@@ -182,7 +198,8 @@ router.post('/checkout', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'worker_id is required' });
     }
 
-    const today = new Date().toISOString().split('T')[0];
+    // Match the Lagos workday the check-in was recorded under
+    const today = getLagosDateStr();
 
     let locationVerificationStatus = null;
     let distanceFromShop = null;
@@ -380,14 +397,14 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
     }
     // Verification is now handled by the local ZKBridge SDK via the frontend.
     // The frontend sends the matched worker_id directly after identifying them.
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLagosDateStr();
 
     // Check if already checked in today
     const existing = await query(
       `SELECT * FROM attendance 
        WHERE worker_id = $1 
-       AND (date = $2 OR date::text LIKE $3)`,
-      [worker_id, today, `${today}%`]
+       AND date = $2`,
+      [worker_id, today]
     );
 
     if (existing.rows.length > 0) {
@@ -399,26 +416,30 @@ router.post('/verify-fingerprint', authenticate, async (req, res) => {
     let attendanceStatus = 'present';
 
     // Lateness detection (9:00 AM Lagos Time)
-    const lagosNow = getLagosTime();
-    const resumptionTime = new Date(lagosNow);
-    resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
-
-    if (lagosNow > resumptionTime) {
+    if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
       attendanceStatus = 'late';
     }
 
-    const result = await query(
-      `INSERT INTO attendance (worker_id, date, check_in_time, status, 
-                              location_verification_status) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [
-        worker_id,
-        today,
-        new Date().toISOString(),
-        attendanceStatus,
-        'verified' // Fingerprint counts as verified
-      ]
-    );
+    let result;
+    try {
+      result = await query(
+        `INSERT INTO attendance (worker_id, date, check_in_time, status, 
+                                location_verification_status) 
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [
+          worker_id,
+          today,
+          new Date().toISOString(),
+          attendanceStatus,
+          'verified' // Fingerprint counts as verified
+        ]
+      );
+    } catch (insertError) {
+      if (isDuplicateAttendanceError(insertError)) {
+        return res.status(400).json({ error: 'Already checked in today' });
+      }
+      throw insertError;
+    }
 
     // Update user status
     try {
@@ -454,15 +475,15 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
     }
     const workerName = userResult.rows[0].name;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLagosDateStr();
 
     // Check existing attendance for today
     const existing = await query(
       `SELECT * FROM attendance 
        WHERE worker_id = $1 
-       AND (date = $2 OR date::text LIKE $3)
+       AND date = $2
        ORDER BY created_at DESC LIMIT 1`,
-      [worker_id, today, `${today}%`]
+      [worker_id, today]
     );
 
     let action = 'check_in';
@@ -472,7 +493,14 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
       if (record.check_out_time) {
         return res.status(400).json({ error: `${workerName} has already checked out for today.` });
       }
-      
+
+      // Double-tap guard: a check-out scan arriving right after check-in is
+      // almost always an accidental second scan and would silently end the day.
+      if (record.check_in_time &&
+          Date.now() - new Date(record.check_in_time).getTime() < MIN_CHECKOUT_INTERVAL_MS) {
+        return res.status(400).json({ error: `${workerName} just checked in. Please wait a minute before scanning again.` });
+      }
+
       // Perform Check-Out
       action = 'check_out';
       await query(
@@ -493,19 +521,22 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
       let attendanceStatus = 'present';
 
       // Lateness detection
-      const lagosNow = getLagosTime();
-      const resumptionTime = new Date(lagosNow);
-      resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
-
-      if (lagosNow > resumptionTime) {
+      if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
         attendanceStatus = 'late';
       }
 
-      await query(
-        `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
-         VALUES ($1, $2, $3, $4, $5)`,
-        [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
-      );
+      try {
+        await query(
+          `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
+        );
+      } catch (insertError) {
+        if (isDuplicateAttendanceError(insertError)) {
+          return res.status(400).json({ error: `${workerName} is already checked in for today.` });
+        }
+        throw insertError;
+      }
 
       // Update user status
       try {
@@ -526,8 +557,8 @@ router.post('/kiosk-scan', authenticate, authorize(['admin', 'manager']), async 
   }
 });
 
-// Public Kiosk Mode: Auto Check-in or Check-out via fingerprint (no auth required)
-router.post('/public-kiosk-scan', async (req, res) => {
+// Public Kiosk Mode: Auto Check-in or Check-out via fingerprint (kiosk token or user auth)
+router.post('/public-kiosk-scan', requireKioskOrUser, async (req, res) => {
   try {
     const { worker_id } = req.body;
     
@@ -542,15 +573,15 @@ router.post('/public-kiosk-scan', async (req, res) => {
     }
     const workerName = userResult.rows[0].name;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLagosDateStr();
 
     // Check existing attendance for today
     const existing = await query(
       `SELECT * FROM attendance 
        WHERE worker_id = $1 
-       AND (date = $2 OR date::text LIKE $3)
+       AND date = $2
        ORDER BY created_at DESC LIMIT 1`,
-      [worker_id, today, `${today}%`]
+      [worker_id, today]
     );
 
     let action = 'check_in';
@@ -560,7 +591,14 @@ router.post('/public-kiosk-scan', async (req, res) => {
       if (record.check_out_time) {
         return res.status(400).json({ error: `${workerName} has already checked out for today.` });
       }
-      
+
+      // Double-tap guard: a check-out scan arriving right after check-in is
+      // almost always an accidental second scan and would silently end the day.
+      if (record.check_in_time &&
+          Date.now() - new Date(record.check_in_time).getTime() < MIN_CHECKOUT_INTERVAL_MS) {
+        return res.status(400).json({ error: `${workerName} just checked in. Please wait a minute before scanning again.` });
+      }
+
       // Perform Check-Out
       action = 'check_out';
       await query(
@@ -581,19 +619,22 @@ router.post('/public-kiosk-scan', async (req, res) => {
       let attendanceStatus = 'present';
 
       // Lateness detection
-      const lagosNow = getLagosTime();
-      const resumptionTime = new Date(lagosNow);
-      resumptionTime.setHours(WORK_HOURS.RESUMPTION.HOUR, WORK_HOURS.RESUMPTION.MINUTE, 0, 0);
-
-      if (lagosNow > resumptionTime) {
+      if (isLateNow({ hour: WORK_HOURS.RESUMPTION.HOUR, minute: WORK_HOURS.RESUMPTION.MINUTE })) {
         attendanceStatus = 'late';
       }
 
-      await query(
-        `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
-         VALUES ($1, $2, $3, $4, $5)`,
-        [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
-      );
+      try {
+        await query(
+          `INSERT INTO attendance (worker_id, date, check_in_time, status, location_verification_status) 
+           VALUES ($1, $2, $3, $4, $5)`,
+          [worker_id, today, new Date().toISOString(), attendanceStatus, 'verified']
+        );
+      } catch (insertError) {
+        if (isDuplicateAttendanceError(insertError)) {
+          return res.status(400).json({ error: `${workerName} is already checked in for today.` });
+        }
+        throw insertError;
+      }
 
       // Update user status
       try {
@@ -615,7 +656,8 @@ router.post('/public-kiosk-scan', async (req, res) => {
 });
 
 // Get all enrolled fingerprint templates for the local bridge to match against
-router.get('/templates', async (req, res) => {
+// (kiosk token or user auth — templates are biometric data, not public)
+router.get('/templates', requireKioskOrUser, async (req, res) => {
   try {
     const result = await query("SELECT id, fingerprint_template as template FROM users WHERE fingerprint_template IS NOT NULL AND is_active = true");
     res.json(result.rows);
@@ -870,16 +912,16 @@ router.put('/correction-requests/:id', authenticate, authorize(['admin', 'manage
   }
 });
 
-// Get today's attendance for the kiosk display
-router.get('/today', async (req, res) => {
+// Get today's attendance for the kiosk display (kiosk token or user auth)
+router.get('/today', requireKioskOrUser, async (req, res) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLagosDateStr();
     
     const result = await query(
       `SELECT a.id, a.worker_id, a.check_in_time, a.check_out_time, a.status, a.location_verification_status, u.name as worker_name
        FROM attendance a
        JOIN users u ON a.worker_id = u.id
-       WHERE DATE(a.check_in_time) = $1
+       WHERE (a.check_in_time AT TIME ZONE 'Africa/Lagos')::date = $1::date
        ORDER BY a.check_in_time ASC`,
       [today]
     );

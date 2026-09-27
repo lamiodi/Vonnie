@@ -507,7 +507,7 @@ export const sendInventoryAlert = async (alertDetails) => {
 };
 
 export const sendDailyAttendanceReport = async (adminEmail, reportData) => {
-  const { date, totalWorkers, presentCount, lateCount, absentCount, workers } = reportData;
+  const { date, totalWorkers, presentCount, lateCount, absentCount, workers, bookings = [] } = reportData;
   const subject = `📅 Daily Attendance Report - ${date}`;
 
   // Generate table rows for each worker
@@ -529,6 +529,36 @@ export const sendDailyAttendanceReport = async (adminEmail, reportData) => {
       </td>
       <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #6b7280; font-size: 13px;">
         ${w.verificationMethod || '-'}
+      </td>
+    </tr>
+  `).join('');
+
+  // Generate table rows for each booking with its assigned workers
+  const bookingRowsHtml = bookings.map(b => `
+    <tr>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-family: monospace; font-size: 13px;">
+        ${b.bookingNumber}
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #374151; white-space: nowrap;">
+        ${b.time}
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #111827; font-weight: 500;">
+        ${b.customerName}
+        <div style="color: #6b7280; font-size: 12px; font-weight: normal;">${b.services}</div>
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #374151;">
+        ${b.workers === 'Unassigned'
+          ? '<span style="color: #b45309; font-weight: 600;">Unassigned</span>'
+          : b.workers}
+      </td>
+      <td style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb;">
+        <span style="display: inline-block; padding: 4px 8px; border-radius: 9999px; font-size: 12px; font-weight: 600;
+          ${b.status === 'completed' ? 'background-color: #d1fae5; color: #065f46;' :
+            b.status === 'in-progress' ? 'background-color: #dbeafe; color: #1d4ed8;' :
+            b.status === 'cancelled' ? 'background-color: #fee2e2; color: #991b1b;' :
+              'background-color: #e0e7ff; color: #4338ca;'}">
+          ${(b.status || '—').replace('-', ' ').toUpperCase()}
+        </span>
       </td>
     </tr>
   `).join('');
@@ -581,6 +611,31 @@ export const sendDailyAttendanceReport = async (adminEmail, reportData) => {
           </table>
         </div>
         
+        <!-- Bookings & Assigned Workers -->
+        <h3 style="color: #1f2937; font-size: 18px; font-weight: 700; margin: 32px 0 16px 0;">
+          Today's Bookings &amp; Assigned Workers (${bookings.length})
+        </h3>
+        ${bookings.length === 0 ? `
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 24px; text-align: center; color: #6b7280;">
+          No bookings scheduled for today.
+        </div>` : `
+        <div style="background: white; border: 1px solid #e5e7eb; border-radius: 12px; overflow: hidden;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 14px;">
+            <thead>
+              <tr style="background: #f9fafb;">
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Booking</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Time</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Customer / Service</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Assigned Workers</th>
+                <th style="padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #4b5563; font-weight: 600;">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${bookingRowsHtml}
+            </tbody>
+          </table>
+        </div>`}
+
         <div style="text-align: center; margin-top: 32px; padding: 12px; background: #f8fafc; border-radius: 8px;">
           <p style="margin: 0; color: #64748b; font-size: 12px;">
             This is an automated report generated at 10:00 AM.

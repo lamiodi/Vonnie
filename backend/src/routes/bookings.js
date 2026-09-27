@@ -928,6 +928,14 @@ Thank you for your understanding.`;
         'SELECT worker_id FROM booking_workers WHERE booking_id = $1 AND status = $2',
         [id, 'active']
       );
+
+      // Close out the active assignments so they stop counting toward
+      // availability checks — stale 'active' rows used to make workers
+      // permanently "busy" for new bookings
+      await query(
+        'UPDATE booking_workers SET status = $1 WHERE booking_id = $2 AND status = $3',
+        [status, id, 'active']
+      );
       
       // Update status for each assigned worker
       for (const worker of assignedWorkers.rows) {
@@ -1104,6 +1112,13 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
       ));
     }
     
+    // Remember who was assigned before, so workers dropped by this
+    // re-assignment can be freed afterwards
+    const previousAssignments = await client.query(
+      "SELECT worker_id FROM booking_workers WHERE booking_id = $1 AND status = 'active'",
+      [id]
+    );
+
     // Deactivate existing worker assignments within transaction
     await client.query(
       'UPDATE booking_workers SET status = $1 WHERE booking_id = $2',
@@ -1154,6 +1169,27 @@ router.post('/:id/assign-workers', authenticate, authorize(['admin', 'manager'])
            AND current_status = 'available'
            AND is_active = true`,
         [worker.worker_id]
+      );
+    }
+
+    // Free workers dropped by this re-assignment (if they have no other
+    // active booking), otherwise they stay 'busy' until this booking completes
+    for (const prev of previousAssignments.rows) {
+      if (workerIds.includes(prev.worker_id)) continue;
+      await client.query(
+        `UPDATE users
+         SET current_status = 'available'
+         WHERE id = $1
+           AND current_status = 'busy'
+           AND NOT EXISTS (
+             SELECT 1
+             FROM booking_workers bw
+             JOIN bookings b ON b.id = bw.booking_id
+             WHERE bw.worker_id = $1
+               AND bw.status = 'active'
+               AND b.status IN ('scheduled', 'in-progress')
+           )`,
+        [prev.worker_id]
       );
     }
     
