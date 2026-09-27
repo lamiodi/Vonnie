@@ -2,6 +2,27 @@ import { query, getClient } from '../config/db.js';
 import { sendEmail } from './email.js';
 import { generateUniqueBookingNumber, generateBookingNumberWithName } from '../utils/bookingUtils.js';
 
+// Escape customer-supplied values before interpolating into HTML emails
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// Customer-facing times are Lagos wall clock; the server runs UTC
+const formatLagosDateTime = (date) =>
+  new Date(date).toLocaleString('en-US', {
+    timeZone: 'Africa/Lagos',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+
 /**
  * Create a new booking with comprehensive validation and notification
  * @param {Object} bookingData - Booking data from request
@@ -271,7 +292,7 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
 <h1>✨ Walk-in Booking Confirmed!</h1>
 <p>Thanks for visiting Vonne X2X</p>
 </div>
-<p>Hello <strong>${customer_name}</strong>,</p>
+<p>Hello <strong>${escapeHtml(customer_name)}</strong>,</p>
 <p>Your walk-in appointment has been successfully booked. Here are the details:</p>
 <div class="booking-details">
 <div class="detail-row">
@@ -279,8 +300,8 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
 <span class="value">${bookingNumber}</span>
 </div>
 <div class="detail-row">
-<span class="label">Date & Time:</span>
-<span class="value">${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+<span class="label">Date &amp; Time:</span>
+<span class="value">${formatLagosDateTime(scheduled_time)}</span>
 </div>
 <div class="detail-row">
 <span class="label">Services:</span>
@@ -313,7 +334,7 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
               
               <!-- Main content -->
               <div style="padding: 25px 20px;">
-                <p style="font-size: 16px; color: #333; margin-bottom: 15px; font-family: 'Patrick Hand', cursive;">Dear <strong style="color: #9333ea;">${customer_name}</strong>,</p>
+                <p style="font-size: 16px; color: #333; margin-bottom: 15px; font-family: 'Patrick Hand', cursive;">Dear <strong style="color: #9333ea;">${escapeHtml(customer_name)}</strong>,</p>
                 <p style="font-size: 14px; color: #555; line-height: 1.5; margin-bottom: 20px; font-family: 'Patrick Hand', cursive;">
                   Thank you for booking with Vonne X2X! Your appointment has been received and is being prepared for you.
                 </p>
@@ -332,7 +353,7 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e0d4f7;">
                       <span style="font-weight: 600; color: #666; font-family: 'Patrick Hand', cursive;">Date & Time:</span>
-                      <span style="color: #333; font-weight: 600; font-family: 'Patrick Hand', cursive;">${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style="color: #333; font-weight: 600; font-family: 'Patrick Hand', cursive;">${formatLagosDateTime(scheduled_time)}</span>
                     </div>
                     
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
@@ -384,7 +405,7 @@ body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; max-widt
         await sendEmail(
           customer_email,
           '✨ Booking Confirmed - Vonne X2X',
-          `Dear ${customer_name}, Your booking ${bookingNumber} has been received. Date: ${new Date(scheduled_time).toLocaleString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}. Total: ₦${totalPrice.toFixed(2)}. We'll send confirmation once approved.`,
+          `Dear ${customer_name}, Your booking ${bookingNumber} has been received. Date: ${formatLagosDateTime(scheduled_time)}. Total: ₦${totalPrice.toFixed(2)}. We'll send confirmation once approved.`,
           bookingConfirmationHtml
         );
 

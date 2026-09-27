@@ -10,6 +10,26 @@ const getResendClient = () => {
   return resendClient;
 };
 
+// Escape customer-supplied values before interpolating into HTML emails
+const escapeHtml = (value) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// All customer-facing times are Lagos wall clock; the server runs UTC and
+// would otherwise render times one hour behind
+const formatLagosDate = (date) =>
+  new Date(date).toLocaleDateString('en-US', {
+    timeZone: 'Africa/Lagos',
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
 // Common styles and font imports
 const FONT_IMPORTS = `
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -85,6 +105,7 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
     
   // Format service name
   const serviceName = bookingDetails.serviceName || 'To be discussed in-shop';
+  const customerName = escapeHtml(bookingDetails.customerName);
 
   const content = `
       <!-- Header with gradient -->
@@ -97,7 +118,7 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
       
       <!-- Main content -->
       <div style="padding: 40px 32px;">
-        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Hello <strong style="color: #111827;">${bookingDetails.customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Hello <strong style="color: #111827;">${customerName}</strong>,</p>
         <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 32px;">
           Thank you for choosing Vonne X2X! We're excited to confirm your appointment.
         </p>
@@ -121,7 +142,7 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border-radius: 10px; border: 1px solid #e5e7eb;">
               <span style="font-weight: 600; color: #6b7280; font-size: 14px;">Date</span>
-              <span style="color: #111827; font-weight: 700; font-size: 14px;">${new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}</span>
+              <span style="color: #111827; font-weight: 700; font-size: 14px;">${formatLagosDate(bookingDetails.bookingDate)}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border-radius: 10px; border: 1px solid #e5e7eb;">
@@ -158,9 +179,9 @@ export const sendBookingConfirmation = async (userEmail, bookingDetails) => {
 
 export const sendBookingReminder = async (userEmail, bookingDetails) => {
   const subject = '⏰ Appointment Reminder - Vonne X2X';
-  
+
   // Format service name
-  const serviceName = bookingDetails.serviceName || 'To be discussed in-shop';
+  const serviceName = escapeHtml(bookingDetails.serviceName || 'To be discussed in-shop');
   
   const content = `
       <!-- Header with gradient -->
@@ -173,7 +194,7 @@ export const sendBookingReminder = async (userEmail, bookingDetails) => {
       
       <!-- Main content -->
       <div style="padding: 40px 32px;">
-        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Hello <strong style="color: #111827;">${bookingDetails.customerName}</strong>,</p>
+        <p style="font-size: 16px; color: #374151; margin-bottom: 24px; line-height: 1.6;">Hello <strong style="color: #111827;">${escapeHtml(bookingDetails.customerName)}</strong>,</p>
         <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 32px;">
           This is a friendly reminder for your upcoming beauty appointment.
         </p>
@@ -192,12 +213,7 @@ export const sendBookingReminder = async (userEmail, bookingDetails) => {
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border-radius: 10px; border: 1px solid #fcd34d;">
               <span style="font-weight: 600; color: #6b7280; font-size: 14px;">Date</span>
-              <span style="color: #111827; font-weight: 700; font-size: 14px;">${new Date(bookingDetails.bookingDate).toLocaleDateString('en-US', { 
-                weekday: 'short', 
-                month: 'short', 
-                day: 'numeric',
-                year: 'numeric'
-              })}</span>
+              <span style="color: #111827; font-weight: 700; font-size: 14px;">${formatLagosDate(bookingDetails.bookingDate)}</span>
             </div>
             
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; background: white; border-radius: 10px; border: 1px solid #fcd34d;">

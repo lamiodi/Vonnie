@@ -909,7 +909,7 @@ Thank you for your understanding.`;
           customerName: booking.customer_name,
           serviceName: updatedBooking.service_name,
           bookingDate: booking.scheduled_time,
-          bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' }),
           price: booking.service_price
         }
       );
@@ -1300,7 +1300,7 @@ router.post('/:id/approve', authenticate, authorize(['admin', 'manager']), async
         customerName: booking.customer_name,
         serviceName: serviceNames,
         bookingDate: booking.scheduled_time,
-        bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+        bookingTime: new Date(booking.scheduled_time).toLocaleTimeString('en-US', { timeZone: 'Africa/Lagos', hour: '2-digit', minute: '2-digit' }),
         price: booking.service_price
       }
     );

@@ -22,11 +22,11 @@ router.get('/services', async (req, res) => {
   }
 });
 
-// Get all workers (public)
+// Get all workers (public) — no emails; contact details stay internal
 router.get('/workers', async (req, res) => {
   try {
     const result = await query(
-      `SELECT id, name, email, specialty, current_status 
+      `SELECT id, name, specialty, current_status 
        FROM users 
        WHERE role IN ('staff', 'manager') AND is_active = true 
        ORDER BY name`
@@ -152,32 +152,11 @@ router.get('/bookings/available-slots', async (req, res) => {
     const availableSlots = [];
     const slotInterval = 30; // minutes
 
-    // Create date objects for comparison (without time portion)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const selectedDate = new Date(`${date}T00:00:00`);
+    // Day boundary and business hours for the requested date are computed
+    // below from the date string itself (Date.UTC), so the server timezone
+    // cannot shift which day is being evaluated
+    let startHour, startMinute = 0, endHour;
 
-    // Check if Tuesday (Day 2) - Closed
-    if (selectedDate.getDay() === 2) {
-      return res.json([]); // Return empty array for Tuesdays
-    }
-
-    let startHour, startMinute = 0, endHour, closingTime;
-
-    if (selectedDate.getDay() === 0) {
-      // Sunday: 1 PM to 7 PM
-      startHour = 13; // 1 PM
-      endHour = 19;   // 7 PM
-      closingTime = new Date(`${date}T19:00:00`);
-    } else {
-      // Mon, Wed-Sat: 9:00 AM to 8:30 PM
-      startHour = 9;  // 9 AM
-      startMinute = 0; // 00 mins
-      endHour = 20;   // 8 PM (for loop limit)
-      closingTime = new Date(`${date}T20:30:00`);
-    }
-
-    // Get current time in Lagos (WAT) using Intl to avoid server timezone issues
     const now = new Date();
     const lagosOptions = {
       timeZone: 'Africa/Lagos',
@@ -486,6 +465,7 @@ router.post('/payment/verify', async (req, res) => {
       console.log('Payment verification successful - Reference:', reference, 'Method:', verificationResult.method, 'Extracted booking number:', booking_number);
 
       // Update booking payment status
+      // NOTE: bookings has no service_id column; services live in booking_services
       const bookingResult = await query(
         `UPDATE bookings 
          SET payment_status = $1, 
@@ -494,7 +474,7 @@ router.post('/payment/verify', async (req, res) => {
              payment_date = CURRENT_TIMESTAMP,
              updated_at = CURRENT_TIMESTAMP
          WHERE booking_number = $4 
-         RETURNING id, customer_email, customer_name, total_amount, service_id, booking_number`,
+         RETURNING id, customer_email, customer_name, total_amount, booking_number`,
         ['completed', 'card', reference, booking_number]
       );
 
@@ -713,17 +693,22 @@ router.post('/contact', async (req, res) => {
       return res.status(400).json(errorResponse('Name, email, and message are required', 'MISSING_FIELDS', 400));
     }
 
+    // Escape before embedding in HTML — this form is public-facing
+    const safe = (v) => String(v ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
     // Send notification to admin
     const adminSubject = `New Contact Form Submission from ${name}`;
     const adminHtml = `
       <div style="font-family: Arial, sans-serif; padding: 20px;">
         <h2>New Contact Form Submission</h2>
-        <p><strong>Name:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Subject:</strong> ${subject || 'No Subject'}</p>
+        <p><strong>Name:</strong> ${safe(name)}</p>
+        <p><strong>Email:</strong> ${safe(email)}</p>
+        <p><strong>Subject:</strong> ${safe(subject || 'No Subject')}</p>
         <p><strong>Message:</strong></p>
         <div style="background-color: #f5f5f5; padding: 15px; border-radius: 5px;">
-          ${message}
+          ${safe(message)}
         </div>
       </div>
     `;
