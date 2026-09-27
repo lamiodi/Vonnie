@@ -50,7 +50,6 @@ const Expenses = () => {
     payment_method: '',
     supplier: '',
     description: '',
-    receipt_reference: ''
   });
 
   useEffect(() => {
@@ -126,7 +125,6 @@ const Expenses = () => {
             paymentMethod: formData.payment_method,
             supplier: formData.supplier,
             description: formData.description,
-            receiptReference: formData.receipt_reference
           });
           toast.success('Edit saved offline — will sync when online');
           loadPendingOfflineExpenses();
@@ -144,7 +142,6 @@ const Expenses = () => {
             paymentMethod: formData.payment_method,
             supplier: formData.supplier,
             description: formData.description,
-            receiptReference: formData.receipt_reference
           });
           toast.success('Expense saved offline — will sync when online');
           loadPendingOfflineExpenses();
@@ -171,7 +168,6 @@ const Expenses = () => {
       payment_method: expense.payment_method,
       supplier: expense.supplier || '',
       description: expense.description || '',
-      receipt_reference: expense.receipt_reference || ''
     });
     setShowForm(true);
   };
@@ -197,8 +193,7 @@ const Expenses = () => {
       payment_method: '',
       supplier: '',
       description: '',
-      receipt_reference: ''
-    });
+      });
   };
 
   const formatCurrency = (amount) => {
@@ -453,17 +448,6 @@ const Expenses = () => {
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="What was this expense for?"
                   rows={2}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Receipt Reference</label>
-                <input
-                  type="text"
-                  value={formData.receipt_reference}
-                  onChange={(e) => setFormData(prev => ({ ...prev, receipt_reference: e.target.value }))}
-                  placeholder="Receipt number or reference"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
