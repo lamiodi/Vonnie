@@ -436,7 +436,6 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
       payment_method = 'cash',
       payment_status, // e.g., 'completed' | 'pending'
       payment_reference,
-      tax = 0,
       misc_charges = [] // Added for miscellaneous charges in POS
     } = req.body;
 
@@ -517,11 +516,6 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
     if (customer_info.email) customer_info.email = String(customer_info.email).trim().slice(0, 255).toLowerCase();
     if (customer_info.phone) customer_info.phone = String(customer_info.phone).trim().slice(0, 20);
 
-    // Validate tax amount
-    if (tax < 0) {
-      await client.query('ROLLBACK');
-      return res.status(400).json(errorResponse('Tax amount cannot be negative', 'INVALID_TAX_AMOUNT', 400));
-    }
     let booking = null;
     let service_amount = 0;
     // Get booking if provided
@@ -729,7 +723,8 @@ router.post('/checkout', authenticate, authorize(['staff', 'manager', 'admin']),
         }
       }
     }
-    const computed_total = subtotal_amount - discount_amount + Number(tax || 0);
+    // VAT removed — totals are subtotal minus discount only
+    const computed_total = subtotal_amount - discount_amount;
 
     // Determine payment status and transaction status BEFORE insertion
     let effectivePaymentStatus = payment_status;

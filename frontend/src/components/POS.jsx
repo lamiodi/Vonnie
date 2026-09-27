@@ -11,7 +11,6 @@ import { useAuth } from '../contexts/AuthContext';
 // ==========================================
 // CONSTANTS
 // ==========================================
-const VAT_RATE = 0.075; // 7.5% VAT
 
 const categories = [
   { value: '', label: 'All Categories' },
@@ -375,17 +374,11 @@ const POS = () => {
     }
   }, [appliedCoupon, getSubtotal]);
 
-  // VAT Calculation (Issue #14 - Added VAT)
-  const getTaxAmount = useCallback(() => {
-    return getSubtotal() * VAT_RATE;
-  }, [getSubtotal]);
-
   const getTotal = useCallback(() => {
     const subtotal = getSubtotal();
     const discount = getDiscount();
-    const tax = getTaxAmount();
-    return subtotal - discount + tax;
-  }, [getSubtotal, getDiscount, getTaxAmount]);
+    return subtotal - discount;
+  }, [getSubtotal, getDiscount]);
 
   const addToCart = useCallback((item, type = 'product', size = null) => {
     if (paymentConfirmed) {
@@ -707,10 +700,9 @@ const POS = () => {
       customer_info: customerInfo,
       staff_id: user?.id,
       coupon_code: appliedCoupon?.code || null,
-      tax: getTaxAmount(),
       misc_charges: miscCharges
     };
-  }, [bookingData, cart, customerInfo, user, appliedCoupon, getTaxAmount, miscCharges]);
+  }, [bookingData, cart, customerInfo, user, appliedCoupon, miscCharges]);
 
   // Shared success handler for non-Paystack payments
   const handlePaymentSuccess = useCallback((responseData, paymentMethodLabel) => {
@@ -1461,11 +1453,6 @@ const POS = () => {
                       <span className="font-medium">-₦{formatPrice(getDiscount())}</span>
                     </div>
                   )}
-                  {/* VAT Section */}
-                  <div className="flex justify-between text-gray-600">
-                    <span>VAT (7.5%)</span>
-                    <span className="font-medium">₦{formatPrice(getTaxAmount())}</span>
-                  </div>
                 </div>
 
                 <div className="pt-2 border-t-2 border-gray-200">
