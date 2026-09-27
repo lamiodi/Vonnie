@@ -346,3 +346,16 @@ CREATE TABLE public.webhook_endpoints (
   updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT webhook_endpoints_pkey PRIMARY KEY (id)
 );
+CREATE TABLE public.worker_schedules (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  worker_id uuid NOT NULL,
+  day_of_week integer NOT NULL,
+  start_time character varying NOT NULL DEFAULT '09:00'::character varying,
+  end_time character varying NOT NULL DEFAULT '17:00'::character varying,
+  is_available boolean NOT NULL DEFAULT true,
+  created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  updated_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT worker_schedules_pkey PRIMARY KEY (id),
+  CONSTRAINT worker_schedules_worker_id_fkey FOREIGN KEY (worker_id) REFERENCES public.users(id) ON DELETE CASCADE,
+  CONSTRAINT worker_schedules_unique_worker_day UNIQUE (worker_id, day_of_week)
+);

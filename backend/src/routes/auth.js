@@ -121,14 +121,7 @@ router.post('/register', async (req, res) => {
       }
     }
     
-    // Debug: log the received data
-    console.log('Register request received:');
-    console.log('Name:', name);
-    console.log('Email:', email);
-    console.log('Password:', password ? 'provided' : 'missing');
-    console.log('Role:', role);
-    console.log('Phone:', phone);
-    console.log('Full request body:', req.body);
+    console.log('Register request received for email:', email);
     
     /* 
     // MOVED UP: Checks for signup status and role validation logic have been moved to the top of the function
@@ -203,52 +196,16 @@ router.post('/login', loginLimiter, async (req, res) => {
     }
     
     console.log('Login attempt for email:', normalizedEmail);
-    console.log('Request body:', req.body);
     
     const result = await query(
       'SELECT * FROM users WHERE LOWER(email) = $1',
       [normalizedEmail]
     );
 
-    console.log('Database query result:', result);
-    console.log('Number of rows found:', result.rows.length);
-    
     const user = result.rows[0];
     
-    // Debug: log the user object to see available fields
-    console.log('User from database:', user);
-    console.log('User object keys:', user ? Object.keys(user) : 'No user found');
-    
-    // Check if user exists and has a password field (could be password_hash or password)
+    // Check if user exists
     if (!user) {
-      console.log('No user found with email:', email);
-      return res.status(400).json(errorResponse(
-        'Invalid credentials',
-        'INVALID_CREDENTIALS',
-        400
-      ));
-    }
-    
-    // Try different possible password field names
-    const passwordField = user.password_hash || user.password;
-    console.log('Password field found:', passwordField ? 'Yes' : 'No');
-    console.log('Password field type:', typeof passwordField);
-    
-    if (!passwordField) {
-      console.error('No password field found in user object:', Object.keys(user));
-      return res.status(400).json(errorResponse(
-        'Invalid credentials',
-        'INVALID_CREDENTIALS',
-        400
-      ));
-    }
-    
-    console.log('Comparing password with bcrypt...');
-    const passwordMatch = await bcrypt.compare(password, passwordField);
-    console.log('Password match result:', passwordMatch);
-    
-    if (!passwordMatch) {
-      console.log('Password does not match for user:', email);
       return res.status(400).json(errorResponse(
         'Invalid credentials',
         'INVALID_CREDENTIALS',
@@ -256,7 +213,37 @@ router.post('/login', loginLimiter, async (req, res) => {
       ));
     }
 
-    console.log('Login successful for user:', email);
+    // Check if account is active
+    if (user.is_active === false) {
+      return res.status(403).json(errorResponse(
+        'Account is deactivated. Please contact an administrator.',
+        'ACCOUNT_DEACTIVATED',
+        403
+      ));
+    }
+    
+    // Try different possible password field names
+    const passwordField = user.password_hash || user.password;
+    
+    if (!passwordField) {
+      return res.status(400).json(errorResponse(
+        'Invalid credentials',
+        'INVALID_CREDENTIALS',
+        400
+      ));
+    }
+    
+    const passwordMatch = await bcrypt.compare(password, passwordField);
+    
+    if (!passwordMatch) {
+      return res.status(400).json(errorResponse(
+        'Invalid credentials',
+        'INVALID_CREDENTIALS',
+        400
+      ));
+    }
+
+    console.log('Login successful for user:', normalizedEmail);
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     
     // Return user data without sensitive information

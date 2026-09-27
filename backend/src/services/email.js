@@ -400,7 +400,7 @@ export const sendPasswordResetEmail = async (email, resetToken) => {
         
         <div style="background: #fff1f2; border: 1px solid #fecdd3; border-radius: 12px; padding: 20px; margin-bottom: 32px;">
           <p style="margin: 0; color: #9f1239; font-size: 14px; text-align: center; font-weight: 500;">
-            This link will expire in 1 hour for security reasons.
+            This link will expire in 10 minutes for security reasons. If it has expired, please request a new password reset.
           </p>
         </div>
         

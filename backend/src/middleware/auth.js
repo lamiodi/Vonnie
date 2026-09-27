@@ -17,7 +17,12 @@ export const authenticate = async (req, res, next) => {
       return res.status(401).json({ error: 'Invalid token.' });
     }
 
-    req.user = result.rows[0];
+    const user = result.rows[0];
+    if (user.is_active === false) {
+      return res.status(403).json({ error: 'Account is deactivated. Please contact an administrator.' });
+    }
+
+    req.user = user;
     next();
   } catch (error) {
     res.status(400).json({ error: 'Invalid token.' });
