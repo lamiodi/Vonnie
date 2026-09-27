@@ -12,10 +12,12 @@ router.post('/initiate-physical-pos/:bookingId', authenticate, authorize(['admin
     const managerId = req.user.id;
 
     // Get booking details
+    // NOTE: bookings has no service_id column; services live in booking_services
     const bookingResult = await query(`
-      SELECT b.*, s.name as service_name, s.price as service_price
+      SELECT b.*,
+        (SELECT string_agg(s.name, ', ') FROM booking_services bs JOIN services s ON s.id = bs.service_id WHERE bs.booking_id = b.id) as service_name,
+        (SELECT SUM(bs.total_price) FROM booking_services bs WHERE bs.booking_id = b.id) as service_price
       FROM bookings b
-      LEFT JOIN services s ON b.service_id = s.id
       WHERE b.id = $1
     `, [bookingId]);
 
@@ -70,11 +72,17 @@ router.post('/confirm-physical-pos/:bookingId', authenticate, authorize(['admin'
     const { payment_reference, notes } = req.body;
     const managerId = req.user.id;
 
+    // The POS receipt number is required so the payment is traceable
+    if (!payment_reference || !String(payment_reference).trim()) {
+      return res.status(400).json(errorResponse('The POS receipt number is required', 'POS_RECEIPT_REQUIRED', 400));
+    }
+
     // Get booking details
     const bookingResult = await query(`
-      SELECT b.*, s.name as service_name, s.price as service_price
+      SELECT b.*,
+        (SELECT string_agg(s.name, ', ') FROM booking_services bs JOIN services s ON s.id = bs.service_id WHERE bs.booking_id = b.id) as service_name,
+        (SELECT SUM(bs.total_price) FROM booking_services bs WHERE bs.booking_id = b.id) as service_price
       FROM bookings b
-      LEFT JOIN services s ON b.service_id = s.id
       WHERE b.id = $1 AND b.payment_status = 'pending'
     `, [bookingId]);
 

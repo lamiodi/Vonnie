@@ -407,6 +407,12 @@ const Dashboard = () => {
     }
   };
 
+  // Names of all workers actively assigned to a booking, for quick display
+  const getAssignedWorkersLabel = (booking) => {
+    const names = (booking.workers || []).map((w) => w.worker_name).filter(Boolean);
+    return names.length > 0 ? names.join(', ') : 'Unassigned';
+  };
+
   const getPaymentStatusColor = (paymentStatus) => {
     switch (paymentStatus) {
       case 'completed':
@@ -883,7 +889,7 @@ const Dashboard = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-3 text-xs">
                         <div>
-                          <div className="text-gray-500 mb-1">Date & Time</div>
+                          <div className="text-gray-500 mb-1">Date &amp; Time</div>
                           <div className="text-gray-900">{formatDate(booking.scheduled_time)}</div>
                           <div className="text-gray-500">{new Date(booking.scheduled_time).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
                         </div>
@@ -896,6 +902,12 @@ const Dashboard = () => {
                           <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPaymentStatusColor(booking.payment_status)}`}>
                             {booking.payment_status || 'pending'}
                           </span>
+                        </div>
+                      </div>
+                      <div className="mt-3 text-xs">
+                        <div className="text-gray-500 mb-1">👷 Assigned Workers</div>
+                        <div className={`font-medium ${booking.workers?.length > 0 ? 'text-gray-900' : 'text-amber-600 italic'}`}>
+                          {getAssignedWorkersLabel(booking)}
                         </div>
                       </div>
                     </div>
@@ -922,7 +934,10 @@ const Dashboard = () => {
                         Customer
                       </th>
                       <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                        Date & Time
+                        Assigned Workers
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                        Date &amp; Time
                       </th>
                       <th scope="col" className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                         Status
@@ -952,6 +967,11 @@ const Dashboard = () => {
                               </div>
                             </div>
                           </td>
+                          <td className="px-6 py-4">
+                            <div className={`text-sm font-medium ${booking.workers?.length > 0 ? 'text-gray-900' : 'text-amber-600 italic'}`}>
+                              {getAssignedWorkersLabel(booking)}
+                            </div>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-900">{formatDate(booking.scheduled_time)}</div>
                             <div className="text-xs text-gray-500">{new Date(booking.scheduled_time).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', hour12: true })}</div>
@@ -973,7 +993,7 @@ const Dashboard = () => {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan="5" className="px-6 py-12 text-center">
+                        <td colSpan="6" className="px-6 py-12 text-center">
                           <div className="flex flex-col items-center">
                             <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />

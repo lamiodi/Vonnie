@@ -567,11 +567,18 @@ const BookingsTable = ({
                   <td className="px-3 py-4 whitespace-nowrap text-gray-900 text-xs">
                     {formatDateTime(booking.scheduled_time)}
                   </td>
-                  <td className="px-3 py-4 whitespace-nowrap">
+                  <td className="px-3 py-4">
                     {hasWorkers ? (
-                      <div className="font-medium text-gray-900 text-sm truncate max-w-[120px]">
-                        {booking.workers[0].worker_name}
-                        {booking.workers.length > 1 && <span className="text-xs text-gray-500 ml-1">+{booking.workers.length - 1}</span>}
+                      <div className="flex flex-wrap gap-1 max-w-[180px]">
+                        {booking.workers.map((w) => (
+                          <span
+                            key={w.worker_id || w.id}
+                            title={w.worker_email || w.worker_name}
+                            className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 border border-teal-200"
+                          >
+                            {w.worker_name}
+                          </span>
+                        ))}
                       </div>
                     ) : (
                       <span className="text-gray-400 italic text-sm">Unassigned</span>

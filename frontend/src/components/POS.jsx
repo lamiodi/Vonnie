@@ -5,7 +5,7 @@ import io from 'socket.io-client';
 import { handleError, handleSuccess } from '../utils/errorHandler';
 import { toast } from 'react-hot-toast';
 import { apiGet, apiPost, apiPatch, API_ENDPOINTS } from '../utils/api';
-import { generatePaystackReference, generateBankTransferReference, generatePOSReference } from '../utils/paymentUtils';
+import { generatePaystackReference } from '../utils/paymentUtils';
 import { useAuth } from '../contexts/AuthContext';
 
 // ==========================================
@@ -143,6 +143,8 @@ const POS = () => {
   const [activeTab, setActiveTab] = useState('products');
   const [miscCharges, setMiscCharges] = useState([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Pending bank-transfer / POS-terminal payment awaiting its receipt number
+  const [receiptModal, setReceiptModal] = useState(null);
 
   // Receipt preview & transaction history state
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -826,19 +828,39 @@ const POS = () => {
 
   // Bank Transfer Payment
   const handleTransferPayment = useCallback(async () => {
-    await processOfflinePayment('bank_transfer_pos', generateBankTransferReference, 'Bank transfer payment');
-  }, [processOfflinePayment]);
+    // Ask for the receipt/reference number from the transfer receipt or POS
+    // terminal so the payment can be traced
+    setReceiptModal({
+      method: 'bank_transfer_pos',
+      label: 'Bank transfer payment',
+      title: 'Bank Transfer — Receipt / Reference Number',
+      hint: 'Enter the receipt or reference number from the bank transfer or POS terminal slip.',
+      value: ''
+    });
+  }, []);
 
   // POS Terminal Payment
   const handlePosTerminalPayment = useCallback(async () => {
-    setProcessing(true);
-    try {
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      await processOfflinePayment('physical_pos', generatePOSReference, 'POS Terminal payment');
-    } finally {
-      setProcessing(false);
+    setReceiptModal({
+      method: 'physical_pos',
+      label: 'POS Terminal payment',
+      title: 'POS Terminal — Receipt Number',
+      hint: 'Enter the receipt number printed on the POS terminal slip.',
+      value: ''
+    });
+  }, []);
+
+  // Confirm the receipt number and record the payment
+  const confirmReceiptPayment = useCallback(async () => {
+    if (!receiptModal) return;
+    const receipt = receiptModal.value.trim();
+    if (receipt.length < 3) {
+      toast.error('Please enter the receipt number from the POS slip or transfer receipt');
+      return;
     }
-  }, [processOfflinePayment]);
+    setReceiptModal(null);
+    await processOfflinePayment(receiptModal.method, () => receipt, receiptModal.label);
+  }, [receiptModal, processOfflinePayment]);
 
   // Card Payment (delegates to Paystack)
   const handleCardPayment = useCallback(() => {
@@ -1537,6 +1559,41 @@ const POS = () => {
           </div>
         </div>
       </div>
+
+      {/* POS Receipt Number Modal (bank transfer / physical POS) */}
+      {receiptModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-1">{receiptModal.title}</h3>
+            <p className="text-xs text-gray-500 mb-4">{receiptModal.hint}</p>
+            <input
+              type="text"
+              autoFocus
+              value={receiptModal.value}
+              onChange={(e) => setReceiptModal(prev => ({ ...prev, value: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirmReceiptPayment(); }}
+              placeholder="e.g. 0123456789"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setReceiptModal(null)}
+                disabled={processing}
+                className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmReceiptPayment}
+                disabled={processing || !receiptModal.value.trim()}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {processing ? 'Processing...' : 'Confirm Payment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Size Selection Modal */}
       {showSizeModal && selectedProductForSize && (
