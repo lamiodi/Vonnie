@@ -1,5 +1,5 @@
 import express from 'express';
-import { query } from '../config/db.js';
+import { query, getClient } from '../config/db.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import { getLagosDateStr, getLagosDayOfWeek, isLateNow, isShopClosedDay, getBusinessResumption } from '../utils/lagosTime.js';
 
@@ -435,16 +435,46 @@ router.post('/verify-location', authenticate, async (req, res) => {
 
 // Enroll fingerprint template (admin only — fingerprint changes are sensitive)
 router.post('/enroll-fingerprint', authenticate, authorize(['admin']), async (req, res) => {
+  const client = await getClient();
   try {
     const { worker_id, fingerprint_template } = req.body;
     if (!worker_id || !fingerprint_template) {
       return res.status(400).json({ error: 'Worker ID and fingerprint template are required' });
     }
 
-    await query('UPDATE users SET fingerprint_template = $1 WHERE id = $2', [fingerprint_template, worker_id]);
+    // Record who enrolled and when — fingerprint changes are sensitive
+    await client.query('BEGIN');
+    const result = await client.query(
+      `UPDATE users
+       SET fingerprint_template = $1,
+           fingerprint_enrolled_at = CURRENT_TIMESTAMP,
+           fingerprint_enrolled_by = $2
+       WHERE id = $3
+       RETURNING name`,
+      [fingerprint_template, req.user.id, worker_id]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Worker not found' });
+    }
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, created_at)
+       VALUES ($1, 'fingerprint_enroll', 'user', $2, $3, CURRENT_TIMESTAMP)`,
+      [req.user.id, worker_id, JSON.stringify({
+        worker_name: result.rows[0].name,
+        template_length: String(fingerprint_template).length
+      })]
+    );
+
+    await client.query('COMMIT');
     res.json({ message: 'Fingerprint enrolled successfully' });
   } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
     res.status(500).json({ error: error.message });
+  } finally {
+    client.release();
   }
 });
 
