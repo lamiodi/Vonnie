@@ -433,8 +433,8 @@ router.post('/verify-location', authenticate, async (req, res) => {
 // Verify location logic here
 // ...
 
-// Enroll fingerprint template
-router.post('/enroll-fingerprint', authenticate, authorize(['admin', 'manager']), async (req, res) => {
+// Enroll fingerprint template (admin only — fingerprint changes are sensitive)
+router.post('/enroll-fingerprint', authenticate, authorize(['admin']), async (req, res) => {
   try {
     const { worker_id, fingerprint_template } = req.body;
     if (!worker_id || !fingerprint_template) {

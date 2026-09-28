@@ -158,7 +158,7 @@ function WorkerForm({ value, onChange, onSubmit, onCancel, canEdit, title, submi
   );
 }
 
-function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, changeLog, schedule }) {
+function ProfilePanel({ worker, onClose, canEdit, canEnrollFingerprint, onEdit, metrics, assignments, changeLog, schedule }) {
   const roleClass = worker.role === 'manager' ? 'bg-blue-100 text-blue-800' : worker.role === 'admin' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-800';
   const availabilityClass = worker.current_status === 'busy' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
   const [enrolling, setEnrolling] = useState(false);
@@ -215,11 +215,11 @@ function ProfilePanel({ worker, onClose, canEdit, onEdit, metrics, assignments, 
             <div className="text-gray-600">Phone</div>
             <div className="font-medium">{worker.phone || '-'}</div>
           </div>
-          {canEdit && (
+          {canEnrollFingerprint && (
             <div className="bg-gray-50 p-3 rounded-md border border-gray-200">
               <div className="text-sm font-medium text-gray-800 mb-2">Biometric Enrollment</div>
               <p className="text-xs text-gray-500 mb-3">
-                Enroll a fingerprint for this worker using the local ZKTeco USB scanner.
+                Enroll a fingerprint for this worker using the local ZKTeco USB scanner. Admin only.
               </p>
               <button 
                 onClick={handleEnrollFingerprint}
@@ -602,6 +602,7 @@ export default function Workers() {
           worker={profile.worker}
           onClose={() => setProfile(null)}
           canEdit={canManage}
+          canEnrollFingerprint={user?.role === 'admin'}
           onEdit={(w) => handleEditOpen(w)}
           metrics={profile.metrics}
           assignments={profile.assignments}
