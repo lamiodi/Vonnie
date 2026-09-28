@@ -49,6 +49,9 @@ if (missingEnvVars.length > 0) {
 }
 
 const app = express();
+// Behind Render's proxy — makes req.ip the real client IP so the login rate
+// limiter is per-client instead of one shared bucket, and audit IPs are real
+app.set('trust proxy', 1);
 const server = createServer(app);
 const io = new Server(server, {
   cors: {

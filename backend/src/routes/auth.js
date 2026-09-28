@@ -11,6 +11,27 @@ import { validateEmail, validateStringLength, validatePhone } from '../utils/inp
 
 const router = express.Router();
 
+// Persist a login event for the audit trail. Never lets an audit failure
+// block the login response itself.
+async function logLoginEvent({ userId, email, success, reason, req }) {
+  try {
+    await query(
+      `INSERT INTO audit_logs (user_id, action, entity_type, entity_id, details, ip_address, user_agent, created_at)
+       VALUES ($1, $2, 'user', $3, $4, $5, $6, CURRENT_TIMESTAMP)`,
+      [
+        userId || null,
+        success ? 'login' : 'login_failed',
+        userId || null,
+        JSON.stringify({ email, reason: reason || null }),
+        req.ip || null,
+        req.get('user-agent') || null
+      ]
+    );
+  } catch (auditError) {
+    console.warn('Login audit write failed:', auditError.message);
+  }
+}
+
 // Register
 router.post('/register', async (req, res) => {
   try {
@@ -203,9 +224,10 @@ router.post('/login', loginLimiter, async (req, res) => {
     );
 
     const user = result.rows[0];
-    
+
     // Check if user exists
     if (!user) {
+      await logLoginEvent({ email: normalizedEmail, success: false, reason: 'unknown_email', req });
       return res.status(400).json(errorResponse(
         'Invalid credentials',
         'INVALID_CREDENTIALS',
@@ -215,27 +237,19 @@ router.post('/login', loginLimiter, async (req, res) => {
 
     // Check if account is active
     if (user.is_active === false) {
+      await logLoginEvent({ userId: user.id, email: normalizedEmail, success: false, reason: 'account_deactivated', req });
       return res.status(403).json(errorResponse(
         'Account is deactivated. Please contact an administrator.',
         'ACCOUNT_DEACTIVATED',
         403
       ));
     }
-    
+
     // Try different possible password field names
     const passwordField = user.password_hash || user.password;
-    
+
     if (!passwordField) {
-      return res.status(400).json(errorResponse(
-        'Invalid credentials',
-        'INVALID_CREDENTIALS',
-        400
-      ));
-    }
-    
-    const passwordMatch = await bcrypt.compare(password, passwordField);
-    
-    if (!passwordMatch) {
+      await logLoginEvent({ userId: user.id, email: normalizedEmail, success: false, reason: 'no_password_field', req });
       return res.status(400).json(errorResponse(
         'Invalid credentials',
         'INVALID_CREDENTIALS',
@@ -243,7 +257,18 @@ router.post('/login', loginLimiter, async (req, res) => {
       ));
     }
 
-    console.log('Login successful for user:', normalizedEmail);
+    const passwordMatch = await bcrypt.compare(password, passwordField);
+
+    if (!passwordMatch) {
+      await logLoginEvent({ userId: user.id, email: normalizedEmail, success: false, reason: 'wrong_password', req });
+      return res.status(400).json(errorResponse(
+        'Invalid credentials',
+        'INVALID_CREDENTIALS',
+        400
+      ));
+    }
+
+    await logLoginEvent({ userId: user.id, email: normalizedEmail, success: true, req });
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
     
     // Return user data without sensitive information
